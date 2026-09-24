@@ -649,22 +649,42 @@ class _VersionInfo extends StatelessWidget {
                   ),
                 ),
               ),
-              SmallIconButton(
-                icon: Icons.refresh,
-                size: 13,
-                tooltip: 'Retry',
-                onPressed: updates.check,
-              ),
             ],
           );
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SelectableText(
-              updates.current.label,
-              key: const ValueKey('app-version'),
-              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+            Row(
+              children: [
+                Flexible(
+                  child: SelectableText(
+                    updates.current.label,
+                    key: const ValueKey('app-version'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                if (updates.checking)
+                  const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: SizedBox.square(
+                      dimension: 11,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                    ),
+                  )
+                else
+                  SmallIconButton(
+                    key: const ValueKey('check-updates'),
+                    icon: Icons.refresh,
+                    size: 13,
+                    tooltip: 'Check for updates',
+                    onPressed: updates.check,
+                  ),
+              ],
             ),
             ?status,
           ],
