@@ -3,6 +3,16 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
 
+/// [showDialog] without the open/close animation: dialogs appear instantly.
+Future<T?> showAppDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) => showDialog<T>(
+  context: context,
+  builder: builder,
+  animationStyle: AnimationStyle.noAnimation,
+);
+
 /// Asks for confirmation. Returns true if confirmed.
 Future<bool> confirm(
   BuildContext context, {
@@ -11,7 +21,7 @@ Future<bool> confirm(
   String confirmLabel = 'OK',
   bool danger = false,
 }) async {
-  final r = await showDialog<bool>(
+  final r = await showAppDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(title, style: const TextStyle(fontSize: 17)),
@@ -62,7 +72,7 @@ Future<List<String>?> promptFields(
   Widget? extra,
   String? Function(List<String>)? validate,
 }) {
-  return showDialog<List<String>>(
+  return showAppDialog<List<String>>(
     context: context,
     builder: (ctx) => _PromptDialog(
       title: title,
@@ -207,7 +217,7 @@ Future<T?> chooseOption<T>(
   String? message,
   required List<(T, String, String)> options,
 }) {
-  return showDialog<T>(
+  return showAppDialog<T>(
     context: context,
     builder: (ctx) => SimpleDialog(
       title: Text(title, style: const TextStyle(fontSize: 17)),

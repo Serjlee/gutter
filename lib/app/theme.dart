@@ -125,9 +125,18 @@ ThemeData buildTheme() {
       radius: const Radius.circular(4),
     ),
     snackBarTheme: const SnackBarThemeData(
-      backgroundColor: AppColors.toolbar,
-      contentTextStyle: TextStyle(color: AppColors.text),
+      backgroundColor: AppColors.panelAlt,
+      contentTextStyle: TextStyle(color: AppColors.text, fontSize: 12.5),
+      actionTextColor: AppColors.accent,
+      closeIconColor: AppColors.textDim,
       behavior: SnackBarBehavior.floating,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(6)),
+        side: BorderSide(color: AppColors.border),
+      ),
     ),
+    // Desktop UI: no ink ripples (they read as lag); hover highlights stay.
+    splashFactory: NoSplash.splashFactory,
   );
 }

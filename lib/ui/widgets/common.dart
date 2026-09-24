@@ -88,6 +88,7 @@ class ToolbarButton extends StatelessWidget {
       children: [
         button,
         PopupMenuButton<VoidCallback>(
+          popUpAnimationStyle: AnimationStyle.noAnimation,
           tooltip: 'More options',
           padding: EdgeInsets.zero,
           iconSize: 16,
@@ -140,6 +141,72 @@ PopupMenuItem<VoidCallback> menuItem(
   );
 }
 
+/// A compact dropdown that opens instantly (Flutter's DropdownButton has a
+/// fixed open animation).
+class AppDropdown<T> extends StatelessWidget {
+  const AppDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.style,
+    this.expand = false,
+  });
+
+  final T value;
+
+  /// (value, label, color) triples.
+  final List<(T, String, Color?)> items;
+  final ValueChanged<T> onChanged;
+  final TextStyle? style;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = items.firstWhere(
+      (i) => i.$1 == value,
+      orElse: () => items.first,
+    );
+    final base = style ?? const TextStyle(fontSize: 13, color: AppColors.text);
+    final label = Text(
+      current.$2,
+      overflow: TextOverflow.ellipsis,
+      style: current.$3 == null ? base : base.copyWith(color: current.$3),
+    );
+    return PopupMenuButton<T>(
+      tooltip: '',
+      popUpAnimationStyle: AnimationStyle.noAnimation,
+      initialValue: value,
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final (v, text, color) in items)
+          PopupMenuItem<T>(
+            value: v,
+            height: 32,
+            child: Text(
+              text,
+              style: color == null ? base : base.copyWith(color: color),
+            ),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            if (expand) Expanded(child: label) else label,
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: AppColors.textDim,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Shows a context menu at a global pointer position (zoom-aware).
 Future<void> showContextMenu(
   BuildContext context,
@@ -151,6 +218,7 @@ Future<void> showContextMenu(
   final local = overlay.globalToLocal(globalPosition);
   final cb = await showMenu<VoidCallback>(
     context: context,
+    popUpAnimationStyle: AnimationStyle.noAnimation,
     position: RelativeRect.fromRect(
       Rect.fromLTWH(local.dx, local.dy, 0, 0),
       Offset.zero & overlay.size,

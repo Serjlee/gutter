@@ -648,6 +648,7 @@ class _RefPills extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: PopupMenuButton<VoidCallback>(
+                popUpAnimationStyle: AnimationStyle.noAnimation,
                 tooltip: pills.skip(1).map((p) => p.label).join('\n'),
                 padding: EdgeInsets.zero,
                 itemBuilder: (_) => [

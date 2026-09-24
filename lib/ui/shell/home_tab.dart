@@ -411,19 +411,16 @@ class _SettingsForm extends StatelessWidget {
       children: [
         _row(
           'Auto-fetch',
-          DropdownButton<int>(
+          AppDropdown<int>(
             value: s.fetchIntervalMinutes,
-            isDense: true,
-            underline: const SizedBox(),
-            style: const TextStyle(fontSize: 13, color: AppColors.text),
             items: const [
-              DropdownMenuItem(value: 0, child: Text('Off')),
-              DropdownMenuItem(value: 1, child: Text('Every minute')),
-              DropdownMenuItem(value: 5, child: Text('Every 5 min')),
-              DropdownMenuItem(value: 10, child: Text('Every 10 min')),
-              DropdownMenuItem(value: 30, child: Text('Every 30 min')),
+              (0, 'Off', null),
+              (1, 'Every minute', null),
+              (5, 'Every 5 min', null),
+              (10, 'Every 10 min', null),
+              (30, 'Every 30 min', null),
             ],
-            onChanged: (v) => app.setFetchInterval(v ?? 5),
+            onChanged: app.setFetchInterval,
           ),
         ),
         _row(
@@ -458,17 +455,14 @@ class _SettingsForm extends StatelessWidget {
         ),
         _row(
           'Commits loaded',
-          DropdownButton<int>(
+          AppDropdown<int>(
             value: s.maxCommits,
-            isDense: true,
-            underline: const SizedBox(),
-            style: const TextStyle(fontSize: 13, color: AppColors.text),
             items: const [
-              DropdownMenuItem(value: 2000, child: Text('2,000')),
-              DropdownMenuItem(value: 20000, child: Text('20,000')),
-              DropdownMenuItem(value: 100000, child: Text('100,000')),
+              (2000, '2,000', null),
+              (20000, '20,000', null),
+              (100000, '100,000', null),
             ],
-            onChanged: (v) => app.setMaxCommits(v ?? 20000),
+            onChanged: app.setMaxCommits,
           ),
         ),
         const SizedBox(height: 8),

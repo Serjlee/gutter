@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import '../../git/rebase_plan.dart';
 import '../repo/repo_tab_controller.dart';
+import '../widgets/common.dart';
+import 'dialogs.dart';
 
 /// Opens the interactive rebase editor for `base..HEAD` (null base: root).
 Future<void> showInteractiveRebase(
@@ -33,7 +35,7 @@ Future<void> showInteractiveRebase(
     return;
   }
   if (!context.mounted) return;
-  final plan = await showDialog<RebasePlan>(
+  final plan = await showAppDialog<RebasePlan>(
     context: context,
     builder: (_) => InteractiveRebaseDialog(
       steps: steps,
@@ -256,31 +258,16 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                                           const SizedBox(width: 6),
                                           SizedBox(
                                             width: 96,
-                                            child: DropdownButton<RebaseAction>(
+                                            child: AppDropdown<RebaseAction>(
                                               value: s.action,
-                                              isDense: true,
-                                              underline: const SizedBox(),
-                                              isExpanded: true,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: _actionColor(s.action),
-                                              ),
+                                              expand: true,
                                               items: [
                                                 for (final a
                                                     in RebaseAction.values)
-                                                  DropdownMenuItem(
-                                                    value: a,
-                                                    child: Text(
-                                                      a.label,
-                                                      style: TextStyle(
-                                                        color: _actionColor(a),
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  (a, a.label, _actionColor(a)),
                                               ],
-                                              onChanged: (a) {
-                                                if (a != null) _setAction(i, a);
-                                              },
+                                              onChanged: (a) =>
+                                                  _setAction(i, a),
                                             ),
                                           ),
                                           const SizedBox(width: 8),

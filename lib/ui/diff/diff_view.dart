@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/parsers/diff_parser.dart';
+import '../dialogs/dialogs.dart';
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
@@ -96,7 +97,7 @@ class _DiffViewState extends State<DiffView> {
   }
 
   Future<bool> _confirmDiscard(String what) async {
-    return await showDialog<bool>(
+    return await showAppDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text(

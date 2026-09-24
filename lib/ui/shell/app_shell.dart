@@ -69,32 +69,55 @@ class _AppShellState extends State<AppShell> {
   void _showMessage(AppMessage m) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: Duration(seconds: m.error ? 8 : 3),
-        width: 640,
-        content: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              m.error ? Icons.error_outline : Icons.info_outline,
-              size: 18,
-              color: m.error ? AppColors.danger : AppColors.accent,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SelectableText(
-                m.text,
-                maxLines: 12,
-                style: const TextStyle(fontSize: 13, color: AppColors.text),
+    // A compact toast in the bottom-right corner, sized to the message.
+    final screen = MediaQuery.sizeOf(context).width;
+    final maxWidth = m.error ? 520.0 : 380.0;
+    final textWidth = (TextPainter(
+      text: TextSpan(text: m.text, style: const TextStyle(fontSize: 12.5)),
+      textDirection: TextDirection.ltr,
+    )..layout()).width;
+    final width = (textWidth + 90).clamp(200.0, maxWidth);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: Duration(seconds: m.error ? 8 : 3),
+          margin: EdgeInsets.only(
+            left: (screen - width - 16).clamp(16.0, double.infinity),
+            right: 16,
+            bottom: 16,
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+          showCloseIcon: true,
+          closeIconColor: AppColors.textDim,
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(
+                  m.error ? Icons.error_outline : Icons.check_circle_outline,
+                  size: 16,
+                  color: m.error ? AppColors.danger : AppColors.success,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: SelectableText(
+                  m.text,
+                  minLines: 1,
+                  maxLines: 8,
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.text),
+                ),
+              ),
+            ],
+          ),
         ),
-        action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
-      ),
-    );
+        snackBarAnimationStyle: const AnimationStyle(
+          duration: Duration(milliseconds: 100),
+          reverseDuration: Duration(milliseconds: 80),
+        ),
+      );
   }
 
   Future<void> _openRepoDialog() async {
