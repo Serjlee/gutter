@@ -57,8 +57,6 @@ fetch/push.
 - **UI zoom** for high-DPI screens: `Ctrl/Cmd +`, `Ctrl/Cmd -`,
   `Ctrl/Cmd 0`, or `Ctrl/Cmd` + mouse wheel (50–300%). The level is saved.
 
-  ![150% zoom](docs/zoom-150.png)
-
 ## Performance notes
 
 - Output from git is NUL-separated and parsed off the UI thread. The graph
