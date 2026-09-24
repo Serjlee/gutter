@@ -75,6 +75,37 @@ fetch/push.
 | `Esc` | Close diff |
 | `Ctrl/Cmd + / - / 0` | Zoom in / out / reset |
 
+## Install on macOS
+
+Download `Gutter-macos-<version>.zip` from the
+[Releases](https://github.com/serjlee/gutter/releases) page. The build is
+universal (Apple Silicon and Intel).
+
+Gutter is **ad-hoc signed and not notarized** (there's no paid Apple
+Developer account behind it). So macOS blocks the downloaded app until you
+clear its quarantine flag. Do it once per update, using any of these:
+
+- **Script**: `tool/install_macos.sh` downloads the latest release
+  (needs `gh`), installs it to `/Applications` and clears the flag.
+  You can also pass a zip you downloaded: `tool/install_macos.sh
+  ~/Downloads/Gutter-macos-0.1.0.zip`.
+- **Terminal**: move `Gutter.app` to `/Applications`, then run
+  `xattr -dr com.apple.quarantine /Applications/Gutter.app`.
+- **System Settings**: open Gutter once (it gets blocked), then go to
+  System Settings → Privacy & Security and click **Open Anyway**. On
+  macOS 15 and later, right-click → Open no longer bypasses the block.
+
+Other things to know:
+
+- Gutter needs `git`. Install it with `xcode-select --install` or Homebrew.
+- The first time you scan a folder under Documents or Desktop, macOS asks
+  for access. Click Allow.
+- **Releases**: `git tag v0.1.0 && git push origin v0.1.0` builds and
+  publishes a release (`.github/workflows/release.yml`).
+- **Signing later**: with a Developer ID certificate, the workflow could
+  sign and notarize the app (hardened runtime + `xcrun notarytool`). The
+  quarantine step would then go away.
+
 ## Building
 
 You need Flutter (stable) and git.

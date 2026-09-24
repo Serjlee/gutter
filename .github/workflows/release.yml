@@ -1,0 +1,70 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the macOS app and publishes it as a GitHub
+# Release. Running the workflow manually only builds and uploads an artifact.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build
+        run: flutter build macos --release
+
+      - name: Sign (ad-hoc) and verify
+        working-directory: build/macos/Build/Products/Release
+        run: |
+          codesign --force --deep --sign - Gutter.app
+          codesign --verify --deep --strict --verbose=2 Gutter.app
+          lipo -archs Gutter.app/Contents/MacOS/Gutter
+
+      - name: Package
+        id: package
+        run: |
+          version=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; fi
+          zip="Gutter-macos-${version}.zip"
+          ditto -c -k --sequential-rsrc --keepParent \
+            build/macos/Build/Products/Release/Gutter.app "$zip"
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+          ls -lh "$zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip }}
+          path: ${{ steps.package.outputs.zip }}
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          Unsigned (ad-hoc signed, not notarized) universal build for Apple Silicon and Intel Macs.
+
+          **Install**
+          1. Unzip and move `Gutter.app` to `/Applications`.
+          2. Clear the download quarantine flag (needed after every update, because the app is not notarized):
+             ```sh
+             xattr -dr com.apple.quarantine /Applications/Gutter.app
+             ```
+             Or: open Gutter once, then System Settings → Privacy & Security → **Open Anyway**.
+
+          Or run `tool/install_macos.sh` from the repository, which downloads, installs and clears the flag.
+
+          Requires `git` (Xcode Command Line Tools or Homebrew).
+          EOF
+          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+            --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md
