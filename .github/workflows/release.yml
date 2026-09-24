@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the macOS app and publishes it as a GitHub
-# Release. Running the workflow manually only builds and uploads an artifact.
+# Pushing a tag like v0.1.0 builds the macOS and Linux apps and publishes
+# them as a GitHub Release. Running the workflow manually only builds and
+# uploads the artifacts (as dev builds).
 on:
   push:
     tags: ['v*']
@@ -11,7 +12,31 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      commit: ${{ steps.v.outputs.commit }}
+      label: ${{ steps.v.outputs.label }}
+    steps:
+      - id: v
+        run: |
+          commit="${GITHUB_SHA::7}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            label="$version"
+          else
+            version=""  # manual runs are dev builds: commit only
+            label="dev-$commit"
+          fi
+          {
+            echo "commit=$commit"
+            echo "version=$version"
+            echo "label=$label"
+          } >> "$GITHUB_OUTPUT"
+
   macos:
+    needs: version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,22 +45,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Version
-        id: version
-        run: |
-          commit="${GITHUB_SHA::7}"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version=""  # manual runs are dev builds: commit only
-          fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Build
         env:
-          GUTTER_VERSION: ${{ steps.version.outputs.version }}
-          GUTTER_COMMIT: ${{ steps.version.outputs.commit }}
+          GUTTER_VERSION: ${{ needs.version.outputs.version }}
+          GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
         run: |
           flutter build macos --release \
             --dart-define=GUTTER_VERSION="$GUTTER_VERSION" \
@@ -49,40 +62,73 @@ jobs:
           lipo -archs Gutter.app/Contents/MacOS/Gutter
 
       - name: Package
-        id: package
         run: |
-          version="${{ steps.version.outputs.version }}"
-          [[ -n "$version" ]] || version="dev-${{ steps.version.outputs.commit }}"
-          zip="Gutter-macos-${version}.zip"
-          ditto -c -k --keepParent \
-            build/macos/Build/Products/Release/Gutter.app "$zip"
-          echo "zip=$zip" >> "$GITHUB_OUTPUT"
-          ls -lh "$zip"
+          ditto -c -k --keepParent build/macos/Build/Products/Release/Gutter.app \
+            "Gutter-macos-${{ needs.version.outputs.label }}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.zip }}
-          path: ${{ steps.package.outputs.zip }}
+          name: macos
+          path: Gutter-macos-*.zip
 
+  linux:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+
+      - name: Build
+        env:
+          GUTTER_VERSION: ${{ needs.version.outputs.version }}
+          GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
+        run: |
+          flutter build linux --release \
+            --dart-define=GUTTER_VERSION="$GUTTER_VERSION" \
+            --dart-define=GUTTER_COMMIT="$GUTTER_COMMIT"
+
+      - name: Package
+        run: |
+          name="gutter-linux-x64-${{ needs.version.outputs.label }}"
+          cp -r build/linux/x64/release/bundle "$name"
+          tar czf "$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: gutter-linux-x64-*.tar.gz
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          cat > notes.md <<'EOF'
-          Unsigned (ad-hoc signed, not notarized) universal build for Apple Silicon and Intel Macs.
-
-          **Install**
+          cat > notes.md <<'NOTES'
+          **macOS** (`Gutter-macos-*.zip`): universal build for Apple Silicon and Intel, ad-hoc signed and not notarized.
           1. Unzip and move `Gutter.app` to `/Applications`.
-          2. Clear the download quarantine flag (needed after every update, because the app is not notarized):
+          2. Clear the download quarantine flag (needed after every update):
              ```sh
              xattr -dr com.apple.quarantine /Applications/Gutter.app
              ```
-             Or: open Gutter once, then System Settings → Privacy & Security → **Open Anyway**.
+             Or open Gutter once, then System Settings → Privacy & Security → **Open Anyway**.
 
           Or run `tool/install_macos.sh` from the repository, which downloads, installs and clears the flag.
 
-          Requires `git` (Xcode Command Line Tools or Homebrew).
-          EOF
-          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+          **Linux** (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3.
+
+          Requires `git` on the `PATH`.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" Gutter-macos-*.zip gutter-linux-x64-*.tar.gz \
             --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md

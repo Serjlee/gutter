@@ -1,8 +1,15 @@
 name: CI
 
+# Linux only: macOS and Linux release builds run in the Release workflow.
 on:
   push:
+    branches: [main]
   pull_request:
+
+# A newer push supersedes a running CI for the same branch / PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -14,7 +21,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test tool
+      - run: dart format --output=none --set-exit-if-changed lib test tool integration_test test_driver
       - run: flutter analyze
       - run: |
           git config --global user.name ci
@@ -23,7 +30,8 @@ jobs:
       - run: flutter test
 
   # The real app, AOT-compiled (profile), against a dirty repository: catches
-  # release-only miscompilations that JIT unit tests cannot.
+  # release-only miscompilations that JIT unit tests cannot. Also proves the
+  # Linux app builds.
   integration-linux:
     runs-on: ubuntu-latest
     steps:
@@ -38,28 +46,3 @@ jobs:
           xvfb-run -a flutter drive --profile -d linux \
             --driver test_driver/integration_test.dart \
             --target integration_test/app_test.dart
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
-      - run: flutter build linux --release --dart-define=GUTTER_COMMIT="${GITHUB_SHA::7}"
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter build macos --release --dart-define=GUTTER_COMMIT="${GITHUB_SHA::7}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Gutter-macos
-          path: build/macos/Build/Products/Release/Gutter.app

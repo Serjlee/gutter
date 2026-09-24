@@ -100,8 +100,10 @@ Other things to know:
 - Gutter needs `git`. Install it with `xcode-select --install` or Homebrew.
 - The first time you scan a folder under Documents or Desktop, macOS asks
   for access. Click Allow.
-- **Releases**: `git tag v0.1.0 && git push origin v0.1.0` builds and
-  publishes a release (`.github/workflows/release.yml`).
+- **Releases**: `git tag v0.1.0 && git push origin v0.1.0` builds the
+  macOS zip and a Linux tarball and publishes them as a GitHub Release
+  (`.github/workflows/release.yml`). CI on `main` and pull requests runs on
+  Linux only.
 - **Signing later**: with a Developer ID certificate, the workflow could
   sign and notarize the app (hardened runtime + `xcrun notarytool`). The
   quarantine step would then go away.
