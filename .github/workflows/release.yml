@@ -36,7 +36,7 @@ jobs:
           version=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; fi
           zip="Gutter-macos-${version}.zip"
-          ditto -c -k --sequential-rsrc --keepParent \
+          ditto -c -k --keepParent \
             build/macos/Build/Products/Release/Gutter.app "$zip"
           echo "zip=$zip" >> "$GITHUB_OUTPUT"
           ls -lh "$zip"
