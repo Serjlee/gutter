@@ -250,9 +250,9 @@ class RepoToolbar extends StatelessWidget {
                       icon: Icons.upload,
                       label: 'Push',
                       busy: busy == 'Push' || busy == 'Force push',
-                      onPressed: idle ? () => tab.push() : null,
+                      onPressed: idle ? actions.push : null,
                       menu: [
-                        menuItem('Push', () => tab.push(), icon: Icons.upload),
+                        menuItem('Push', actions.push, icon: Icons.upload),
                         menuItem(
                           'Force push (with lease)…',
                           actions.forcePush,

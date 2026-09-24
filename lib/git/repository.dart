@@ -679,6 +679,16 @@ class Repository {
     },
   ]);
 
+  /// Whether a failed push was rejected because the remote branch has
+  /// commits the local one doesn't (a force push would overwrite them).
+  /// Not true for a stale force-with-lease, which needs a fetch instead.
+  static bool isNonFastForwardRejection(Object error) {
+    if (error is! GitException) return false;
+    final err = error.stderr;
+    return err.contains('[rejected]') &&
+        (err.contains('(non-fast-forward)') || err.contains('(fetch first)'));
+  }
+
   /// Pushes [branch] (default: current). Sets upstream on [remote] when the
   /// branch has none.
   Future<void> push({

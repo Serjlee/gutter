@@ -17,6 +17,15 @@ import '../../git/repository.dart';
 import '../../graph/graph_layout.dart';
 import 'auto_fetch.dart';
 
+enum PushOutcome {
+  pushed,
+
+  /// The remote has commits the branch doesn't: a force push would
+  /// overwrite them.
+  rejected,
+  failed,
+}
+
 /// Sha used for the pseudo "work in progress" row.
 const wipSha = '__WIP__';
 
@@ -666,10 +675,13 @@ class RepoTabController extends ChangeNotifier {
   }
 
   /// Runs a git command with busy indication, error reporting and a refresh.
+  ///
+  /// [onError] may take over an error (return true) so it isn't reported.
   Future<bool> run(
     String label,
     Future<void> Function() action, {
     String? success,
+    bool Function(Object error)? onError,
   }) async {
     busy = label;
     _notify();
@@ -679,7 +691,7 @@ class RepoTabController extends ChangeNotifier {
       if (success != null) app.notify(success);
     } catch (e) {
       ok = false;
-      _reportError(e);
+      if (onError == null || !onError(e)) _reportError(e);
     } finally {
       busy = null;
       try {
@@ -714,11 +726,14 @@ class RepoTabController extends ChangeNotifier {
 
   Future<void> pull(PullMode mode) => run('Pull', () => repo.pull(mode));
 
-  Future<void> push({bool force = false}) async {
+  /// Pushes the current branch. A plain push the remote rejects as
+  /// non-fast-forward returns [PushOutcome.rejected] without reporting an
+  /// error, so the caller can offer a force push.
+  Future<PushOutcome> push({bool force = false}) async {
     final branch = currentBranch;
     if (branch == null) {
       app.notify('Cannot push: HEAD is detached', error: true);
-      return;
+      return PushOutcome.failed;
     }
     final upstream = status.branch.upstream;
     String? remote;
@@ -733,10 +748,11 @@ class RepoTabController extends ChangeNotifier {
           : (remotes.isEmpty ? null : remotes.first.name);
       if (remote == null) {
         app.notify('No remote configured', error: true);
-        return;
+        return PushOutcome.failed;
       }
     }
-    await run(
+    var rejected = false;
+    final ok = await run(
       force ? 'Force push' : 'Push',
       () => repo.push(
         branch: branch,
@@ -746,7 +762,11 @@ class RepoTabController extends ChangeNotifier {
         forceWithLease: force,
       ),
       success: 'Pushed $branch to $remote',
+      onError: (e) =>
+          rejected = !force && Repository.isNonFastForwardRejection(e),
     );
+    if (ok) return PushOutcome.pushed;
+    return rejected ? PushOutcome.rejected : PushOutcome.failed;
   }
 
   // Staging.

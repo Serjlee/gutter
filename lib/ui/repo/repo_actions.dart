@@ -359,6 +359,27 @@ class RepoActions {
     if (ok) await tab.run('Drop stash', () => repo.stashDrop(s.index));
   }
 
+  /// Pushes; if the remote rejects it because it has commits the branch
+  /// doesn't, offers a force push.
+  Future<void> push() async {
+    if (await tab.push() != PushOutcome.rejected) return;
+    if (!context.mounted) return;
+    final branch = tab.currentBranch;
+    final target = tab.status.branch.upstream ?? 'The remote branch';
+    final ok = await confirm(
+      context,
+      title: 'Push rejected',
+      message:
+          '$target has commits that aren\'t in your local $branch. '
+          'Force push (with lease) to replace it with your branch? '
+          'Those remote commits will be lost.\n\n'
+          'To keep them, cancel and pull first.',
+      confirmLabel: 'Force push',
+      danger: true,
+    );
+    if (ok) await tab.push(force: true);
+  }
+
   Future<void> forcePush() async {
     final ok = await confirm(
       context,

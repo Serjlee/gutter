@@ -117,6 +117,62 @@ void main() {
       expect(tab.graph.rowCount, 3);
     });
 
+    test(
+      'a diverged push is rejected (no error), force push fixes it',
+      () async {
+        final remote = await Directory.systemTemp.createTemp('gutter_remote_');
+        addTearDown(() => remote.deleteSync(recursive: true));
+        Process.runSync('git', ['init', '-q', '--bare', remote.path]);
+        t.git(['remote', 'add', 'origin', remote.path]);
+        t.git(['push', '-q', '-u', 'origin', 'main']);
+        // Someone else pushes to main...
+        t.git(['commit', '-q', '--allow-empty', '-m', 'theirs']);
+        t.git(['push', '-q', 'origin', 'main']);
+        t.git(['fetch', '-q']);
+        // ...and we rewrite our main so it no longer contains their commit.
+        t.git(['reset', '-q', '--hard', 'HEAD~1']);
+        t.git(['commit', '-q', '--allow-empty', '-m', 'ours']);
+        await tab.load();
+
+        final errors = <String>[];
+        final sub = app.messages.listen((m) {
+          if (m.error) errors.add(m.text);
+        });
+        addTearDown(sub.cancel);
+
+        expect(await tab.push(), PushOutcome.rejected);
+        await Future<void>.delayed(Duration.zero);
+        expect(errors, isEmpty);
+
+        expect(await tab.push(force: true), PushOutcome.pushed);
+        final remoteHead = Process.runSync('git', [
+          '-C',
+          remote.path,
+          'log',
+          '-1',
+          '--format=%s',
+          'main',
+        ]).stdout;
+        expect((remoteHead as String).trim(), 'ours');
+      },
+    );
+
+    test(
+      'other push failures are reported, not offered a force push',
+      () async {
+        t.git(['remote', 'add', 'origin', '/nonexistent/remote.git']);
+        await tab.load();
+        final errors = <String>[];
+        final sub = app.messages.listen((m) {
+          if (m.error) errors.add(m.text);
+        });
+        addTearDown(sub.cancel);
+        expect(await tab.push(), PushOutcome.failed);
+        await Future<void>.delayed(Duration.zero);
+        expect(errors, hasLength(1));
+      },
+    );
+
     test('selects commits and stages selected lines from the diff', () async {
       await tab.load();
       final side = tab.graph.commits.firstWhere(
