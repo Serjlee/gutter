@@ -189,10 +189,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expectNoErrors(tester, 'split view at zoom $zoom');
     }
+    // The file view loads the blob asynchronously.
     await tester.tap(find.text('File'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(
+      tester,
+      () => find
+          .textContaining('print(s);', findRichText: true)
+          .evaluate()
+          .isNotEmpty,
+    );
     expectNoErrors(tester, 'file view');
-    expect(find.textContaining('print(s);', findRichText: true), findsWidgets);
     await tester.tap(find.text('Unified'));
     await tester.pump(const Duration(seconds: 2));
 
