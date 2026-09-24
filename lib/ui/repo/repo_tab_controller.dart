@@ -932,9 +932,11 @@ GraphData layoutGraph(
   );
 }
 
-/// [history] with a pseudo-commit per stash, placed by date but always
-/// above the commit it was made on. The pseudo-commit's only parent is that
-/// commit (its index/untracked parents aren't part of the history).
+/// [history] with a pseudo-commit per stash, placed right above the commit
+/// it was made on whatever its date, so its line to that commit stays
+/// short. Stashes on commits that aren't loaded go at the end. The
+/// pseudo-commit's only parent is that commit (its index/untracked parents
+/// aren't part of the history).
 @visibleForTesting
 List<Commit> mergeStashes(List<Commit> history, List<StashEntry> stashes) {
   if (stashes.isEmpty) return history;
@@ -950,13 +952,7 @@ List<Commit> mergeStashes(List<Commit> history, List<StashEntry> stashes) {
   for (final s in stashes) {
     final base = s.base;
     if (base == null) continue;
-    var pos = baseRow[base] ?? history.length;
-    for (var i = 0; i < pos; i++) {
-      if (history[i].authorTime <= s.time) {
-        pos = i;
-        break;
-      }
-    }
+    final pos = baseRow[base] ?? history.length;
     placed.add((
       pos,
       placed.length,

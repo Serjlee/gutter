@@ -272,7 +272,13 @@ void main() {
       c('a', 100),
     ];
 
-    test('placed by date, linked only to the base commit', () {
+    test('right above the base commit, whatever the date', () {
+      // A stash made long after its base (newer than every commit).
+      final rows = mergeStashes(history, [s(0, 's0', 9999, 'b')]);
+      expect(rows.map((r) => r.sha), ['d', 'c', 's0', 'b', 'a']);
+    });
+
+    test('placed above its base, linked only to it', () {
       final rows = mergeStashes(history, [s(0, 's0', 250, 'b')]);
       expect(rows.map((r) => r.sha), ['d', 'c', 's0', 'b', 'a']);
       expect(rows[2].parents, ['b']);
