@@ -136,7 +136,5 @@ ThemeData buildTheme() {
         side: BorderSide(color: AppColors.border),
       ),
     ),
-    // Desktop UI: no ink ripples (they read as lag); hover highlights stay.
-    splashFactory: NoSplash.splashFactory,
   );
 }
