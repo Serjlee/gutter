@@ -132,6 +132,9 @@ flutter build macos --release
 ```sh
 flutter analyze
 flutter test                                      # includes tests against real temp repos
+xvfb-run flutter drive --profile -d linux \
+  --driver test_driver/integration_test.dart \
+  --target integration_test/app_test.dart         # real app, AOT-compiled
 dart run tool/bench_layout.dart 200000            # graph layout benchmark
 dart run tool/bench_repo.dart /path/to/big/repo   # history load timings
 tool/make_demo_repo.sh /tmp/demo                  # branchy demo repository

@@ -291,6 +291,17 @@ class _FileRowState extends State<_FileRow> {
   }
 }
 
+/// Which list a working-tree file row belongs to.
+enum _WipSection { conflicts, unstaged, staged }
+
+/// One row of the staging list: a section header ([entry] null) or a file.
+class _WipItem {
+  const _WipItem.header(this.section) : entry = null;
+  const _WipItem.file(this.section, StatusEntry this.entry);
+  final _WipSection section;
+  final StatusEntry? entry;
+}
+
 /// Staging area and commit composer.
 class WipPanel extends StatelessWidget {
   const WipPanel({super.key, required this.tab});
@@ -298,18 +309,38 @@ class WipPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = RepoActions(context, tab);
     final s = tab.status;
-    final conflicts = s.conflicted;
-    final unstaged = s.unstaged.where((e) => !e.conflicted).toList();
-    final staged = s.staged;
-    final target = tab.diffTarget;
+    final conflicts = <StatusEntry>[];
+    final unstaged = <StatusEntry>[];
+    final staged = <StatusEntry>[];
+    for (final e in s.entries) {
+      if (e.conflicted) {
+        conflicts.add(e);
+        continue;
+      }
+      if (e.hasUnstaged) unstaged.add(e);
+      if (e.hasStaged) staged.add(e);
+    }
 
-    bool isSel(StatusEntry e, bool st) =>
-        target is WorkingFileTarget &&
-        target.entry.path == e.path &&
-        target.staged == st;
+    // Flat item list for a lazily built ListView: large working trees
+    // (thousands of changes) only build the visible rows.
+    final items = <_WipItem>[];
+    if (conflicts.isNotEmpty) {
+      items.add(const _WipItem.header(_WipSection.conflicts));
+      for (final e in conflicts) {
+        items.add(_WipItem.file(_WipSection.conflicts, e));
+      }
+    }
+    items.add(const _WipItem.header(_WipSection.unstaged));
+    for (final e in unstaged) {
+      items.add(_WipItem.file(_WipSection.unstaged, e));
+    }
+    items.add(const _WipItem.header(_WipSection.staged));
+    for (final e in staged) {
+      items.add(_WipItem.file(_WipSection.staged, e));
+    }
 
+    final actions = RepoActions(context, tab);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -321,7 +352,8 @@ class WipPanel extends StatelessWidget {
                 child: Text(
                   s.isClean
                       ? 'No changes'
-                      : '${s.entries.length} file change${s.entries.length == 1 ? '' : 's'}'
+                      : '${s.entries.length} file change'
+                            '${s.entries.length == 1 ? '' : 's'}'
                             ' on ${tab.currentBranch ?? 'detached HEAD'}',
                   style: const TextStyle(
                     fontSize: 13,
@@ -340,159 +372,182 @@ class WipPanel extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: ListView(
-            children: [
-              if (conflicts.isNotEmpty) ...[
-                SectionHeader(title: 'Conflicts', count: conflicts.length),
-                for (final e in conflicts)
-                  _FileRow(
-                    kind: ChangeKind.conflicted,
-                    path: e.path,
-                    selected: isSel(e, false),
-                    onTap: () => tab.openWorkingFile(e, staged: false),
-                    actions: [
-                      SmallIconButton(
-                        icon: Icons.person_outline,
-                        tooltip: 'Use ours (${e.conflictCode})',
-                        onPressed: () => tab.run(
-                          'Resolve',
-                          () => tab.repo.resolveWith(e.path, ours: true),
-                        ),
-                      ),
-                      SmallIconButton(
-                        icon: Icons.people_outline,
-                        tooltip: 'Use theirs',
-                        onPressed: () => tab.run(
-                          'Resolve',
-                          () => tab.repo.resolveWith(e.path, ours: false),
-                        ),
-                      ),
-                      SmallIconButton(
-                        icon: Icons.check,
-                        tooltip: 'Mark resolved (stage file as is)',
-                        color: AppColors.success,
-                        onPressed: () => tab.run(
-                          'Resolve',
-                          () => tab.repo.markResolved([e.path]),
-                        ),
-                      ),
-                      SmallIconButton(
-                        icon: Icons.open_in_new,
-                        tooltip: 'Open in external editor',
-                        onPressed: () => openExternally(tab, e.path),
-                      ),
-                    ],
-                  ),
-              ],
-              SectionHeader(
-                title: 'Unstaged files',
-                count: unstaged.length,
-                actions: [
-                  TextButton(
-                    onPressed: unstaged.isEmpty
-                        ? null
-                        : () => tab.stageEntries(unstaged),
-                    child: const Text(
-                      'Stage all',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              for (final e in unstaged)
-                _FileRow(
-                  kind: e.worktree ?? ChangeKind.modified,
-                  path: e.path,
-                  selected: isSel(e, false),
-                  onTap: () => tab.openWorkingFile(e, staged: false),
-                  onSecondaryTap: (pos) => showContextMenu(context, pos, [
-                    menuItem(
-                      'Stage',
-                      () => tab.stageEntries([e]),
-                      icon: Icons.add,
-                    ),
-                    menuItem(
-                      'Discard changes',
-                      () => actions.discard([e]),
-                      icon: Icons.delete_outline,
-                      danger: true,
-                    ),
-                    menuItem(
-                      'Open in external editor',
-                      () => openExternally(tab, e.path),
-                      icon: Icons.open_in_new,
-                    ),
-                    menuItem(
-                      'Copy path',
-                      () => copyToClipboard(context, e.path),
-                      icon: Icons.copy,
-                    ),
-                  ]),
-                  actions: [
-                    SmallIconButton(
-                      icon: Icons.delete_outline,
-                      tooltip: 'Discard',
-                      color: AppColors.danger,
-                      onPressed: () => actions.discard([e]),
-                    ),
-                    SmallIconButton(
-                      icon: Icons.add_circle_outline,
-                      tooltip: 'Stage file',
-                      color: AppColors.success,
-                      onPressed: () => tab.stageEntries([e]),
-                    ),
-                  ],
-                ),
-              SectionHeader(
-                title: 'Staged files',
-                count: staged.length,
-                actions: [
-                  TextButton(
-                    onPressed: staged.isEmpty
-                        ? null
-                        : () => tab.run('Unstage', tab.repo.unstageAll),
-                    child: const Text(
-                      'Unstage all',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              for (final e in staged)
-                _FileRow(
-                  kind: e.index ?? ChangeKind.modified,
-                  path: e.path,
-                  oldPath: e.oldPath,
-                  selected: isSel(e, true),
-                  onTap: () => tab.openWorkingFile(e, staged: true),
-                  onSecondaryTap: (pos) => showContextMenu(context, pos, [
-                    menuItem(
-                      'Unstage',
-                      () => tab.unstageEntries([e]),
-                      icon: Icons.remove,
-                    ),
-                    menuItem(
-                      'Copy path',
-                      () => copyToClipboard(context, e.path),
-                      icon: Icons.copy,
-                    ),
-                  ]),
-                  actions: [
-                    SmallIconButton(
-                      icon: Icons.remove_circle_outline,
-                      tooltip: 'Unstage file',
-                      color: AppColors.warning,
-                      onPressed: () => tab.unstageEntries([e]),
-                    ),
-                  ],
-                ),
-            ],
+          child: ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, i) {
+              final item = items[i];
+              final entry = item.entry;
+              if (entry == null) {
+                return _header(item.section, conflicts, unstaged, staged);
+              }
+              return _fileRow(context, actions, item.section, entry);
+            },
           ),
         ),
         const Divider(),
         _CommitComposer(tab: tab),
       ],
     );
+  }
+
+  Widget _header(
+    _WipSection section,
+    List<StatusEntry> conflicts,
+    List<StatusEntry> unstaged,
+    List<StatusEntry> staged,
+  ) {
+    switch (section) {
+      case _WipSection.conflicts:
+        return SectionHeader(title: 'Conflicts', count: conflicts.length);
+      case _WipSection.unstaged:
+        return SectionHeader(
+          title: 'Unstaged files',
+          count: unstaged.length,
+          actions: [
+            TextButton(
+              onPressed: unstaged.isEmpty
+                  ? null
+                  : () => tab.stageEntries(unstaged),
+              child: const Text('Stage all', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        );
+      case _WipSection.staged:
+        return SectionHeader(
+          title: 'Staged files',
+          count: staged.length,
+          actions: [
+            TextButton(
+              onPressed: staged.isEmpty
+                  ? null
+                  : () => tab.run('Unstage', tab.repo.unstageAll),
+              child: const Text('Unstage all', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        );
+    }
+  }
+
+  bool _isSelected(StatusEntry e, bool staged) {
+    final target = tab.diffTarget;
+    return target is WorkingFileTarget &&
+        target.entry.path == e.path &&
+        target.staged == staged;
+  }
+
+  Widget _fileRow(
+    BuildContext context,
+    RepoActions actions,
+    _WipSection section,
+    StatusEntry e,
+  ) {
+    switch (section) {
+      case _WipSection.conflicts:
+        return _FileRow(
+          kind: ChangeKind.conflicted,
+          path: e.path,
+          selected: _isSelected(e, false),
+          onTap: () => tab.openWorkingFile(e, staged: false),
+          actions: [
+            SmallIconButton(
+              icon: Icons.person_outline,
+              tooltip: 'Use ours (${e.conflictCode})',
+              onPressed: () => tab.run(
+                'Resolve',
+                () => tab.repo.resolveWith(e.path, ours: true),
+              ),
+            ),
+            SmallIconButton(
+              icon: Icons.people_outline,
+              tooltip: 'Use theirs',
+              onPressed: () => tab.run(
+                'Resolve',
+                () => tab.repo.resolveWith(e.path, ours: false),
+              ),
+            ),
+            SmallIconButton(
+              icon: Icons.check,
+              tooltip: 'Mark resolved (stage file as is)',
+              color: AppColors.success,
+              onPressed: () =>
+                  tab.run('Resolve', () => tab.repo.markResolved([e.path])),
+            ),
+            SmallIconButton(
+              icon: Icons.open_in_new,
+              tooltip: 'Open in external editor',
+              onPressed: () => openExternally(tab, e.path),
+            ),
+          ],
+        );
+      case _WipSection.unstaged:
+        return _FileRow(
+          kind: e.worktree ?? ChangeKind.modified,
+          path: e.path,
+          selected: _isSelected(e, false),
+          onTap: () => tab.openWorkingFile(e, staged: false),
+          onSecondaryTap: (pos) => showContextMenu(context, pos, [
+            menuItem('Stage', () => tab.stageEntries([e]), icon: Icons.add),
+            menuItem(
+              'Discard changes',
+              () => actions.discard([e]),
+              icon: Icons.delete_outline,
+              danger: true,
+            ),
+            menuItem(
+              'Open in external editor',
+              () => openExternally(tab, e.path),
+              icon: Icons.open_in_new,
+            ),
+            menuItem(
+              'Copy path',
+              () => copyToClipboard(context, e.path),
+              icon: Icons.copy,
+            ),
+          ]),
+          actions: [
+            SmallIconButton(
+              icon: Icons.delete_outline,
+              tooltip: 'Discard',
+              color: AppColors.danger,
+              onPressed: () => actions.discard([e]),
+            ),
+            SmallIconButton(
+              icon: Icons.add_circle_outline,
+              tooltip: 'Stage file',
+              color: AppColors.success,
+              onPressed: () => tab.stageEntries([e]),
+            ),
+          ],
+        );
+      case _WipSection.staged:
+        return _FileRow(
+          kind: e.index ?? ChangeKind.modified,
+          path: e.path,
+          oldPath: e.oldPath,
+          selected: _isSelected(e, true),
+          onTap: () => tab.openWorkingFile(e, staged: true),
+          onSecondaryTap: (pos) => showContextMenu(context, pos, [
+            menuItem(
+              'Unstage',
+              () => tab.unstageEntries([e]),
+              icon: Icons.remove,
+            ),
+            menuItem(
+              'Copy path',
+              () => copyToClipboard(context, e.path),
+              icon: Icons.copy,
+            ),
+          ]),
+          actions: [
+            SmallIconButton(
+              icon: Icons.remove_circle_outline,
+              tooltip: 'Unstage file',
+              color: AppColors.warning,
+              onPressed: () => tab.unstageEntries([e]),
+            ),
+          ],
+        );
+    }
   }
 }
 
