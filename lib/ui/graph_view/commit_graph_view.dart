@@ -357,7 +357,7 @@ class _GraphRowState extends State<_GraphRow> {
     final commit = graph.commitAt(row);
     final stash = graph.stashAt(row);
     final sha = commit?.sha ?? wipSha;
-    final selected = tab.selectedSha == sha;
+    final selected = tab.isSelected(sha);
     final laneColor = AppColors.lane(graph.layout.nodeColor[row]);
     final isHit = tab.searchHitSet.contains(row);
     final dimmed = tab.search.trim().isNotEmpty && !isHit;
@@ -384,11 +384,29 @@ class _GraphRowState extends State<_GraphRow> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           widget.onFocus();
-          unawaited(tab.select(sha));
+          // Shift: select a range; Ctrl/Cmd: add or remove this commit.
+          final kb = HardwareKeyboard.instance;
+          if (kb.isShiftPressed) {
+            tab.selectRange(sha);
+          } else if (kb.isControlPressed || kb.isMetaPressed) {
+            tab.toggleSelect(sha);
+          } else {
+            unawaited(tab.select(sha));
+          }
         },
         onSecondaryTapUp: commit == null
             ? null
             : (d) {
+                if (tab.multiSelection.contains(sha)) {
+                  unawaited(
+                    showContextMenu(
+                      context,
+                      d.globalPosition,
+                      widget.actions.multiCommitMenu(),
+                    ),
+                  );
+                  return;
+                }
                 unawaited(tab.select(sha));
                 unawaited(
                   showContextMenu(

@@ -135,6 +135,25 @@ class RepoTabController extends ChangeNotifier {
 
   // Selection.
   String? selectedSha; // wipSha for the WIP row
+
+  /// Commits selected together (Shift/Ctrl-click); empty unless two or
+  /// more are. The WIP row and stashes can't be part of it.
+  Set<String> multiSelection = const {};
+
+  /// Start of a Shift range.
+  String? _anchor;
+
+  bool isSelected(String sha) => multiSelection.isEmpty
+      ? selectedSha == sha
+      : multiSelection.contains(sha);
+
+  /// The multi-selected commits, oldest first (bottom to top in the graph).
+  List<Commit> get selectedCommits {
+    final rows = [for (final sha in multiSelection) ?graph.rowOf(sha)]
+      ..sort((a, b) => b.compareTo(a));
+    return [for (final r in rows) graph.commitAt(r)!];
+  }
+
   CommitDetails? details;
   List<FileChange> commitFiles = const [];
   bool detailsLoading = false;
@@ -306,6 +325,10 @@ class RepoTabController extends ChangeNotifier {
     }
     if (_disposed) return;
 
+    if (multiSelection.isNotEmpty) {
+      final kept = multiSelection.where((s) => graph.rowOf(s) != null).toSet();
+      multiSelection = kept.length > 1 ? kept : const {};
+    }
     // Keep the WIP selection / diff in sync with the working tree.
     if (selectedSha == wipSha && !graph.hasWip && diffTarget == null) {
       selectedSha = null;
@@ -470,7 +493,63 @@ class RepoTabController extends ChangeNotifier {
 
   // ------------------------------------------------------------ selection
 
-  Future<void> select(String sha) async {
+  /// Whether [sha] can be part of a multi-selection.
+  bool _multiSelectable(String sha) =>
+      sha != wipSha &&
+      !graph.stashes.containsKey(sha) &&
+      graph.rowOf(sha) != null;
+
+  /// Ctrl/Cmd-click: adds [sha] to the selection or removes it.
+  void toggleSelect(String sha) {
+    if (!_multiSelectable(sha)) return;
+    final set = {if (multiSelection.isEmpty) ?selectedSha, ...multiSelection}
+      ..removeWhere((s) => !_multiSelectable(s));
+    if (!set.remove(sha)) set.add(sha);
+    _anchor = sha;
+    _setMulti(set);
+  }
+
+  /// Shift-click: selects every commit between the anchor and [sha].
+  void selectRange(String sha) {
+    final from = graph.rowOf(_anchor ?? selectedSha ?? sha);
+    final to = graph.rowOf(sha);
+    if (from == null || to == null || !_multiSelectable(sha)) return;
+    final set = <String>{
+      for (var r = min(from, to); r <= max(from, to); r++)
+        if (graph.commitAt(r)?.sha case final s? when _multiSelectable(s)) s,
+    };
+    _setMulti(set);
+  }
+
+  void _setMulti(Set<String> set) {
+    if (set.length <= 1) {
+      multiSelection = const {};
+      if (set.isNotEmpty) {
+        final only = set.single;
+        selectedSha = null; // force a reload of its details
+        unawaited(select(only, keepAnchor: true));
+        return;
+      }
+      _notify();
+      return;
+    }
+    multiSelection = set;
+    closeDiff(notify: false);
+    _notify();
+  }
+
+  void clearMultiSelection() {
+    if (multiSelection.isEmpty) return;
+    multiSelection = const {};
+    _notify();
+  }
+
+  Future<void> select(String sha, {bool keepAnchor = false}) async {
+    if (!keepAnchor) _anchor = sha;
+    if (multiSelection.isNotEmpty) {
+      multiSelection = const {};
+      _notify();
+    }
     if (selectedSha == sha && (sha == wipSha || details?.sha == sha)) return;
     selectedSha = sha;
     closeDiff(notify: false);

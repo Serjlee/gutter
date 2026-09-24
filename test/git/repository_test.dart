@@ -366,6 +366,25 @@ void main() {
     expect(await repo.stashes(), isEmpty);
   });
 
+  test('cherry-picks several commits in order', () async {
+    t.commit('base', {'a.txt': 'a\n'});
+    t.git(['checkout', '-q', '-b', 'side']);
+    t.commit('one', {'one.txt': '1\n'});
+    t.commit('two', {'two.txt': '2\n'});
+    t.git(['checkout', '-q', 'main']);
+    final commits = (await repo.log())
+        .where((c) => c.subject == 'one' || c.subject == 'two')
+        .toList()
+        .reversed // oldest first
+        .toList();
+    await repo.cherryPickAll(commits);
+    expect(t.git(['log', '--format=%s', '-3']).trim().split('\n'), [
+      'two',
+      'one',
+      'base',
+    ]);
+  });
+
   test('checking out a remote branch fast-forwards the local one', () async {
     final a = t.commit('a', {'a.txt': 'a\n'});
     final b = t.commit('b', {'a.txt': 'b\n'});

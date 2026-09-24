@@ -18,7 +18,10 @@ class DetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget child;
-    if (tab.selectedSha == wipSha || (tab.selectedSha == null && tab.isDirty)) {
+    if (tab.multiSelection.isNotEmpty) {
+      child = MultiCommitPanel(tab: tab);
+    } else if (tab.selectedSha == wipSha ||
+        (tab.selectedSha == null && tab.isDirty)) {
       child = WipPanel(tab: tab);
     } else if (tab.selectedSha != null) {
       child = CommitDetailsPanel(tab: tab);
@@ -31,6 +34,118 @@ class DetailsPanel extends StatelessWidget {
       );
     }
     return Container(color: AppColors.panel, child: child);
+  }
+}
+
+/// Several commits selected in the graph: what they are and what can be
+/// done with them together.
+class MultiCommitPanel extends StatelessWidget {
+  const MultiCommitPanel({super.key, required this.tab});
+  final RepoTabController tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final commits = tab.selectedCommits.reversed.toList(); // newest first
+    final n = commits.length;
+    final actions = RepoActions(context, tab);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$n commits selected',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              SmallIconButton(
+                icon: Icons.close,
+                tooltip: 'Clear selection',
+                onPressed: tab.clearMultiSelection,
+              ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(14, 0, 14, 10),
+          child: Text(
+            'Shift-click selects a range, Ctrl/Cmd-click adds or removes '
+            'a commit.',
+            style: TextStyle(fontSize: 12, color: AppColors.textDim),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                key: const ValueKey('multi-cherry-pick'),
+                onPressed: tab.busy == null ? actions.cherryPickSelected : null,
+                icon: const Icon(Icons.content_copy, size: 16),
+                label: Text('Cherry-pick $n commits'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('multi-squash'),
+                onPressed:
+                    tab.busy == null && tab.operation == RepoOperation.none
+                    ? actions.squashSelected
+                    : null,
+                icon: const Icon(Icons.merge, size: 16),
+                label: Text('Squash $n commits…'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            itemCount: n,
+            itemBuilder: (context, i) {
+              final c = commits[i];
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      c.shortSha,
+                      style: monoStyle(size: 12, color: AppColors.textDim),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        c.subject,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      c.authorName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 

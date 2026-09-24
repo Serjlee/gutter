@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../../git/models.dart';
+import '../../git/rebase_plan.dart';
 import '../../git/repository.dart';
 import '../dialogs/dialogs.dart';
 import '../dialogs/interactive_rebase_dialog.dart';
@@ -227,6 +228,87 @@ class RepoActions {
       confirmLabel: 'Cherry-pick',
     );
     if (ok) await tab.run('Cherry-pick', () => repo.cherryPick(c));
+  }
+
+  /// Cherry-picks the multi-selected commits, oldest first.
+  Future<void> cherryPickSelected() async {
+    final commits = tab.selectedCommits;
+    if (commits.isEmpty) return;
+    final branch = tab.currentBranch ?? 'HEAD';
+    final ok = await confirm(
+      context,
+      title: 'Cherry-pick ${commits.length} commits',
+      message:
+          'Apply these commits onto $branch, oldest first?\n\n'
+          '${commits.map((c) => '${_short(c.sha)}  ${c.subject}').join('\n')}',
+      confirmLabel: 'Cherry-pick',
+    );
+    if (!ok) return;
+    final done = await tab.run(
+      'Cherry-pick',
+      () => repo.cherryPickAll(commits),
+      success: 'Cherry-picked ${commits.length} commits onto $branch',
+    );
+    if (done) tab.clearMultiSelection();
+  }
+
+  /// Squashes the multi-selected commits into the oldest of them, through
+  /// the interactive rebase dialog (preset, so the message can be edited).
+  /// They must be consecutive commits of the current branch.
+  Future<void> squashSelected() async {
+    final commits = tab.selectedCommits; // oldest first
+    if (commits.length < 2) return;
+    final oldest = commits.first;
+    final base = oldest.parents.isEmpty ? null : oldest.parents.first;
+    final shas = {for (final c in commits) c.sha};
+    await showInteractiveRebase(
+      context,
+      tab,
+      base,
+      baseLabel: base == null ? 'root' : _short(base),
+      initialSelection: shas,
+      prepare: (steps) {
+        if (presetSquash(steps, shas)) return true;
+        tab.app.notify(
+          'Only consecutive commits of ${tab.currentBranch ?? 'HEAD'} '
+          '(without merges) can be squashed together.',
+          error: true,
+        );
+        return false;
+      },
+    );
+  }
+
+  List<PopupMenuEntry<VoidCallback>> multiCommitMenu() {
+    final commits = tab.selectedCommits;
+    final n = commits.length;
+    return [
+      menuItem(
+        'Cherry-pick $n commits',
+        cherryPickSelected,
+        icon: Icons.content_copy,
+      ),
+      menuItem(
+        'Squash $n commits…',
+        squashSelected,
+        icon: Icons.merge,
+        enabled: tab.operation == RepoOperation.none,
+      ),
+      const PopupMenuDivider(),
+      menuItem(
+        'Copy SHAs',
+        () => copyToClipboard(
+          context,
+          commits.reversed.map((c) => c.sha).join('\n'),
+        ),
+        icon: Icons.tag,
+      ),
+      menuItem(
+        'Clear selection',
+        tab.clearMultiSelection,
+        icon: Icons.deselect,
+      ),
+    ];
   }
 
   Future<void> revert(Commit c) async {

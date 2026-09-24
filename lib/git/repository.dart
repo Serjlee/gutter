@@ -632,6 +632,16 @@ class Repository {
     ]),
   );
 
+  /// Cherry-picks [commits] (oldest first) in one sequence; on a conflict
+  /// git stops and the rest follow `cherry-pick --continue`.
+  Future<void> cherryPickAll(List<Commit> commits) => _mutate(
+    () => _run([
+      'cherry-pick',
+      if (commits.any((c) => c.isMerge)) ...['-m', '1'],
+      for (final c in commits) c.sha,
+    ]),
+  );
+
   Future<void> revert(Commit c) => _mutate(
     () => _run([
       'revert',

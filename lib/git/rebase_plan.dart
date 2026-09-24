@@ -121,4 +121,24 @@ class RebasePlan {
   }
 }
 
+/// Presets [steps] (oldest first) so the commits in [shas] are squashed
+/// into the oldest of them. Returns false, changing nothing, unless they
+/// are all among [steps] and consecutive.
+bool presetSquash(List<RebaseStep> steps, Set<String> shas) {
+  final idx = [
+    for (var i = 0; i < steps.length; i++)
+      if (shas.contains(steps[i].sha)) i,
+  ];
+  if (idx.length < 2 ||
+      idx.length != shas.length ||
+      idx.last - idx.first != idx.length - 1) {
+    return false;
+  }
+  steps[idx.first].action = RebaseAction.pick;
+  for (final i in idx.skip(1)) {
+    steps[i].action = RebaseAction.squash;
+  }
+  return true;
+}
+
 String shellQuote(String s) => "'${s.replaceAll("'", r"'\''")}'";

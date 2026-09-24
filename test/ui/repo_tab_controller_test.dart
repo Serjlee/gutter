@@ -173,6 +173,49 @@ void main() {
       },
     );
 
+    test('multi-selects commits with toggle and range', () async {
+      await tab.load();
+      String sha(String subject) =>
+          tab.graph.commits.firstWhere((c) => c.subject == subject).sha;
+      final two = sha('two'), side = sha('side work'), one = sha('one');
+
+      await tab.select(two);
+      tab.toggleSelect(one);
+      expect(tab.multiSelection, {two, one});
+      expect(tab.isSelected(side), isFalse);
+      // Oldest first, whatever the click order.
+      expect(tab.selectedCommits.map((c) => c.subject), ['one', 'two']);
+
+      // Toggling back down to one commit returns to a single selection.
+      tab.toggleSelect(one);
+      expect(tab.multiSelection, isEmpty);
+      await Future<void>.delayed(Duration.zero);
+      expect(tab.selectedSha, two);
+
+      // Shift range from the anchor (the last clicked commit).
+      await tab.select(two);
+      tab.selectRange(one);
+      expect(tab.multiSelection, {two, side, one});
+
+      // A plain click clears it.
+      await tab.select(side);
+      expect(tab.multiSelection, isEmpty);
+      expect(tab.selectedSha, side);
+    });
+
+    test('the WIP row and stashes stay out of a multi-selection', () async {
+      t.write('a.txt', 'a\nb\nstash me\n');
+      await tab.repo.stashPush(message: 'stashed');
+      t.write('a.txt', 'a\nb\ndirty\n');
+      await tab.load();
+      expect(tab.graph.hasWip, isTrue);
+      final one = tab.graph.commits.firstWhere((c) => c.subject == 'one').sha;
+      await tab.select(wipSha);
+      tab.selectRange(one);
+      final subjects = tab.selectedCommits.map((c) => c.subject).toList();
+      expect(subjects, ['one', 'side work', 'two']);
+    });
+
     test('selects commits and stages selected lines from the diff', () async {
       await tab.load();
       final side = tab.graph.commits.firstWhere(

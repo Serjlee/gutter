@@ -45,6 +45,11 @@ fetch/push.
   reset (soft / mixed / hard), stash, pull (ff-only / merge / rebase),
   push (sets the upstream automatically; if the remote rejects it, Gutter
   offers a force push with lease).
+- **Multiple commits**: Shift-click selects a range in the graph and
+  Ctrl/Cmd-click adds or removes commits. Selected commits can be
+  cherry-picked together (oldest first), or squashed into one when
+  they're consecutive commits of the current branch (this opens the
+  interactive rebase dialog, preset, so you can edit the message).
 - **Interactive rebase**: reorder, pick, reword, edit, squash, fixup
   and drop, all without a text editor.
   - Select several commits (checkboxes, Shift/Ctrl-click, `Ctrl/Cmd A`)

@@ -13,6 +13,8 @@ Future<void> showInteractiveRebase(
   RepoTabController tab,
   String? base, {
   required String baseLabel,
+  bool Function(List<RebaseStep> steps)? prepare,
+  Set<String> initialSelection = const {},
 }) async {
   if (tab.isDirty) {
     tab.app.notify(
@@ -34,6 +36,8 @@ Future<void> showInteractiveRebase(
     tab.app.notify('No commits to rebase');
     return;
   }
+  // Lets callers preset actions (e.g. squash a selection); false cancels.
+  if (prepare != null && !prepare(steps)) return;
   if (!context.mounted) return;
   final plan = await showAppDialog<RebasePlan>(
     context: context,
@@ -42,6 +46,7 @@ Future<void> showInteractiveRebase(
       branch: tab.currentBranch ?? 'HEAD',
       baseLabel: baseLabel,
       hasMerges: hasMerges,
+      initialSelection: initialSelection,
     ),
   );
   if (plan == null) return;
@@ -58,6 +63,7 @@ class InteractiveRebaseDialog extends StatefulWidget {
     required this.branch,
     required this.baseLabel,
     required this.hasMerges,
+    this.initialSelection = const {},
   });
 
   /// Oldest first.
@@ -65,6 +71,10 @@ class InteractiveRebaseDialog extends StatefulWidget {
   final String branch;
   final String baseLabel;
   final bool hasMerges;
+
+  /// Shas selected when the dialog opens (default: the newest commit); the
+  /// oldest of them is highlighted.
+  final Set<String> initialSelection;
 
   @override
   State<InteractiveRebaseDialog> createState() =>
@@ -105,7 +115,16 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   @override
   void initState() {
     super.initState();
-    if (_rows.isNotEmpty) _selectOnly(_rows.first);
+    final initial = _rows
+        .where((s) => widget.initialSelection.contains(s.sha))
+        .toList();
+    if (initial.isNotEmpty) {
+      _selection.addAll(initial);
+      _anchor = initial.last;
+      _setCursor(initial.last);
+    } else if (_rows.isNotEmpty) {
+      _selectOnly(_rows.first);
+    }
   }
 
   @override

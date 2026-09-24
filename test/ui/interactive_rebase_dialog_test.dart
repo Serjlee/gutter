@@ -21,7 +21,10 @@ void main() {
     ];
   });
 
-  Future<void> pumpDialog(WidgetTester tester) async {
+  Future<void> pumpDialog(
+    WidgetTester tester, {
+    Set<String> initialSelection = const {},
+  }) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -34,6 +37,7 @@ void main() {
             branch: 'main',
             baseLabel: 'base',
             hasMerges: false,
+            initialSelection: initialSelection,
           ),
         ),
       ),
@@ -158,5 +162,24 @@ void main() {
     await key(tester, LogicalKeyboardKey.keyD);
     expect(step('e').action, RebaseAction.reword);
     expect(step('e').newMessage, 'new message');
+  });
+
+  testWidgets('opens with a preset squash selected, oldest highlighted', (
+    tester,
+  ) async {
+    // What "Squash 3 commits" in the graph does before opening the dialog.
+    expect(presetSquash(steps, {'bbbbbbb0', 'ccccccc0', 'ddddddd0'}), isTrue);
+    await pumpDialog(
+      tester,
+      initialSelection: {'bbbbbbb0', 'ccccccc0', 'ddddddd0'},
+    );
+    expect(find.text('3 selected'), findsOneWidget);
+    // The highlighted row is b, the head of the squash group, so the
+    // message box shows the combined message.
+    expect(find.text('New message'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'b\n\nc\n\nd',
+    );
   });
 }
