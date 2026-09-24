@@ -20,8 +20,26 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Version
+        id: version
+        run: |
+          commit="${GITHUB_SHA::7}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=""  # manual runs are dev builds: commit only
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build
-        run: flutter build macos --release
+        env:
+          GUTTER_VERSION: ${{ steps.version.outputs.version }}
+          GUTTER_COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          flutter build macos --release \
+            --dart-define=GUTTER_VERSION="$GUTTER_VERSION" \
+            --dart-define=GUTTER_COMMIT="$GUTTER_COMMIT"
 
       - name: Sign (ad-hoc) and verify
         working-directory: build/macos/Build/Products/Release
@@ -33,8 +51,8 @@ jobs:
       - name: Package
         id: package
         run: |
-          version=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; fi
+          version="${{ steps.version.outputs.version }}"
+          [[ -n "$version" ]] || version="dev-${{ steps.version.outputs.commit }}"
           zip="Gutter-macos-${version}.zip"
           ditto -c -k --keepParent \
             build/macos/Build/Products/Release/Gutter.app "$zip"

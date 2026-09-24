@@ -23,6 +23,9 @@ class Settings {
   /// Show working-tree files as a folder tree instead of a flat list.
   bool fileTree = false;
 
+  /// Periodically look up the latest Gutter release on GitHub.
+  bool checkForUpdates = true;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -38,6 +41,7 @@ class Settings {
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
     'fileTree': fileTree,
+    'checkForUpdates': checkForUpdates,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -57,7 +61,8 @@ class Settings {
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
-      ..fileTree = j['fileTree'] == true;
+      ..fileTree = j['fileTree'] == true
+      ..checkForUpdates = j['checkForUpdates'] != false;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

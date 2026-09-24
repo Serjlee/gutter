@@ -116,6 +116,14 @@ flutter run -d macos        # or: -d linux
 flutter build macos --release
 ```
 
+- **Version label**: the home tab shows the build's version, which is
+  embedded at build time. Tagged CI releases set both values; to label a
+  local build, pass:
+  `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
+- **Update checks**: every 6 hours Gutter asks GitHub for the latest
+  release of `serjlee/gutter` and shows a link on the home tab when a
+  newer one exists. It's the app's only network request of its own, and
+  you can turn it off in the home tab settings.
 - **Linux** also needs `clang cmake ninja-build pkg-config libgtk-3-dev`.
 - **macOS**: the app sandbox is disabled (see `macos/Runner/*.entitlements`)
   because Gutter runs `git` and reads repositories anywhere on disk.

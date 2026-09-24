@@ -127,6 +127,8 @@ class _HomeTabState extends State<HomeTab> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      _VersionInfo(app: app),
                       const SizedBox(height: 16),
                       _ActionButton(
                         icon: Icons.folder_open,
@@ -454,6 +456,16 @@ class _SettingsForm extends StatelessWidget {
           ),
         ),
         _row(
+          'Check for updates',
+          SizedBox(
+            height: 24,
+            child: Switch(
+              value: s.checkForUpdates,
+              onChanged: app.setCheckForUpdates,
+            ),
+          ),
+        ),
+        _row(
           'Commits loaded',
           AppDropdown<int>(
             value: s.maxCommits,
@@ -516,6 +528,132 @@ class _GitPathFieldState extends State<_GitPathField> {
           hintText: widget.app.git.gitPath,
         ),
       ),
+    );
+  }
+}
+
+/// Current build and the latest release, with a link when an update exists.
+class _VersionInfo extends StatelessWidget {
+  const _VersionInfo({required this.app});
+  final AppController app;
+
+  @override
+  Widget build(BuildContext context) {
+    final updates = app.updates;
+    return ListenableBuilder(
+      listenable: updates,
+      builder: (context, _) {
+        final latest = updates.latest;
+        final enabled = app.settings.checkForUpdates;
+        Widget? status;
+        if (latest != null && updates.updateAvailable) {
+          status = Container(
+            key: const ValueKey('update-available'),
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.12),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.5),
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.system_update_alt,
+                      size: 16,
+                      color: AppColors.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${latest.tag} is available',
+                        style: const TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => openWithSystem(latest.url),
+                    icon: const Icon(Icons.open_in_new, size: 15),
+                    label: const Text('Open release page'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else if (latest != null) {
+          status = Row(
+            children: [
+              Flexible(
+                child: Text(
+                  app.updates.current.isRelease
+                      ? 'Up to date (latest ${latest.tag})'
+                      : 'Latest release: ${latest.tag}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textFaint,
+                  ),
+                ),
+              ),
+              if (!app.updates.current.isRelease)
+                SmallIconButton(
+                  icon: Icons.open_in_new,
+                  size: 13,
+                  tooltip: 'Open release page',
+                  onPressed: () => openWithSystem(latest.url),
+                ),
+            ],
+          );
+        } else if (enabled && updates.checking) {
+          status = const Text(
+            'Checking for updates…',
+            style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+          );
+        } else if (enabled && updates.error != null) {
+          status = Row(
+            children: [
+              Flexible(
+                child: Tooltip(
+                  message: updates.error!,
+                  child: const Text(
+                    'Update check failed',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
+                ),
+              ),
+              SmallIconButton(
+                icon: Icons.refresh,
+                size: 13,
+                tooltip: 'Retry',
+                onPressed: updates.check,
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(
+              updates.current.label,
+              key: const ValueKey('app-version'),
+              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+            ),
+            ?status,
+          ],
+        );
+      },
     );
   }
 }

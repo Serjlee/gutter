@@ -8,13 +8,18 @@ import '../git/repository.dart';
 import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'settings_store.dart';
+import 'update_checker.dart';
 import 'zoom.dart';
 
 /// Top-level app state: settings, open tabs, window focus, repo discovery.
 class AppController extends ChangeNotifier {
-  AppController(this.store, this.settings) {
+  AppController(this.store, this.settings, {UpdateChecker? updates})
+    : updates = updates ?? UpdateChecker() {
     git = GitRunner(gitPath: settings.gitPath);
   }
+
+  /// Latest-release lookup shown on the home tab.
+  final UpdateChecker updates;
 
   final SettingsStore? store;
   final Settings settings;
@@ -186,6 +191,22 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts periodic update checks if enabled.
+  void startUpdateChecks() {
+    if (settings.checkForUpdates) updates.start();
+  }
+
+  void setCheckForUpdates(bool value) {
+    settings.checkForUpdates = value;
+    if (value) {
+      updates.start(delay: Duration.zero);
+    } else {
+      updates.stop();
+    }
+    save();
+    notifyListeners();
+  }
+
   void setMaxCommits(int n) {
     settings.maxCommits = n;
     save();
@@ -264,6 +285,7 @@ class AppController extends ChangeNotifier {
       s.cancel();
     }
     store?.saveNow(settings);
+    updates.dispose();
     _messages.close();
     super.dispose();
   }
