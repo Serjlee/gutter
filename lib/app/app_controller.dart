@@ -197,21 +197,8 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Starts periodic update checks if enabled.
-  void startUpdateChecks() {
-    if (settings.checkForUpdates) updates.start();
-  }
-
-  void setCheckForUpdates(bool value) {
-    settings.checkForUpdates = value;
-    if (value) {
-      updates.start(delay: Duration.zero);
-    } else {
-      updates.stop();
-    }
-    save();
-    notifyListeners();
-  }
+  /// Starts periodic update checks.
+  void startUpdateChecks() => updates.start();
 
   void setMaxCommits(int n) {
     settings.maxCommits = n;

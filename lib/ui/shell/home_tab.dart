@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
+import '../../git/git_runner.dart';
 import '../../git/repository.dart';
 import '../dialogs/dialogs.dart';
 import '../widgets/common.dart';
@@ -467,16 +468,6 @@ class _SettingsForm extends StatelessWidget {
           ),
         ),
         _row(
-          'Check for updates',
-          SizedBox(
-            height: 24,
-            child: Switch(
-              value: s.checkForUpdates,
-              onChanged: app.setCheckForUpdates,
-            ),
-          ),
-        ),
-        _row(
           'Commits loaded',
           AppDropdown<int>(
             value: s.maxCommits,
@@ -488,18 +479,25 @@ class _SettingsForm extends StatelessWidget {
             onChanged: app.setMaxCommits,
           ),
         ),
-        const SizedBox(height: 8),
-        _GitPathField(app: app),
+        _row('Git executable', _GitPathField(app: app), expand: true),
       ],
     );
   }
 
-  Widget _row(String label, Widget control) => Padding(
+  /// A label and its control; with [expand] the control takes the rest of
+  /// the row (text fields) instead of the label.
+  Widget _row(String label, Widget control, {bool expand = false}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
       children: [
-        Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
-        control,
+        if (expand) ...[
+          Text(label, style: const TextStyle(fontSize: 13)),
+          const SizedBox(width: 12),
+          Expanded(child: control),
+        ] else ...[
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+          control,
+        ],
       ],
     ),
   );
@@ -518,6 +516,9 @@ class _GitPathFieldState extends State<_GitPathField> {
     text: widget.app.settings.gitPath ?? '',
   );
 
+  /// What Gutter uses when no path is set (shown as the hint).
+  final _defaultPath = GitRunner.resolveGitPath();
+
   @override
   void dispose() {
     _c.dispose();
@@ -531,12 +532,17 @@ class _GitPathFieldState extends State<_GitPathField> {
         if (!f) widget.app.setGitPath(_c.text);
       },
       child: TextField(
+        key: const ValueKey('git-path'),
         controller: _c,
-        style: const TextStyle(fontSize: 12.5),
+        style: const TextStyle(fontSize: 13),
         onSubmitted: widget.app.setGitPath,
         decoration: InputDecoration(
-          labelText: 'git executable',
-          hintText: widget.app.git.gitPath,
+          hintText: _defaultPath,
+          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textFaint),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
         ),
       ),
     );
@@ -555,7 +561,6 @@ class _VersionInfo extends StatelessWidget {
       listenable: updates,
       builder: (context, _) {
         final latest = updates.latest;
-        final enabled = app.settings.checkForUpdates;
         Widget? status;
         if (latest != null && updates.updateAvailable) {
           status = Container(
@@ -624,12 +629,12 @@ class _VersionInfo extends StatelessWidget {
                 ),
             ],
           );
-        } else if (enabled && updates.checking) {
+        } else if (updates.checking) {
           status = const Text(
             'Checking for updates…',
             style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
           );
-        } else if (enabled && updates.error != null) {
+        } else if (updates.error != null) {
           status = Row(
             children: [
               Flexible(

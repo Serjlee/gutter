@@ -128,8 +128,7 @@ flutter build macos --release
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
 - **Update checks**: every 6 hours Gutter asks GitHub for the latest
   release of `serjlee/gutter` and shows a link on the home tab when a
-  newer one exists. It's the app's only network request of its own, and
-  you can turn it off in the home tab settings.
+  newer one exists. It's the app's only network request of its own.
 - **Icons**: the app icons and the home tab logo are generated from
   `assets/icon/source.png` by `tool/make_icons.sh` (needs ImageMagick).
 - **Linux** also needs `clang cmake ninja-build pkg-config libgtk-3-dev`.

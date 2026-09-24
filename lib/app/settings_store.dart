@@ -26,9 +26,6 @@ class Settings {
   /// Syntax highlighting in diffs and file previews (costs CPU on big files).
   bool syntaxHighlight = false;
 
-  /// Periodically look up the latest Gutter release on GitHub.
-  bool checkForUpdates = true;
-
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -44,7 +41,6 @@ class Settings {
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
     'fileTree': fileTree,
-    'checkForUpdates': checkForUpdates,
     'syntaxHighlight': syntaxHighlight,
   };
 
@@ -66,7 +62,6 @@ class Settings {
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
       ..fileTree = j['fileTree'] == true
-      ..checkForUpdates = j['checkForUpdates'] != false
       ..syntaxHighlight = j['syntaxHighlight'] == true;
     final cw = j['columnWidths'];
     if (cw is Map) {
