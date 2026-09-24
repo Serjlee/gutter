@@ -5,6 +5,8 @@ GitKraken. Built with Flutter, driving your system `git`. No accounts or
 cloud features, and nothing leaves your machine except your own
 fetch/push.
 
+> **Disclaimer:** This app was heavily vibe coded with Claude Opus 5.5.
+
 ![Commit graph](docs/graph.png)
 
 ## Features
