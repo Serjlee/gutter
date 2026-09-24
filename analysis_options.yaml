@@ -1,0 +1,17 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - macos/**
+    - linux/**
+  language:
+    strict-casts: true
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - prefer_final_locals
+    - unawaited_futures
+    - always_declare_return_types
+    - avoid_void_async
