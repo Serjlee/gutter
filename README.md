@@ -24,18 +24,26 @@ fetch/push.
 - **Repository discovery**: pick a folder and every git repository under
   it (including nested ones) is found in the background. You can also
   open, clone or init repositories directly.
+
+  ![Home tab](docs/dashboard.png)
+
 - **Staging**: stage, unstage or discard whole files, single hunks, or
   selected lines (click the line-number gutter; shift-click selects a
   range).
 
   ![Line staging](docs/line-staging.png)
 
-- **Diffs**: unified or split view, plus a full-file preview (images too).
+- **Diffs**: unified or split view, plus a full-file preview (images too),
+  with optional syntax highlighting for about 40 languages.
+
+  ![Diff with syntax highlighting](docs/diff-highlight.png)
+
 - **Branches and history**: checkout (including remote branches as
   tracking branches), create, rename and delete branches, tags, merge
   (ff / no-ff / ff-only / squash), rebase, cherry-pick, revert,
   reset (soft / mixed / hard), stash, pull (ff-only / merge / rebase),
-  push (sets the upstream automatically; force-with-lease is available).
+  push (sets the upstream automatically; if the remote rejects it, Gutter
+  offers a force push with lease).
 - **Interactive rebase**: reorder, pick, reword, edit, squash, fixup
   and drop, all without a text editor.
 
