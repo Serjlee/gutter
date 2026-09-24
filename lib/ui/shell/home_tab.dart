@@ -120,12 +120,23 @@ class _HomeTabState extends State<HomeTab> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      const Text(
-                        'Gutter',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/icon/logo.png',
+                            key: const ValueKey('app-logo'),
+                            height: 32,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Gutter',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       _VersionInfo(app: app),

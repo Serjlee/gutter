@@ -130,6 +130,8 @@ flutter build macos --release
   release of `serjlee/gutter` and shows a link on the home tab when a
   newer one exists. It's the app's only network request of its own, and
   you can turn it off in the home tab settings.
+- **Icons**: the app icons and the home tab logo are generated from
+  `assets/icon/source.png` by `tool/make_icons.sh` (needs ImageMagick).
 - **Linux** also needs `clang cmake ninja-build pkg-config libgtk-3-dev`.
 - **macOS**: the app sandbox is disabled (see `macos/Runner/*.entitlements`)
   because Gutter runs `git` and reads repositories anywhere on disk.
