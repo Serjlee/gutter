@@ -66,43 +66,53 @@ class CommitDetailsPanel extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-          child: Row(
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            runSpacing: 4,
             children: [
-              Text(
-                'commit ',
-                style: monoStyle(size: 12, color: AppColors.textDim),
-              ),
-              InkWell(
-                onTap: () => copyToClipboard(context, d.sha),
-                child: Tooltip(
-                  message: 'Copy full SHA',
-                  child: Text(
-                    d.sha.substring(0, 10),
-                    style: monoStyle(size: 12, color: AppColors.accent),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'commit ',
+                    style: monoStyle(size: 12, color: AppColors.textDim),
                   ),
-                ),
-              ),
-              const Spacer(),
-              if (d.parents.isNotEmpty) ...[
-                Text(
-                  d.parents.length > 1 ? 'parents ' : 'parent ',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textDim,
-                  ),
-                ),
-                for (final p in d.parents)
                   InkWell(
-                    onTap: () => tab.jumpToSha(p),
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 4),
+                    onTap: () => copyToClipboard(context, d.sha),
+                    child: Tooltip(
+                      message: 'Copy full SHA',
                       child: Text(
-                        p.substring(0, 7),
+                        d.sha.substring(0, 10),
                         style: monoStyle(size: 12, color: AppColors.accent),
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
+              if (d.parents.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      d.parents.length > 1 ? 'parents ' : 'parent ',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                    for (final p in d.parents)
+                      InkWell(
+                        onTap: () => tab.jumpToSha(p),
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            p.substring(0, 7),
+                            style: monoStyle(size: 12, color: AppColors.accent),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
             ],
           ),
         ),

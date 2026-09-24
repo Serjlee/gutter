@@ -192,6 +192,13 @@ void main() {
     });
   });
 
+  test('writes a commit-graph once', () async {
+    t.commit('one', {'a.txt': 'a\n'});
+    expect(await repo.ensureCommitGraph(), isTrue);
+    expect(await repo.ensureCommitGraph(), isFalse);
+    expect(await repo.log(), hasLength(1));
+  });
+
   test('commit and amend', () async {
     t.commit('init', {'a.txt': 'a\n'});
     t.write('a.txt', 'b\n');

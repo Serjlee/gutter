@@ -15,6 +15,7 @@ import '../../git/parsers/log_parser.dart';
 import '../../git/patch_builder.dart';
 import '../../git/repository.dart';
 import '../../graph/graph_layout.dart';
+import 'auto_fetch.dart';
 
 /// Sha used for the pseudo "work in progress" row.
 const wipSha = '__WIP__';
@@ -83,9 +84,7 @@ class WorkingFileTarget extends DiffTarget {
 
 /// State of one repository tab.
 class RepoTabController extends ChangeNotifier {
-  RepoTabController(this.repo, this.app) {
-    _jitter = Duration(seconds: Random().nextInt(45));
-  }
+  RepoTabController(this.repo, this.app);
 
   final Repository repo;
   final AppController app;
@@ -132,7 +131,6 @@ class RepoTabController extends ChangeNotifier {
   DateTime? lastFetch;
   String? fetchError;
   bool fetching = false;
-  late final Duration _jitter;
 
   bool _active = false;
   bool _disposed = false;
@@ -175,6 +173,7 @@ class RepoTabController extends ChangeNotifier {
       loadError = null;
       unawaited(_loadRemotes());
       unawaited(_startWatching());
+      unawaited(_ensureCommitGraph());
     } catch (e) {
       loadError = e is GitException ? e.message : e.toString();
     } finally {
@@ -184,10 +183,20 @@ class RepoTabController extends ChangeNotifier {
     _scheduleTimers();
   }
 
+  Future<void> _ensureCommitGraph() async {
+    try {
+      if (graph.commits.length < 2000) return;
+      await repo.ensureCommitGraph();
+    } catch (_) {
+      // Only an optimization.
+    }
+  }
+
   Future<void> _loadRemotes() async {
     try {
       remotes = await repo.remotes();
       _notify();
+      _fetchSoonIfDue(); // first fetch once we know there are remotes
     } catch (_) {}
   }
 
@@ -324,44 +333,51 @@ class RepoTabController extends ChangeNotifier {
   void setActive(bool active) {
     if (_active == active) return;
     _active = active;
-    if (active && !loading) unawaited(refresh());
+    if (active && !loading) {
+      unawaited(refresh());
+      _fetchSoonIfDue();
+    }
     _scheduleTimers();
   }
 
   void onAppFocused() {
-    if (_active && !loading) unawaited(refresh());
-    // Overdue fetches happen soon after focus, staggered across tabs.
-    if (_fetchDue()) {
-      Timer(Duration(milliseconds: 300 + Random().nextInt(3000)), () {
-        if (!_disposed && app.focused.value && _fetchDue()) {
-          unawaited(fetch(auto: true));
-        }
-      });
-    }
+    if (!_active) return; // background tabs catch up when activated
+    if (!loading) unawaited(refresh());
+    _fetchSoonIfDue();
   }
 
-  bool _fetchDue() {
-    final minutes = app.settings.fetchIntervalMinutes;
-    if (minutes <= 0 || remotes.isEmpty || fetching) return false;
-    final last = lastFetch;
-    if (last == null) return true;
-    return DateTime.now().difference(last) >=
-        Duration(minutes: minutes) + _jitter;
+  /// Fetches shortly if the active tab's auto-fetch is overdue.
+  void _fetchSoonIfDue() {
+    if (!_fetchDue()) return;
+    Timer(const Duration(milliseconds: 300), () {
+      if (!_disposed && _fetchDue()) unawaited(fetch(auto: true));
+    });
   }
 
+  bool _fetchDue() => isAutoFetchDue(
+    now: DateTime.now(),
+    active: _active,
+    lastFetch: lastFetch,
+    intervalMinutes: app.settings.fetchIntervalMinutes,
+    focused: app.focused.value,
+    hasRemotes: remotes.isNotEmpty,
+    fetching: fetching,
+  );
+
+  /// Status polling and auto-fetch only run for the active tab.
   void _scheduleTimers() {
     _pollTimer?.cancel();
     _pollTimer = null;
-    if (_active && !_disposed) {
-      _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-        if (app.focused.value && busy == null && _refreshing == null) {
-          unawaited(refresh().catchError((_) {}));
-        }
-      });
-    }
-    _fetchTimer ??= Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_disposed || !app.focused.value) return;
-      if (_fetchDue()) unawaited(fetch(auto: true));
+    _fetchTimer?.cancel();
+    _fetchTimer = null;
+    if (!_active || _disposed) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (app.focused.value && busy == null && _refreshing == null) {
+        unawaited(refresh().catchError((_) {}));
+      }
+    });
+    _fetchTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!_disposed && _fetchDue()) unawaited(fetch(auto: true));
     });
   }
 

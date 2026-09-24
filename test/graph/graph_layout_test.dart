@@ -15,10 +15,17 @@ Commit c(String sha, [List<String> parents = const []]) => Commit(
   subject: sha,
 );
 
-List<List<int>> edgesOf(GraphLayout l, int r) => [
-  for (var e = l.edgeOffsets[r]; e < l.edgeOffsets[r + 1]; e++)
-    [l.edges[e * 4], l.edges[e * 4 + 1], l.edges[e * 4 + 3]],
-];
+List<List<int>> edgesOf(GraphLayout l, int r) {
+  final e = [
+    for (final x in l.edgesAt(r)) [x[0], x[1], x[3]],
+  ];
+  e.sort((a, b) {
+    if (a[2] != b[2]) return a[2].compareTo(b[2]);
+    if (a[0] != b[0]) return a[0].compareTo(b[0]);
+    return a[1].compareTo(b[1]);
+  });
+  return e;
+}
 
 /// Structural invariants: no line starts from nowhere or ends in nowhere.
 void checkInvariants(List<Commit> commits, GraphLayout l) {

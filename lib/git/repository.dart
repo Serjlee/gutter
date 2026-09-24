@@ -90,6 +90,26 @@ class Repository {
     );
   }
 
+  /// Writes git's commit-graph cache if the repository has none. It makes
+  /// history walks (and so graph loading) several times faster on large
+  /// repositories; git itself maintains it during gc/maintenance, but fresh
+  /// clones start without one. Returns true if a graph was written.
+  Future<bool> ensureCommitGraph() async {
+    final info = (await _out(['rev-parse', '--git-path', 'objects/info']))
+        .trim();
+    final dir = p.isAbsolute(info) ? info : p.join(path, info);
+    if (File(p.join(dir, 'commit-graph')).existsSync() ||
+        Directory(p.join(dir, 'commit-graphs')).existsSync()) {
+      return false;
+    }
+    final res = await _run([
+      'commit-graph',
+      'write',
+      '--reachable',
+    ], allowFailure: true);
+    return res.ok;
+  }
+
   // ---------------------------------------------------------------- reads
 
   /// Commits of all refs (except stash), newest first in date order.
@@ -638,6 +658,9 @@ class Repository {
   // --------------------------------------------------------------- network
 
   Future<void> fetch({String? remote, bool prune = true}) => _net([
+    // Keep the commit-graph cache current so history loads stay fast.
+    '-c',
+    'fetch.writeCommitGraph=true',
     'fetch',
     if (remote == null) '--all' else remote,
     if (prune) '--prune',

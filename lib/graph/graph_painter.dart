@@ -70,7 +70,24 @@ class GraphRowPainter extends CustomPainter {
 
     Color c(int color) => AppColors.lane(color).withValues(alpha: alpha);
 
-    // Incoming edges (from row-1), drawn in the top half.
+    // Straight lines: the lower half of the edges arriving from row-1 and the
+    // upper half of the edges leaving towards row+1. Lines that only cross
+    // the graph column's clip are skipped.
+    final maxX = size.width + metrics.laneWidth;
+    layout.forEachStraight(row - 1, (lane, color) {
+      final x = metrics.laneX(lane);
+      if (x > maxX) return;
+      paint.color = c(color);
+      canvas.drawLine(Offset(x, 0), Offset(x, cy), paint);
+    });
+    layout.forEachStraight(row, (lane, color) {
+      final x = metrics.laneX(lane);
+      if (x > maxX) return;
+      paint.color = c(color);
+      canvas.drawLine(Offset(x, cy), Offset(x, h), paint);
+    });
+
+    // Bends arriving from row-1, drawn in the top half.
     if (row > 0) {
       final start = layout.edgeOffsets[row - 1];
       final end = layout.edgeOffsets[row];

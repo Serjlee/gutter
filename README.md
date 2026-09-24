@@ -1,17 +1,117 @@
-# gutter
+# Gutter
 
-A fast, local-only git client
+A fast, local-only git client for the desktop (macOS and Linux), inspired by
+GitKraken. Built with Flutter, driving your system `git`. No accounts or
+cloud features, and nothing leaves your machine except your own
+fetch/push.
 
-## Getting Started
+![Commit graph](docs/graph.png)
 
-This project is a starting point for a Flutter application.
+## Features
 
-A few resources to get you started if this is your first Flutter project:
+- **Commit graph**: lane-colored branches, ref labels (local and remote
+  merged into one label, tags), author-initials nodes, a WIP row for
+  uncommitted changes, search (`Ctrl/Cmd+F`) and keyboard navigation.
+  It loads 20k commits by default and fetches more as you scroll.
+- **Tabs**: one per repository, with the session restored on start.
+  - Only the **active tab auto-fetches** (every 5 minutes by default, and
+    never while the window is unfocused).
+  - A background tab fetches when you switch to it, if its interval has
+    passed.
+- **Repository discovery**: pick a folder and every git repository under
+  it (including nested ones) is found in the background. You can also
+  open, clone or init repositories directly.
+- **Staging**: stage, unstage or discard whole files, single hunks, or
+  selected lines (click the line-number gutter; shift-click selects a
+  range).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+  ![Line staging](docs/line-staging.png)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Diffs**: unified or split view, plus a full-file preview (images too).
+- **Branches and history**: checkout (including remote branches as
+  tracking branches), create, rename and delete branches, tags, merge
+  (ff / no-ff / ff-only / squash), rebase, cherry-pick, revert,
+  reset (soft / mixed / hard), stash, pull (ff-only / merge / rebase),
+  push (sets the upstream automatically; force-with-lease is available).
+- **Interactive rebase**: reorder, pick, reword, edit, squash, fixup
+  and drop, all without a text editor.
+
+  ![Interactive rebase](docs/interactive-rebase.png)
+
+- **Conflicts**: a banner for merges, rebases, cherry-picks and reverts in
+  progress, with continue / skip / abort. For each conflicted file you
+  can take ours or theirs, mark it resolved, or open it in an external
+  editor.
+- **UI zoom** for high-DPI screens: `Ctrl/Cmd +`, `Ctrl/Cmd -`,
+  `Ctrl/Cmd 0`, or `Ctrl/Cmd` + mouse wheel (50–300%). The level is saved.
+
+  ![150% zoom](docs/zoom-150.png)
+
+## Performance notes
+
+- Output from git is NUL-separated and parsed off the UI thread. The graph
+  is laid out in an isolate, stored in compact typed arrays, and only the
+  visible rows are painted.
+- Graph memory stays proportional to the number of commits, however wide
+  the graph gets: 85k commits of git.git take about 1.5 MB, laid out in
+  about 130 ms.
+- If a large repository has no commit-graph file, Gutter writes one (git's
+  own cache, normally created by `git gc`/`git maintenance`) and keeps it
+  updated on fetch. This makes loading history several times faster.
+
+## Shortcuts
+
+| Keys | Action |
+| --- | --- |
+| `Ctrl/Cmd T` | Repositories (home) tab |
+| `Ctrl/Cmd O` | Open repository |
+| `Ctrl/Cmd W` | Close tab |
+| `Ctrl Tab` / `Ctrl Shift Tab` | Next / previous tab |
+| `Ctrl/Cmd 1…9` | Go to tab |
+| `Ctrl/Cmd R`, `F5` | Refresh |
+| `Ctrl/Cmd F` | Search commits (`Enter` / `Shift Enter` to step) |
+| `↑ ↓ PgUp PgDn Home End` | Move through the graph |
+| `Ctrl/Cmd Enter` | Commit (in the message box) |
+| `Esc` | Close diff |
+| `Ctrl/Cmd + / - / 0` | Zoom in / out / reset |
+
+## Building
+
+You need Flutter (stable) and git.
+
+```sh
+flutter pub get
+flutter run -d macos        # or: -d linux
+flutter build macos --release
+```
+
+- **Linux** also needs `clang cmake ninja-build pkg-config libgtk-3-dev`.
+- **macOS**: the app sandbox is disabled (see `macos/Runner/*.entitlements`)
+  because Gutter runs `git` and reads repositories anywhere on disk.
+- **git location**: Gutter looks for git on `PATH`, then in
+  `/opt/homebrew/bin`, `/usr/local/bin` and `/usr/bin`. You can override
+  it in the settings on the home tab.
+- **Authentication**: fetch, pull and push use your existing git setup
+  (SSH agent, credential helper). Gutter never shows a password prompt,
+  so an operation that needs one fails with git's error message instead
+  of hanging.
+
+## Development
+
+```sh
+flutter analyze
+flutter test                                      # includes tests against real temp repos
+dart run tool/bench_layout.dart 200000            # graph layout benchmark
+dart run tool/bench_repo.dart /path/to/big/repo   # history load timings
+tool/make_demo_repo.sh /tmp/demo                  # branchy demo repository
+```
+
+## Layout
+
+```
+lib/git/     git runner, parsers, Repository API, partial patches, rebase plans
+lib/graph/   lane layout + row painter
+lib/scan/    repository discovery
+lib/app/     app state, settings, theme, zoom
+lib/ui/      shell, tabs, graph view, sidebar, details, diff, dialogs
+```
