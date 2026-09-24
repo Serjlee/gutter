@@ -412,6 +412,15 @@ Future<void> copyToClipboard(BuildContext context, String text) async {
   await Clipboard.setData(ClipboardData(text: text));
 }
 
+/// [path] for display, with the home folder shortened to `~`.
+String displayPath(String path, {String? home}) {
+  home ??= Platform.environment['HOME'];
+  if (home == null || home.isEmpty || home == '/') return path;
+  if (path == home) return '~';
+  final prefix = home.endsWith('/') ? home : '$home/';
+  return path.startsWith(prefix) ? '~/${path.substring(prefix.length)}' : path;
+}
+
 String formatDate(DateTime d) {
   String two(int v) => v.toString().padLeft(2, '0');
   return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';

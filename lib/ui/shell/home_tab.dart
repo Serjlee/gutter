@@ -190,7 +190,7 @@ class _HomeTabState extends State<HomeTab> {
                                 child: Tooltip(
                                   message: root,
                                   child: Text(
-                                    root,
+                                    displayPath(root),
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(fontSize: 12.5),
                                   ),
@@ -397,7 +397,7 @@ class _RepoTileState extends State<_RepoTile> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  p.dirname(widget.path),
+                  displayPath(p.dirname(widget.path)),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
