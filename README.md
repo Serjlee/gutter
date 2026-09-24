@@ -47,6 +47,11 @@ fetch/push.
   offers a force push with lease).
 - **Interactive rebase**: reorder, pick, reword, edit, squash, fixup
   and drop, all without a text editor.
+  - Select several commits (checkboxes, Shift/Ctrl-click, `Ctrl/Cmd A`)
+    and apply an action to all of them. Squashing a selection folds it
+    into its oldest commit.
+  - Keyboard: `P` `R` `E` `S` `F` `D` set the action, `↑ ↓` move
+    (`Shift` extends the selection), `Alt ↑ ↓` reorder.
 
   ![Interactive rebase](docs/interactive-rebase.png)
 
@@ -83,6 +88,8 @@ fetch/push.
 | `↑ ↓ PgUp PgDn Home End` | Move through the graph |
 | `Ctrl/Cmd Enter` | Commit (in the message box) |
 | `Esc` | Close diff |
+| `P R E S F D` | Interactive rebase: pick / reword / edit / squash / fixup / drop the selected commits |
+| `Alt ↑ ↓` | Interactive rebase: move the selected commits |
 | `Ctrl/Cmd + / - / 0` | Zoom in / out / reset |
 
 ## Install on macOS
