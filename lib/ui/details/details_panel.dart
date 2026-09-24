@@ -8,6 +8,7 @@ import '../../git/models.dart';
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'file_tree.dart';
 
 /// Right-hand panel: WIP (staging + commit) or commit details.
 class DetailsPanel extends StatelessWidget {
@@ -243,6 +244,8 @@ class _FileRow extends StatefulWidget {
     required this.onTap,
     this.actions = const [],
     this.onSecondaryTap,
+    this.depth = 0,
+    this.nameOnly = false,
   });
 
   final ChangeKind kind;
@@ -252,6 +255,10 @@ class _FileRow extends StatefulWidget {
   final VoidCallback onTap;
   final List<Widget> actions;
   final void Function(Offset)? onSecondaryTap;
+
+  /// Tree nesting level; with [nameOnly] only the file name is shown.
+  final int depth;
+  final bool nameOnly;
 
   @override
   State<_FileRow> createState() => _FileRowState();
@@ -276,12 +283,23 @@ class _FileRowState extends State<_FileRow> {
           color: widget.selected
               ? AppColors.selection
               : (_hover ? AppColors.hover : null),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.only(
+            left: 12 + widget.depth * _treeIndent,
+            right: 12,
+          ),
           child: Row(
             children: [
+              if (widget.nameOnly) const SizedBox(width: 18),
               ChangeKindBadge(widget.kind),
               const SizedBox(width: 8),
-              Expanded(child: PathLabel(widget.path, oldPath: widget.oldPath)),
+              Expanded(
+                child: PathLabel(
+                  widget.nameOnly
+                      ? widget.path.substring(widget.path.lastIndexOf('/') + 1)
+                      : widget.path,
+                  oldPath: widget.oldPath,
+                ),
+              ),
               if (_hover || widget.selected) ...widget.actions,
             ],
           ),
@@ -294,12 +312,32 @@ class _FileRowState extends State<_FileRow> {
 /// Which list a working-tree file row belongs to.
 enum _WipSection { conflicts, unstaged, staged }
 
-/// One row of the staging list: a section header ([entry] null) or a file.
+const _treeIndent = 16.0;
+
+/// One row of the staging list: a section header, a folder (tree mode) or
+/// a file.
 class _WipItem {
-  const _WipItem.header(this.section) : entry = null;
-  const _WipItem.file(this.section, StatusEntry this.entry);
+  const _WipItem.header(this.section)
+    : entry = null,
+      dir = null,
+      depth = 0,
+      nameOnly = false;
+  const _WipItem.file(
+    this.section,
+    StatusEntry this.entry, {
+    this.depth = 0,
+    this.nameOnly = false,
+  }) : dir = null;
+  _WipItem.dir(this.section, FileTreeRow<StatusEntry> this.dir)
+    : entry = null,
+      depth = dir.depth,
+      nameOnly = false;
+
   final _WipSection section;
   final StatusEntry? entry;
+  final FileTreeRow<StatusEntry>? dir;
+  final int depth;
+  final bool nameOnly;
 }
 
 /// Staging area and commit composer.
@@ -324,21 +362,39 @@ class WipPanel extends StatelessWidget {
 
     // Flat item list for a lazily built ListView: large working trees
     // (thousands of changes) only build the visible rows.
+    final tree = tab.app.settings.fileTree;
     final items = <_WipItem>[];
-    if (conflicts.isNotEmpty) {
-      items.add(const _WipItem.header(_WipSection.conflicts));
-      for (final e in conflicts) {
-        items.add(_WipItem.file(_WipSection.conflicts, e));
+    void addFiles(_WipSection section, List<StatusEntry> files) {
+      if (!tree) {
+        for (final e in files) {
+          items.add(_WipItem.file(section, e));
+        }
+        return;
+      }
+      final prefix = '${section.name}:';
+      final collapsed = <String>{
+        for (final k in tab.collapsedDirs)
+          if (k.startsWith(prefix)) k.substring(prefix.length),
+      };
+      final rows = flattenFileTree(files, (e) => e.path, collapsed: collapsed);
+      for (final row in rows) {
+        final entry = row.item;
+        items.add(
+          entry == null
+              ? _WipItem.dir(section, row)
+              : _WipItem.file(section, entry, depth: row.depth, nameOnly: true),
+        );
       }
     }
+
+    if (conflicts.isNotEmpty) {
+      items.add(const _WipItem.header(_WipSection.conflicts));
+      addFiles(_WipSection.conflicts, conflicts);
+    }
     items.add(const _WipItem.header(_WipSection.unstaged));
-    for (final e in unstaged) {
-      items.add(_WipItem.file(_WipSection.unstaged, e));
-    }
+    addFiles(_WipSection.unstaged, unstaged);
     items.add(const _WipItem.header(_WipSection.staged));
-    for (final e in staged) {
-      items.add(_WipItem.file(_WipSection.staged, e));
-    }
+    addFiles(_WipSection.staged, staged);
 
     final actions = RepoActions(context, tab);
     return Column(
@@ -361,6 +417,14 @@ class WipPanel extends StatelessWidget {
                   ),
                 ),
               ),
+              SmallIconButton(
+                key: const ValueKey('file-view-toggle'),
+                icon: tree
+                    ? Icons.format_list_bulleted
+                    : Icons.account_tree_outlined,
+                tooltip: tree ? 'Show files as a list' : 'Show files as a tree',
+                onPressed: () => tab.app.setFileTree(!tree),
+              ),
               if (unstaged.isNotEmpty)
                 SmallIconButton(
                   icon: Icons.delete_sweep_outlined,
@@ -376,11 +440,27 @@ class WipPanel extends StatelessWidget {
             itemCount: items.length,
             itemBuilder: (context, i) {
               final item = items[i];
+              final dir = item.dir;
+              if (dir != null) {
+                final files = switch (item.section) {
+                  _WipSection.conflicts => conflicts,
+                  _WipSection.unstaged => unstaged,
+                  _WipSection.staged => staged,
+                };
+                return _dirRow(context, actions, item.section, dir, files);
+              }
               final entry = item.entry;
               if (entry == null) {
                 return _header(item.section, conflicts, unstaged, staged);
               }
-              return _fileRow(context, actions, item.section, entry);
+              return _fileRow(
+                context,
+                actions,
+                item.section,
+                entry,
+                depth: item.depth,
+                nameOnly: item.nameOnly,
+              );
             },
           ),
         ),
@@ -435,15 +515,64 @@ class WipPanel extends StatelessWidget {
         target.staged == staged;
   }
 
+  Widget _dirRow(
+    BuildContext context,
+    RepoActions actions,
+    _WipSection section,
+    FileTreeRow<StatusEntry> dir,
+    List<StatusEntry> sectionFiles,
+  ) {
+    List<StatusEntry> inside() =>
+        itemsUnder(sectionFiles, (e) => e.path, dir.path);
+    return _DirRow(
+      key: ValueKey('dir:${section.name}:${dir.path}'),
+      label: dir.label,
+      path: dir.path,
+      depth: dir.depth,
+      fileCount: dir.fileCount,
+      collapsed: dir.collapsed,
+      onTap: () => tab.toggleDir('${section.name}:${dir.path}'),
+      actions: switch (section) {
+        _WipSection.unstaged => [
+          SmallIconButton(
+            icon: Icons.delete_outline,
+            tooltip: 'Discard folder',
+            color: AppColors.danger,
+            onPressed: () => actions.discard(inside()),
+          ),
+          SmallIconButton(
+            icon: Icons.add_circle_outline,
+            tooltip: 'Stage folder',
+            color: AppColors.success,
+            onPressed: () => tab.stageEntries(inside()),
+          ),
+        ],
+        _WipSection.staged => [
+          SmallIconButton(
+            icon: Icons.remove_circle_outline,
+            tooltip: 'Unstage folder',
+            color: AppColors.warning,
+            onPressed: () => tab.unstageEntries(inside()),
+          ),
+        ],
+        _WipSection.conflicts => const [],
+      },
+    );
+  }
+
   Widget _fileRow(
     BuildContext context,
     RepoActions actions,
     _WipSection section,
-    StatusEntry e,
-  ) {
+    StatusEntry e, {
+    int depth = 0,
+    bool nameOnly = false,
+  }) {
     switch (section) {
       case _WipSection.conflicts:
         return _FileRow(
+          depth: depth,
+          nameOnly: nameOnly,
           kind: ChangeKind.conflicted,
           path: e.path,
           selected: _isSelected(e, false),
@@ -481,6 +610,8 @@ class WipPanel extends StatelessWidget {
         );
       case _WipSection.unstaged:
         return _FileRow(
+          depth: depth,
+          nameOnly: nameOnly,
           kind: e.worktree ?? ChangeKind.modified,
           path: e.path,
           selected: _isSelected(e, false),
@@ -521,6 +652,8 @@ class WipPanel extends StatelessWidget {
         );
       case _WipSection.staged:
         return _FileRow(
+          depth: depth,
+          nameOnly: nameOnly,
           kind: e.index ?? ChangeKind.modified,
           path: e.path,
           oldPath: e.oldPath,
@@ -548,6 +681,92 @@ class WipPanel extends StatelessWidget {
           ],
         );
     }
+  }
+}
+
+class _DirRow extends StatefulWidget {
+  const _DirRow({
+    super.key,
+    required this.label,
+    required this.path,
+    required this.depth,
+    required this.fileCount,
+    required this.collapsed,
+    required this.onTap,
+    required this.actions,
+  });
+
+  final String label;
+  final String path;
+  final int depth;
+  final int fileCount;
+  final bool collapsed;
+  final VoidCallback onTap;
+  final List<Widget> actions;
+
+  @override
+  State<_DirRow> createState() => _DirRowState();
+}
+
+class _DirRowState extends State<_DirRow> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: Tooltip(
+          message: widget.path,
+          waitDuration: const Duration(seconds: 1),
+          child: Container(
+            height: 28,
+            color: _hover ? AppColors.hover : null,
+            padding: EdgeInsets.only(
+              left: 12 + widget.depth * _treeIndent,
+              right: 12,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  widget.collapsed ? Icons.chevron_right : Icons.expand_more,
+                  size: 16,
+                  color: AppColors.textDim,
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  widget.collapsed ? Icons.folder : Icons.folder_open,
+                  size: 15,
+                  color: AppColors.textDim,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ),
+                if (_hover)
+                  ...widget.actions
+                else
+                  Text(
+                    '${widget.fileCount}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

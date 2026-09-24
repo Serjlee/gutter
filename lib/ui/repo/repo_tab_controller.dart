@@ -122,6 +122,14 @@ class RepoTabController extends ChangeNotifier {
   final commitMessage = TextEditingController();
   bool amend = false;
 
+  /// Collapsed folders of the staging tree, as `section:path` keys.
+  final collapsedDirs = <String>{};
+
+  void toggleDir(String key) {
+    if (!collapsedDirs.remove(key)) collapsedDirs.add(key);
+    _notify();
+  }
+
   // Search.
   String search = '';
   List<int> searchHits = const [];

@@ -5,6 +5,7 @@
 //     --target integration_test/app_test.dart
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
@@ -57,6 +58,11 @@ void main() {
     for (var i = 0; i < 40; i++) {
       File(p.join(dir, 'new$i.txt')).writeAsStringSync('$i\n');
     }
+    for (final f in ['src/app/x.dart', 'src/app/y.dart', 'docs/guide.md']) {
+      File(p.join(dir, f))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('$f\n');
+    }
     File(p.join(dir, 'a.txt')).writeAsStringSync('a\nchanged\n');
     git(dir, ['add', 'new0.txt', 'new1.txt']);
 
@@ -93,6 +99,37 @@ void main() {
       'new1.txt',
     });
     expect(find.text('a.txt'), findsWidgets);
+
+    // Tree view: folders (compacted), collapse, stage a whole folder.
+    await tester.tap(find.byKey(const ValueKey('file-view-toggle')));
+    await tester.pump();
+    expect(app.settings.fileTree, isTrue);
+    expect(find.text('src/app'), findsOneWidget);
+    expect(find.text('docs'), findsOneWidget);
+    expect(find.text('x.dart'), findsOneWidget);
+    await tester.tap(find.text('src/app'));
+    await tester.pump();
+    expect(find.text('x.dart'), findsNothing);
+    await tester.tap(find.text('src/app'));
+    await tester.pump();
+    expect(find.text('x.dart'), findsOneWidget);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(find.text('docs')));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Stage folder'));
+    await pumpUntil(
+      tester,
+      () => tab.status.staged.any((e) => e.path == 'docs/guide.md'),
+    );
+    expect(tab.status.unstaged.any((e) => e.path.startsWith('docs/')), isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('file-view-toggle')));
+    await tester.pump();
+    expect(app.settings.fileTree, isFalse);
+    git(dir, ['reset', '-q', 'docs']);
 
     // Flip clean <-> dirty a few times, with focus changes in between
     // (re-focus refreshes the active tab).

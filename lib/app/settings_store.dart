@@ -20,6 +20,9 @@ class Settings {
   Map<String, double> columnWidths = {};
   bool diffSplit = false;
 
+  /// Show working-tree files as a folder tree instead of a flat list.
+  bool fileTree = false;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -34,6 +37,7 @@ class Settings {
     'detailsWidth': detailsWidth,
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
+    'fileTree': fileTree,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -52,7 +56,8 @@ class Settings {
       ..gitPath = j['gitPath'] as String?
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
       ..detailsWidth = num_(j['detailsWidth'], 380)
-      ..diffSplit = j['diffSplit'] == true;
+      ..diffSplit = j['diffSplit'] == true
+      ..fileTree = j['fileTree'] == true;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

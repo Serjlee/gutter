@@ -180,6 +180,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFileTree(bool value) {
+    settings.fileTree = value;
+    save();
+    notifyListeners();
+  }
+
   void setMaxCommits(int n) {
     settings.maxCommits = n;
     save();
