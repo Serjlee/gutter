@@ -7,18 +7,18 @@ import 'package:gutter/graph/graph_layout.dart';
 import '../../tool/synthetic_history.dart';
 
 Commit c(String sha, [List<String> parents = const []]) => Commit(
-      sha: sha,
-      parents: parents,
-      authorName: 'a',
-      authorEmail: 'a@a',
-      authorTime: 0,
-      subject: sha,
-    );
+  sha: sha,
+  parents: parents,
+  authorName: 'a',
+  authorEmail: 'a@a',
+  authorTime: 0,
+  subject: sha,
+);
 
 List<List<int>> edgesOf(GraphLayout l, int r) => [
-      for (var e = l.edgeOffsets[r]; e < l.edgeOffsets[r + 1]; e++)
-        [l.edges[e * 4], l.edges[e * 4 + 1], l.edges[e * 4 + 3]],
-    ];
+  for (var e = l.edgeOffsets[r]; e < l.edgeOffsets[r + 1]; e++)
+    [l.edges[e * 4], l.edges[e * 4 + 1], l.edges[e * 4 + 3]],
+];
 
 /// Structural invariants: no line starts from nowhere or ends in nowhere.
 void checkInvariants(List<Commit> commits, GraphLayout l) {
@@ -29,31 +29,42 @@ void checkInvariants(List<Commit> commits, GraphLayout l) {
       final from = e[0], to = e[1];
       if (r > 0) {
         final incoming = edgesOf(l, r - 1).map((x) => x[1]).toSet();
-        expect(from == l.nodeLane[r] || incoming.contains(from), isTrue,
-            reason: 'row $r edge $e starts from nowhere');
+        expect(
+          from == l.nodeLane[r] || incoming.contains(from),
+          isTrue,
+          reason: 'row $r edge $e starts from nowhere',
+        );
       } else {
         expect(from, l.nodeLane[0]);
       }
       if (r + 1 < l.rowCount) {
         final nextFrom = edgesOf(l, r + 1).map((x) => x[0]).toSet();
-        expect(to == l.nodeLane[r + 1] || nextFrom.contains(to), isTrue,
-            reason: 'row $r edge $e ends in nowhere');
+        expect(
+          to == l.nodeLane[r + 1] || nextFrom.contains(to),
+          isTrue,
+          reason: 'row $r edge $e ends in nowhere',
+        );
       }
     }
     // Every loaded parent is reachable: the node has an outgoing edge per
     // distinct parent lane.
-    final hasLoadedParent =
-        commits[r].parents.any((p) => index.containsKey(p));
+    final hasLoadedParent = commits[r].parents.any((p) => index.containsKey(p));
     if (hasLoadedParent && r + 1 < l.rowCount) {
-      expect(out.any((e) => e[0] == l.nodeLane[r]), isTrue,
-          reason: 'row $r has parents but no edge out of its node');
+      expect(
+        out.any((e) => e[0] == l.nodeLane[r]),
+        isTrue,
+        reason: 'row $r has parents but no edge out of its node',
+      );
     }
     // Nodes never share a lane with a pass-through line.
-    final straight = out.where((e) => e[2] == EdgeKind.straight && e[0] != l.nodeLane[r]);
+    final straight = out.where(
+      (e) => e[2] == EdgeKind.straight && e[0] != l.nodeLane[r],
+    );
     if (r > 0) {
-      final incomingNotNode = edgesOf(l, r - 1)
-          .where((e) => e[1] == l.nodeLane[r])
-          .toList();
+      final incomingNotNode = edgesOf(
+        l,
+        r - 1,
+      ).where((e) => e[1] == l.nodeLane[r]).toList();
       for (final s in straight) {
         expect(s[0] == l.nodeLane[r] && incomingNotNode.isEmpty, isFalse);
       }
@@ -63,12 +74,17 @@ void checkInvariants(List<Commit> commits, GraphLayout l) {
 
 void main() {
   test('linear history is a single lane', () {
-    final commits = [c('d', ['c']), c('c', ['b']), c('b', ['a']), c('a')];
+    final commits = [
+      c('d', ['c']),
+      c('c', ['b']),
+      c('b', ['a']),
+      c('a'),
+    ];
     final l = GraphLayout.compute(commits);
     expect(l.nodeLane, [0, 0, 0, 0]);
     expect(l.maxLanes, 1);
     expect(edgesOf(l, 0), [
-      [0, 0, EdgeKind.straight]
+      [0, 0, EdgeKind.straight],
     ]);
     expect(edgesOf(l, 3), isEmpty, reason: 'root commit has no parents');
     checkInvariants(commits, l);
@@ -101,7 +117,11 @@ void main() {
   });
 
   test('two branch tips sharing a parent', () {
-    final commits = [c('x', ['base']), c('y', ['base']), c('base')];
+    final commits = [
+      c('x', ['base']),
+      c('y', ['base']),
+      c('base'),
+    ];
     final l = GraphLayout.compute(commits);
     expect(l.nodeLane, [0, 1, 0]);
     expect(edgesOf(l, 1), [
@@ -112,7 +132,11 @@ void main() {
   });
 
   test('merge whose second parent is the next row', () {
-    final commits = [c('m', ['a', 'b']), c('b', ['a']), c('a')];
+    final commits = [
+      c('m', ['a', 'b']),
+      c('b', ['a']),
+      c('a'),
+    ];
     final l = GraphLayout.compute(commits);
     expect(l.nodeLane, [0, 1, 0]);
     checkInvariants(commits, l);
@@ -147,7 +171,10 @@ void main() {
   });
 
   test('truncated history: parents outside the loaded set', () {
-    final commits = [c('b', ['a']), c('x', ['missing'])];
+    final commits = [
+      c('b', ['a']),
+      c('x', ['missing']),
+    ];
     final l = GraphLayout.compute(commits);
     expect(l.nodeLane, [0, 1]);
     checkInvariants(commits, l);

@@ -13,8 +13,7 @@ class DiffLine {
   final int? oldNo;
   final int? newNo;
 
-  bool get isChange =>
-      type == DiffLineType.add || type == DiffLineType.remove;
+  bool get isChange => type == DiffLineType.add || type == DiffLineType.remove;
 
   String get marker {
     switch (type) {
@@ -173,9 +172,14 @@ List<FileDiff> parseDiff(String text) {
           hl.add(DiffLine(DiffLineType.remove, l.substring(1), oldNo: o++));
           remOld--;
         } else if (l.startsWith(' ') || l.isEmpty) {
-          hl.add(DiffLine(DiffLineType.context,
+          hl.add(
+            DiffLine(
+              DiffLineType.context,
               l.isEmpty ? '' : l.substring(1),
-              oldNo: o++, newNo: n++));
+              oldNo: o++,
+              newNo: n++,
+            ),
+          );
           remOld--;
           remNew--;
         } else {
@@ -183,24 +187,28 @@ List<FileDiff> parseDiff(String text) {
         }
         i++;
       }
-      hunks.add(Hunk(
-        oldStart: oldStart,
-        oldCount: oldCount,
-        newStart: newStart,
-        newCount: newCount,
-        section: hm.group(5) ?? '',
-        lines: hl,
-      ));
+      hunks.add(
+        Hunk(
+          oldStart: oldStart,
+          oldCount: oldCount,
+          newStart: newStart,
+          newCount: newCount,
+          section: hm.group(5) ?? '',
+          lines: hl,
+        ),
+      );
     }
-    files.add(FileDiff(
-      headerLines: header,
-      oldPath: oldPath,
-      newPath: newPath,
-      hunks: hunks,
-      isBinary: binary,
-      isNew: isNew,
-      isDeleted: isDeleted,
-    ));
+    files.add(
+      FileDiff(
+        headerLines: header,
+        oldPath: oldPath,
+        newPath: newPath,
+        hunks: hunks,
+        isBinary: binary,
+        isNew: isNew,
+        isDeleted: isDeleted,
+      ),
+    );
   }
   return files;
 }

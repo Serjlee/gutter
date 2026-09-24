@@ -23,15 +23,19 @@ class TempRepo {
   }
 
   Map<String, String> get _env => {
-        'GIT_AUTHOR_DATE': '$_clock +0000',
-        'GIT_COMMITTER_DATE': '$_clock +0000',
-        'GIT_CONFIG_NOSYSTEM': '1',
-        'HOME': dir.path,
-      };
+    'GIT_AUTHOR_DATE': '$_clock +0000',
+    'GIT_COMMITTER_DATE': '$_clock +0000',
+    'GIT_CONFIG_NOSYSTEM': '1',
+    'HOME': dir.path,
+  };
 
   String git(List<String> args, {String? cwd}) {
-    final r = Process.runSync('git', args,
-        workingDirectory: cwd ?? path, environment: _env);
+    final r = Process.runSync(
+      'git',
+      args,
+      workingDirectory: cwd ?? path,
+      environment: _env,
+    );
     if (r.exitCode != 0) {
       throw StateError('git ${args.join(' ')} failed: ${r.stderr}');
     }

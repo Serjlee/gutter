@@ -14,6 +14,8 @@ void main(List<String> args) {
   final sw = Stopwatch()..start();
   final layout = GraphLayout.compute(commits);
   sw.stop();
-  print('layout of $count commits: ${sw.elapsedMilliseconds} ms, '
-      'max lanes ${layout.maxLanes}, edges ${layout.edges.length ~/ 4}');
+  print(
+    'layout of $count commits: ${sw.elapsedMilliseconds} ms, '
+    'max lanes ${layout.maxLanes}, edges ${layout.edges.length ~/ 4}',
+  );
 }

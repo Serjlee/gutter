@@ -40,8 +40,12 @@ void main() {
     t.write('new file.txt', 'x');
 
     final log = await repo.log();
-    expect(log.map((c) => c.subject),
-        ['merge feature', 'on main', 'on feature', 'first']);
+    expect(log.map((c) => c.subject), [
+      'merge feature',
+      'on main',
+      'on feature',
+      'first',
+    ]);
     expect(log.first.isMerge, isTrue);
 
     final refs = await repo.refs();
@@ -50,7 +54,10 @@ void main() {
     expect(refs.firstWhere((r) => r.name == 'main').isHead, isTrue);
 
     final status = await repo.status();
-    expect(status.unstaged.map((e) => e.path).toSet(), {'a.txt', 'new file.txt'});
+    expect(status.unstaged.map((e) => e.path).toSet(), {
+      'a.txt',
+      'new file.txt',
+    });
 
     final details = await repo.commitDetails(log[1].sha);
     expect(details.subject, 'on main');
@@ -59,7 +66,10 @@ void main() {
     expect(files.single.kind, ChangeKind.added);
     final root = await repo.commitFiles(log.last);
     expect(root.single.path, 'a.txt');
-    final diff = await repo.commitFileDiff(log[1], FileChange(path: 'a.txt', kind: ChangeKind.modified));
+    final diff = await repo.commitFileDiff(
+      log[1],
+      FileChange(path: 'a.txt', kind: ChangeKind.modified),
+    );
     expect(diff!.additions, 1);
     expect(diff.deletions, 1);
     final content = await repo.fileContent(log.last.sha, 'a.txt');
@@ -74,15 +84,17 @@ void main() {
     Future<FileDiff> unstagedDiff(String path) async {
       final s = await repo.status();
       return (await repo.workingDiff(
-          s.entries.firstWhere((e) => e.path == path),
-          staged: false))!;
+        s.entries.firstWhere((e) => e.path == path),
+        staged: false,
+      ))!;
     }
 
     Future<FileDiff> stagedDiff(String path) async {
       final s = await repo.status();
       return (await repo.workingDiff(
-          s.entries.firstWhere((e) => e.path == path),
-          staged: true))!;
+        s.entries.firstWhere((e) => e.path == path),
+        staged: true,
+      ))!;
     }
 
     test('stage a single hunk', () async {
@@ -104,7 +116,14 @@ void main() {
       final hunk = d.hunks[0];
       // Select only the "+L2" line (not the "-l2").
       final addIdx = hunk.lines.indexWhere((l) => l.text == 'L2');
-      await repo.applyPatch(PatchBuilder.build(d, selection: {0: {addIdx}})!);
+      await repo.applyPatch(
+        PatchBuilder.build(
+          d,
+          selection: {
+            0: {addIdx},
+          },
+        )!,
+      );
       final cachedContent = t.git(['show', ':f.txt']);
       expect(cachedContent, startsWith('l1\nl2\nL2\nl3\n'));
 
@@ -113,7 +132,13 @@ void main() {
       final sd = await stagedDiff('f.txt');
       final h = sd.hunks.indexWhere((h) => h.lines.any((l) => l.text == 'NEW'));
       final li = sd.hunks[h].lines.indexWhere((l) => l.text == 'NEW');
-      final patch = PatchBuilder.build(sd, selection: {h: {li}}, reverse: true)!;
+      final patch = PatchBuilder.build(
+        sd,
+        selection: {
+          h: {li},
+        },
+        reverse: true,
+      )!;
       await repo.applyPatch(patch, reverse: true);
       final idx = t.git(['show', ':f.txt']);
       expect(idx, isNot(contains('NEW')));
@@ -125,8 +150,11 @@ void main() {
       t.commit('init', {'f.txt': original});
       t.write('f.txt', modified);
       final d = await unstagedDiff('f.txt');
-      await repo.applyPatch(PatchBuilder.hunk(d, 0, reverse: true)!,
-          cached: false, reverse: true);
+      await repo.applyPatch(
+        PatchBuilder.hunk(d, 0, reverse: true)!,
+        cached: false,
+        reverse: true,
+      );
       expect(t.read('f.txt'), original.replaceFirst('l11', 'NEW\nl11'));
     });
 
@@ -136,7 +164,14 @@ void main() {
       await repo.intentToAdd('n.txt');
       final d = await unstagedDiff('n.txt');
       final li = d.hunks[0].lines.indexWhere((l) => l.text == 'keep');
-      await repo.applyPatch(PatchBuilder.build(d, selection: {0: {li}})!);
+      await repo.applyPatch(
+        PatchBuilder.build(
+          d,
+          selection: {
+            0: {li},
+          },
+        )!,
+      );
       expect(t.git(['show', ':n.txt']), 'keep\n');
     });
 
@@ -221,7 +256,10 @@ void main() {
 
     test('first commit cannot be squashed', () {
       steps[0].action = RebaseAction.squash;
-      expect(() => RebasePlan(steps).validate(), throwsA(isA<RebasePlanError>()));
+      expect(
+        () => RebasePlan(steps).validate(),
+        throwsA(isA<RebasePlanError>()),
+      );
     });
 
     test('rebase from root', () async {
@@ -281,7 +319,10 @@ void main() {
     final head = (await repo.log()).first;
     await repo.revert(head);
     expect(t.subjects().first, startsWith('Revert'));
-    await repo.reset(log.firstWhere((c) => c.subject == 'init').sha, ResetMode.hard);
+    await repo.reset(
+      log.firstWhere((c) => c.subject == 'init').sha,
+      ResetMode.hard,
+    );
     expect(t.subjects(), ['init']);
   });
 
@@ -331,11 +372,36 @@ void main() {
     addTearDown(() => other.deleteSync(recursive: true));
     final clonePath = p.join(other.path, 'c');
     await Repository.clone(remoteDir.path, clonePath);
-    Process.runSync('git', ['-C', clonePath, 'checkout', '-q', '-b', 'remote-feature']);
+    Process.runSync('git', [
+      '-C',
+      clonePath,
+      'checkout',
+      '-q',
+      '-b',
+      'remote-feature',
+    ]);
     File(p.join(clonePath, 'r.txt')).writeAsStringSync('r\n');
     Process.runSync('git', ['-C', clonePath, 'add', '.']);
-    Process.runSync('git', ['-C', clonePath, '-c', 'user.name=x', '-c', 'user.email=x@x', 'commit', '-q', '-m', 'remote commit']);
-    Process.runSync('git', ['-C', clonePath, 'push', '-q', 'origin', 'remote-feature']);
+    Process.runSync('git', [
+      '-C',
+      clonePath,
+      '-c',
+      'user.name=x',
+      '-c',
+      'user.email=x@x',
+      'commit',
+      '-q',
+      '-m',
+      'remote commit',
+    ]);
+    Process.runSync('git', [
+      '-C',
+      clonePath,
+      'push',
+      '-q',
+      'origin',
+      'remote-feature',
+    ]);
 
     await repo.fetch();
     final refs = await repo.refs();
@@ -347,8 +413,25 @@ void main() {
 
     // Upstream moves; pull fast-forwards.
     File(p.join(clonePath, 'r.txt')).writeAsStringSync('r2\n');
-    Process.runSync('git', ['-C', clonePath, '-c', 'user.name=x', '-c', 'user.email=x@x', 'commit', '-qam', 'remote 2']);
-    Process.runSync('git', ['-C', clonePath, 'push', '-q', 'origin', 'remote-feature']);
+    Process.runSync('git', [
+      '-C',
+      clonePath,
+      '-c',
+      'user.name=x',
+      '-c',
+      'user.email=x@x',
+      'commit',
+      '-qam',
+      'remote 2',
+    ]);
+    Process.runSync('git', [
+      '-C',
+      clonePath,
+      'push',
+      '-q',
+      'origin',
+      'remote-feature',
+    ]);
     await repo.pull(PullMode.ffOnly);
     expect(t.subjects().first, 'remote 2');
     expect((await repo.remotes()).single.name, 'origin');

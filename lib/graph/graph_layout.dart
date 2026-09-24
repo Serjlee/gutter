@@ -60,9 +60,11 @@ class GraphLayout {
   /// Number of edges leaving row [r] towards row r+1.
   int edgeCount(int r) => edgeOffsets[r + 1] - edgeOffsets[r];
 
-  static GraphLayout compute(List<Commit> commits) =>
-      computeFromParents(commits.length, (i) => commits[i].sha,
-          (i) => commits[i].parents);
+  static GraphLayout compute(List<Commit> commits) => computeFromParents(
+    commits.length,
+    (i) => commits[i].sha,
+    (i) => commits[i].parents,
+  );
 
   static GraphLayout computeFromParents(
     int n,

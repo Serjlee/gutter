@@ -128,6 +128,9 @@ class GitRunner {
   }
 
   static const _baseArgs = [
+    // Never take the index lock just to refresh stat info: keeps status
+    // polling from rewriting .git/index (and from racing the user's git).
+    '--no-optional-locks',
     '-c',
     'color.ui=false',
     '-c',
@@ -138,16 +141,16 @@ class GitRunner {
   ];
 
   static Map<String, String> baseEnvironment() => {
-        'GIT_TERMINAL_PROMPT': '0',
-        'GIT_EDITOR': 'true',
-        'GIT_SEQUENCE_EDITOR': 'true',
-        'GIT_MERGE_AUTOEDIT': 'no',
-        'LC_ALL': 'C',
-        'LANG': 'C',
-        // Never block on ssh host-key prompts.
-        'GIT_SSH_COMMAND':
-            Platform.environment['GIT_SSH_COMMAND'] ?? 'ssh -oBatchMode=yes',
-      };
+    'GIT_TERMINAL_PROMPT': '0',
+    'GIT_EDITOR': 'true',
+    'GIT_SEQUENCE_EDITOR': 'true',
+    'GIT_MERGE_AUTOEDIT': 'no',
+    'LC_ALL': 'C',
+    'LANG': 'C',
+    // Never block on ssh host-key prompts.
+    'GIT_SSH_COMMAND':
+        Platform.environment['GIT_SSH_COMMAND'] ?? 'ssh -oBatchMode=yes',
+  };
 
   /// Runs git and returns the result. Throws [GitException] on non-zero exit
   /// unless [allowFailure] is true.

@@ -251,8 +251,10 @@ class WorkingTreeStatus {
   final BranchStatus branch;
   final List<StatusEntry> entries;
 
-  static final empty =
-      WorkingTreeStatus(branch: const BranchStatus(), entries: const []);
+  static final empty = WorkingTreeStatus(
+    branch: const BranchStatus(),
+    entries: const [],
+  );
 
   List<StatusEntry> get staged => entries.where((e) => e.hasStaged).toList();
   List<StatusEntry> get unstaged =>

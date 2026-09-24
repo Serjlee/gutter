@@ -76,8 +76,9 @@ class RebasePlan {
       if (s.action.folds) {
         if (out.isEmpty) {
           throw RebasePlanError(
-              'The first kept commit (${s.shortSha}) cannot be squashed or '
-              'fixed up: there is no earlier commit to fold it into.');
+            'The first kept commit (${s.shortSha}) cannot be squashed or '
+            'fixed up: there is no earlier commit to fold it into.',
+          );
         }
         out.last.folded.add(s);
       } else {
@@ -107,8 +108,10 @@ class RebasePlan {
       final changed = head.newMessage.trim() != head.message.trim();
       if (needsMessage && (changed || g.hasSquash)) {
         final path = writeMessage(head.newMessage);
-        lines.add('exec git commit --amend --only --allow-empty --no-verify '
-            '-F ${shellQuote(path)}');
+        lines.add(
+          'exec git commit --amend --only --allow-empty --no-verify '
+          '-F ${shellQuote(path)}',
+        );
       }
     }
     for (final d in dropped) {

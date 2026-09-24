@@ -35,8 +35,12 @@ class Repository {
   static Future<String?> findRoot(String dir, {GitRunner? runner}) async {
     final r = runner ?? GitRunner();
     try {
-      final res = await r.run(['rev-parse', '--show-toplevel'],
-          cwd: dir, allowFailure: true, logCommand: false);
+      final res = await r.run(
+        ['rev-parse', '--show-toplevel'],
+        cwd: dir,
+        allowFailure: true,
+        logCommand: false,
+      );
       if (!res.ok) return null;
       final out = res.stdout.trim();
       return out.isEmpty ? null : p.normalize(out);
@@ -50,18 +54,27 @@ class Repository {
     await (runner ?? GitRunner()).run(['init'], cwd: dir);
   }
 
-  static Future<void> clone(String url, String dir,
-      {GitRunner? runner}) async {
+  static Future<void> clone(String url, String dir, {GitRunner? runner}) async {
     final r = runner ?? GitRunner();
     final parent = p.dirname(dir);
     await Directory(parent).create(recursive: true);
-    await GitRunner.network
-        .run(() => r.run(['clone', '--progress', url, dir], cwd: parent));
+    await GitRunner.network.run(
+      () => r.run(['clone', '--progress', url, dir], cwd: parent),
+    );
   }
 
-  Future<GitResult> _run(List<String> args,
-          {List<int>? stdin, Map<String, String>? env, bool allowFailure = false}) =>
-      git.run(args, cwd: path, stdin: stdin, env: env, allowFailure: allowFailure);
+  Future<GitResult> _run(
+    List<String> args, {
+    List<int>? stdin,
+    Map<String, String>? env,
+    bool allowFailure = false,
+  }) => git.run(
+    args,
+    cwd: path,
+    stdin: stdin,
+    env: env,
+    allowFailure: allowFailure,
+  );
 
   Future<String> _out(List<String> args) async => (await _run(args)).stdout;
 
@@ -73,13 +86,22 @@ class Repository {
 
   Future<String> gitDir() async {
     return _gitDir ??= p.normalize(
-        (await _out(['rev-parse', '--absolute-git-dir'])).trim());
+      (await _out(['rev-parse', '--absolute-git-dir'])).trim(),
+    );
   }
 
   // ---------------------------------------------------------------- reads
 
   /// Commits of all refs (except stash), newest first in date order.
   Future<List<Commit>> log({int maxCount = 20000}) async {
+    final bytes = await logBytes(maxCount: maxCount);
+    if (bytes.length < 256 * 1024) return parseLog(bytes);
+    return Isolate.run(() => parseLog(bytes));
+  }
+
+  /// Raw output for [parseLog]; lets callers parse (and lay out) in an
+  /// isolate of their own.
+  Future<Uint8List> logBytes({int maxCount = 20000}) async {
     final res = await _run([
       'log',
       '--exclude=refs/stash',
@@ -95,13 +117,11 @@ class Repository {
       if (res.stderr.contains('does not have any commits') ||
           res.stderr.contains('bad default revision') ||
           res.stderr.contains('unknown revision')) {
-        return const [];
+        return Uint8List(0);
       }
       throw GitException(res.args, res.exitCode, res.stderr);
     }
-    final bytes = res.stdoutBytes;
-    if (bytes.length < 256 * 1024) return parseLog(bytes);
-    return Isolate.run(() => parseLog(bytes));
+    return res.stdoutBytes;
   }
 
   Future<List<GitRef>> refs() async {
@@ -121,22 +141,27 @@ class Repository {
   }
 
   Future<List<StashEntry>> stashes() async {
-    final res = await _run(
-        ['stash', 'list', '-z', '--format=%H%x00%P%x00%ct%x00%gs'],
-        allowFailure: true);
+    final res = await _run([
+      'stash',
+      'list',
+      '-z',
+      '--format=%H%x00%P%x00%ct%x00%gs',
+    ], allowFailure: true);
     if (!res.ok) return const [];
     final f = res.stdout.split('\x00');
     final out = <StashEntry>[];
     for (var i = 0; i + 4 <= f.length; i += 4) {
       final sha = f[i].trim();
       if (sha.isEmpty) continue;
-      out.add(StashEntry(
-        index: out.length,
-        sha: sha,
-        parents: f[i + 1].isEmpty ? const [] : f[i + 1].split(' '),
-        time: int.tryParse(f[i + 2]) ?? 0,
-        message: f[i + 3],
-      ));
+      out.add(
+        StashEntry(
+          index: out.length,
+          sha: sha,
+          parents: f[i + 1].isEmpty ? const [] : f[i + 1].split(' '),
+          time: int.tryParse(f[i + 2]) ?? 0,
+          message: f[i + 3],
+        ),
+      );
     }
     return out;
   }
@@ -151,11 +176,17 @@ class Repository {
       final url = m.group(2)!;
       final existing = map[name];
       if (m.group(3) == 'fetch') {
-        map[name] =
-            RemoteInfo(name: name, fetchUrl: url, pushUrl: existing?.pushUrl);
+        map[name] = RemoteInfo(
+          name: name,
+          fetchUrl: url,
+          pushUrl: existing?.pushUrl,
+        );
       } else {
         map[name] = RemoteInfo(
-            name: name, fetchUrl: existing?.fetchUrl ?? url, pushUrl: url);
+          name: name,
+          fetchUrl: existing?.fetchUrl ?? url,
+          pushUrl: url,
+        );
       }
     }
     return map.values.toList();
@@ -192,47 +223,62 @@ class Repository {
   }
 
   Future<String?> headSha() async {
-    final res = await _run(['rev-parse', '--verify', '-q', 'HEAD'],
-        allowFailure: true);
+    final res = await _run([
+      'rev-parse',
+      '--verify',
+      '-q',
+      'HEAD',
+    ], allowFailure: true);
     return res.ok ? res.stdout.trim() : null;
   }
 
   Future<CommitDetails> commitDetails(String sha) async {
-    final out =
-        await _out(['log', '-1', '--no-walk', '--format=$detailsFormat', sha]);
+    final out = await _out([
+      'log',
+      '-1',
+      '--no-walk',
+      '--format=$detailsFormat',
+      sha,
+    ]);
     return parseCommitDetails(out);
   }
 
   /// Files changed by a commit (compared to its first parent).
   Future<List<FileChange>> commitFiles(Commit commit) async {
     if (commit.parents.isEmpty) {
-      return parseNameStatus(await _out([
-        'diff-tree',
-        '-r',
+      return parseNameStatus(
+        await _out([
+          'diff-tree',
+          '-r',
+          '-z',
+          '--no-commit-id',
+          '--name-status',
+          '-M',
+          '--root',
+          commit.sha,
+        ]),
+      );
+    }
+    return parseNameStatus(
+      await _out([
+        'diff',
         '-z',
-        '--no-commit-id',
         '--name-status',
         '-M',
-        '--root',
+        commit.parents.first,
         commit.sha,
-      ]));
-    }
-    return parseNameStatus(await _out([
-      'diff',
-      '-z',
-      '--name-status',
-      '-M',
-      commit.parents.first,
-      commit.sha,
-    ]));
+      ]),
+    );
   }
 
   static const _emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-  Future<FileDiff?> commitFileDiff(Commit commit, FileChange file,
-      {int context = 3}) async {
-    final base =
-        commit.parents.isEmpty ? _emptyTree : commit.parents.first;
+  Future<FileDiff?> commitFileDiff(
+    Commit commit,
+    FileChange file, {
+    int context = 3,
+  }) async {
+    final base = commit.parents.isEmpty ? _emptyTree : commit.parents.first;
     final paths = [if (file.oldPath != null) file.oldPath!, file.path];
     final out = await _out([
       'diff',
@@ -249,8 +295,11 @@ class Repository {
 
   /// Diff of a working tree file: staged (index vs HEAD) or unstaged
   /// (worktree vs index). Untracked files are diffed against /dev/null.
-  Future<FileDiff?> workingDiff(StatusEntry entry,
-      {required bool staged, int context = 3}) async {
+  Future<FileDiff?> workingDiff(
+    StatusEntry entry, {
+    required bool staged,
+    int context = 3,
+  }) async {
     GitResult res;
     if (!staged && entry.isUntracked) {
       res = await _run([
@@ -307,8 +356,9 @@ class Repository {
     for (var i = 0; i + 3 <= f.length; i += 3) {
       final sha = f[i].trim();
       if (sha.isEmpty) continue;
-      steps.add(RebaseStep(
-          sha: sha, subject: f[i + 1], message: f[i + 2].trimRight()));
+      steps.add(
+        RebaseStep(sha: sha, subject: f[i + 1], message: f[i + 2].trimRight()),
+      );
     }
     return steps;
   }
@@ -335,80 +385,89 @@ class Repository {
   // -------------------------------------------------------------- staging
 
   Future<void> stage(List<String> paths) => _mutate(() async {
-        if (paths.isEmpty) return;
-        await _run(['add', '-A', '--', ...paths]);
-      });
+    if (paths.isEmpty) return;
+    await _run(['add', '-A', '--', ...paths]);
+  });
 
   Future<void> stageAll() => _mutate(() => _run(['add', '-A']));
 
   Future<void> unstage(List<String> paths) => _mutate(() async {
-        if (paths.isEmpty) return;
-        if (await headSha() == null) {
-          await _run(['rm', '--cached', '-r', '-q', '--', ...paths]);
-        } else {
-          await _run(['reset', '-q', 'HEAD', '--', ...paths]);
-        }
-      });
+    if (paths.isEmpty) return;
+    if (await headSha() == null) {
+      await _run(['rm', '--cached', '-r', '-q', '--', ...paths]);
+    } else {
+      await _run(['reset', '-q', 'HEAD', '--', ...paths]);
+    }
+  });
 
   Future<void> unstageAll() => _mutate(() async {
-        if (await headSha() == null) {
-          await _run(['rm', '--cached', '-r', '-q', '.']);
-        } else {
-          await _run(['reset', '-q', 'HEAD']);
-        }
-      });
+    if (await headSha() == null) {
+      await _run(['rm', '--cached', '-r', '-q', '.']);
+    } else {
+      await _run(['reset', '-q', 'HEAD']);
+    }
+  });
 
   /// Discards worktree changes of [entries] (deleting untracked files).
   Future<void> discard(List<StatusEntry> entries) => _mutate(() async {
-        final tracked =
-            entries.where((e) => !e.isUntracked).map((e) => e.path).toList();
-        final untracked =
-            entries.where((e) => e.isUntracked).map((e) => e.path).toList();
-        if (tracked.isNotEmpty) {
-          await _run(['checkout', '--', ...tracked]);
-        }
-        for (final u in untracked) {
-          final f = File(p.join(path, u));
-          if (f.existsSync()) await f.delete();
-        }
-      });
+    final tracked = entries
+        .where((e) => !e.isUntracked)
+        .map((e) => e.path)
+        .toList();
+    final untracked = entries
+        .where((e) => e.isUntracked)
+        .map((e) => e.path)
+        .toList();
+    if (tracked.isNotEmpty) {
+      await _run(['checkout', '--', ...tracked]);
+    }
+    for (final u in untracked) {
+      final f = File(p.join(path, u));
+      if (f.existsSync()) await f.delete();
+    }
+  });
 
   /// Mark an untracked file as intent-to-add so its hunks can be staged.
   Future<void> intentToAdd(String filePath) =>
       _mutate(() => _run(['add', '-N', '--', filePath]));
 
-  Future<void> applyPatch(String patch,
-          {bool cached = true, bool reverse = false}) =>
-      _mutate(() => _run([
-            'apply',
-            if (cached) '--cached',
-            if (reverse) '--reverse',
-            '--recount',
-            '--unidiff-zero',
-            '--whitespace=nowarn',
-            '-',
-          ], stdin: utf8.encode(patch)));
+  Future<void> applyPatch(
+    String patch, {
+    bool cached = true,
+    bool reverse = false,
+  }) => _mutate(
+    () => _run([
+      'apply',
+      if (cached) '--cached',
+      if (reverse) '--reverse',
+      '--recount',
+      '--unidiff-zero',
+      '--whitespace=nowarn',
+      '-',
+    ], stdin: utf8.encode(patch)),
+  );
 
-  Future<void> commit(String message, {bool amend = false}) =>
-      _mutate(() => _run([
-            'commit',
-            if (amend) '--amend',
-            '--cleanup=strip',
-            '-F',
-            '-',
-          ], stdin: utf8.encode(message)));
+  Future<void> commit(String message, {bool amend = false}) => _mutate(
+    () => _run([
+      'commit',
+      if (amend) '--amend',
+      '--cleanup=strip',
+      '-F',
+      '-',
+    ], stdin: utf8.encode(message)),
+  );
 
   // ------------------------------------------------------------- branches
 
-  Future<void> checkout(String ref) =>
-      _mutate(() => _run(['checkout', ref]));
+  Future<void> checkout(String ref) => _mutate(() => _run(['checkout', ref]));
 
   /// Checks out a remote branch, creating/using a local tracking branch.
   Future<void> checkoutRemote(GitRef remoteRef, List<GitRef> allRefs) =>
       _mutate(() async {
         final local = remoteRef.remoteBranchName;
-        final exists = allRefs.any((r) =>
-            r.type == RefType.localBranch && r.name == local);
+        final exists = allRefs.any(
+          (r) => r.type == RefType.localBranch && r.name == local,
+        );
         if (exists) {
           await _run(['checkout', local]);
         } else {
@@ -416,11 +475,15 @@ class Repository {
         }
       });
 
-  Future<void> createBranch(String name,
-          {String? startPoint, bool checkout = true}) =>
-      _mutate(() => checkout
-          ? _run(['checkout', '-b', name, ?startPoint])
-          : _run(['branch', name, ?startPoint]));
+  Future<void> createBranch(
+    String name, {
+    String? startPoint,
+    bool checkout = true,
+  }) => _mutate(
+    () => checkout
+        ? _run(['checkout', '-b', name, ?startPoint])
+        : _run(['branch', name, ?startPoint]),
+  );
 
   Future<void> deleteBranch(String name, {bool force = false}) =>
       _mutate(() => _run(['branch', force ? '-D' : '-d', name]));
@@ -428,23 +491,24 @@ class Repository {
   Future<void> renameBranch(String from, String to) =>
       _mutate(() => _run(['branch', '-m', from, to]));
 
-  Future<void> setUpstream(String branch, String upstream) => _mutate(
-      () => _run(['branch', '--set-upstream-to=$upstream', branch]));
+  Future<void> setUpstream(String branch, String upstream) =>
+      _mutate(() => _run(['branch', '--set-upstream-to=$upstream', branch]));
 
   Future<void> deleteRemoteBranch(String remote, String branch) =>
       _net(['push', remote, '--delete', branch]);
 
-  Future<void> createTag(String name, String sha, {String? message}) =>
-      _mutate(() => _run([
-            'tag',
-            if (message != null && message.trim().isNotEmpty) ...[
-              '-a',
-              '-m',
-              message,
-            ],
-            name,
-            sha,
-          ]));
+  Future<void> createTag(String name, String sha, {String? message}) => _mutate(
+    () => _run([
+      'tag',
+      if (message != null && message.trim().isNotEmpty) ...[
+        '-a',
+        '-m',
+        message,
+      ],
+      name,
+      sha,
+    ]),
+  );
 
   Future<void> deleteTag(String name) =>
       _mutate(() => _run(['tag', '-d', name]));
@@ -457,21 +521,21 @@ class Repository {
 
   // ------------------------------------------------------ history editing
 
-  Future<void> merge(String ref, {MergeMode mode = MergeMode.auto}) =>
-      _mutate(() => _run([
-            'merge',
-            '--no-edit',
-            switch (mode) {
-              MergeMode.auto => '--ff',
-              MergeMode.noFastForward => '--no-ff',
-              MergeMode.fastForwardOnly => '--ff-only',
-              MergeMode.squash => '--squash',
-            },
-            ref,
-          ]));
+  Future<void> merge(String ref, {MergeMode mode = MergeMode.auto}) => _mutate(
+    () => _run([
+      'merge',
+      '--no-edit',
+      switch (mode) {
+        MergeMode.auto => '--ff',
+        MergeMode.noFastForward => '--no-ff',
+        MergeMode.fastForwardOnly => '--ff-only',
+        MergeMode.squash => '--squash',
+      },
+      ref,
+    ]),
+  );
 
-  Future<void> rebase(String onto) =>
-      _mutate(() => _run(['rebase', onto]));
+  Future<void> rebase(String onto) => _mutate(() => _run(['rebase', onto]));
 
   /// Runs an interactive rebase of `base..HEAD` using [plan].
   Future<void> rebaseInteractive(String? base, RebasePlan plan) =>
@@ -487,19 +551,20 @@ class Repository {
         });
         final todoFile = File(p.join(dir.path, 'todo.txt'))
           ..writeAsStringSync(todo);
-        await _run([
-          '-c',
-          'rebase.missingCommitsCheck=ignore',
-          '-c',
-          'rebase.abbreviateCommands=false',
-          '-c',
-          'rebase.autoSquash=false',
-          'rebase',
-          '-i',
-          base ?? '--root',
-        ], env: {
-          'GIT_SEQUENCE_EDITOR': 'cp ${shellQuote(todoFile.path)}',
-        });
+        await _run(
+          [
+            '-c',
+            'rebase.missingCommitsCheck=ignore',
+            '-c',
+            'rebase.abbreviateCommands=false',
+            '-c',
+            'rebase.autoSquash=false',
+            'rebase',
+            '-i',
+            base ?? '--root',
+          ],
+          env: {'GIT_SEQUENCE_EDITOR': 'cp ${shellQuote(todoFile.path)}'},
+        );
       });
 
   /// Removes temp files from a finished interactive rebase.
@@ -510,18 +575,22 @@ class Repository {
     }
   }
 
-  Future<void> cherryPick(Commit c) => _mutate(() => _run([
-        'cherry-pick',
-        if (c.isMerge) ...['-m', '1'],
-        c.sha,
-      ]));
+  Future<void> cherryPick(Commit c) => _mutate(
+    () => _run([
+      'cherry-pick',
+      if (c.isMerge) ...['-m', '1'],
+      c.sha,
+    ]),
+  );
 
-  Future<void> revert(Commit c) => _mutate(() => _run([
-        'revert',
-        '--no-edit',
-        if (c.isMerge) ...['-m', '1'],
-        c.sha,
-      ]));
+  Future<void> revert(Commit c) => _mutate(
+    () => _run([
+      'revert',
+      '--no-edit',
+      if (c.isMerge) ...['-m', '1'],
+      c.sha,
+    ]),
+  );
 
   Future<void> reset(String sha, ResetMode mode) =>
       _mutate(() => _run(['reset', '--${mode.name}', sha]));
@@ -548,15 +617,14 @@ class Repository {
   // ----------------------------------------------------------------- stash
 
   Future<void> stashPush({String? message, bool includeUntracked = true}) =>
-      _mutate(() => _run([
-            'stash',
-            'push',
-            if (includeUntracked) '--include-untracked',
-            if (message != null && message.trim().isNotEmpty) ...[
-              '-m',
-              message,
-            ],
-          ]));
+      _mutate(
+        () => _run([
+          'stash',
+          'push',
+          if (includeUntracked) '--include-untracked',
+          if (message != null && message.trim().isNotEmpty) ...['-m', message],
+        ]),
+      );
 
   Future<void> stashApply(int index) =>
       _mutate(() => _run(['stash', 'apply', '--index', 'stash@{$index}']));
@@ -570,21 +638,21 @@ class Repository {
   // --------------------------------------------------------------- network
 
   Future<void> fetch({String? remote, bool prune = true}) => _net([
-        'fetch',
-        if (remote == null) '--all' else remote,
-        if (prune) '--prune',
-        '--tags',
-        '--quiet',
-      ]);
+    'fetch',
+    if (remote == null) '--all' else remote,
+    if (prune) '--prune',
+    '--tags',
+    '--quiet',
+  ]);
 
   Future<void> pull(PullMode mode) => _net([
-        'pull',
-        switch (mode) {
-          PullMode.ffOnly => '--ff-only',
-          PullMode.merge => '--no-rebase',
-          PullMode.rebase => '--rebase',
-        },
-      ]);
+    'pull',
+    switch (mode) {
+      PullMode.ffOnly => '--ff-only',
+      PullMode.merge => '--no-rebase',
+      PullMode.rebase => '--rebase',
+    },
+  ]);
 
   /// Pushes [branch] (default: current). Sets upstream on [remote] when the
   /// branch has none.
@@ -594,12 +662,11 @@ class Repository {
     String? remoteBranch,
     bool setUpstream = false,
     bool forceWithLease = false,
-  }) =>
-      _net([
-        'push',
-        if (forceWithLease) '--force-with-lease',
-        if (setUpstream) '--set-upstream',
-        remote ?? 'origin',
-        'refs/heads/$branch:refs/heads/${remoteBranch ?? branch}',
-      ]);
+  }) => _net([
+    'push',
+    if (forceWithLease) '--force-with-lease',
+    if (setUpstream) '--set-upstream',
+    remote ?? 'origin',
+    'refs/heads/$branch:refs/heads/${remoteBranch ?? branch}',
+  ]);
 }

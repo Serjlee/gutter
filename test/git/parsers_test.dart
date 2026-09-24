@@ -80,7 +80,9 @@ void main() {
     });
 
     test('detached and initial', () {
-      final s = parseStatus('# branch.oid (initial)\x00# branch.head (detached)\x00');
+      final s = parseStatus(
+        '# branch.oid (initial)\x00# branch.head (detached)\x00',
+      );
       expect(s.branch.detached, isTrue);
       expect(s.branch.oid, isNull);
       expect(s.isClean, isTrue);
@@ -88,8 +90,18 @@ void main() {
   });
 
   test('name-status with renames', () {
-    final text = ['M', 'a.txt', 'R087', 'old.txt', 'new.txt', 'A', 'x y.txt', 'D', 'gone', '']
-        .join('\x00');
+    final text = [
+      'M',
+      'a.txt',
+      'R087',
+      'old.txt',
+      'new.txt',
+      'A',
+      'x y.txt',
+      'D',
+      'gone',
+      '',
+    ].join('\x00');
     final files = parseNameStatus(text);
     expect(files.map((f) => f.kind), [
       ChangeKind.modified,

@@ -31,20 +31,23 @@ List<Commit> parseLogString(String text) {
       continue;
     }
     final parents = fields[i + 1];
-    commits.add(Commit(
-      sha: sha,
-      parents: parents.isEmpty ? const [] : parents.split(' '),
-      authorName: fields[i + 2],
-      authorEmail: fields[i + 3],
-      authorTime: int.tryParse(fields[i + 4]) ?? 0,
-      subject: fields[i + 5],
-    ));
+    commits.add(
+      Commit(
+        sha: sha,
+        parents: parents.isEmpty ? const [] : parents.split(' '),
+        authorName: fields[i + 2],
+        authorEmail: fields[i + 3],
+        authorTime: int.tryParse(fields[i + 4]) ?? 0,
+        subject: fields[i + 5],
+      ),
+    );
     i += logFieldCount;
   }
   return commits;
 }
 
-const detailsFormat = '%H%x00%P%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%B';
+const detailsFormat =
+    '%H%x00%P%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%B';
 
 CommitDetails parseCommitDetails(String text) {
   final f = text.split('\x00');

@@ -44,20 +44,24 @@ WorkingTreeStatus parseStatus(String text) {
       case 'u':
         // u XY sub m1 m2 m3 mW h1 h2 h3 path
         final f = _splitN(line, 11);
-        entries.add(StatusEntry(
-          path: f[10],
-          index: ChangeKind.conflicted,
-          worktree: ChangeKind.conflicted,
-          conflicted: true,
-          conflictCode: f[1],
-        ));
+        entries.add(
+          StatusEntry(
+            path: f[10],
+            index: ChangeKind.conflicted,
+            worktree: ChangeKind.conflicted,
+            conflicted: true,
+            conflictCode: f[1],
+          ),
+        );
         break;
       case '?':
-        entries.add(StatusEntry(
-          path: line.substring(2),
-          index: null,
-          worktree: ChangeKind.untracked,
-        ));
+        entries.add(
+          StatusEntry(
+            path: line.substring(2),
+            index: null,
+            worktree: ChangeKind.untracked,
+          ),
+        );
         break;
       default:
         // '!' ignored files and anything unknown are skipped.
@@ -124,7 +128,9 @@ List<FileChange> parseNameStatus(String text) {
     final kind = changeKindFromLetter(letter);
     if (kind == ChangeKind.renamed || kind == ChangeKind.copied) {
       if (i + 2 >= parts.length) break;
-      out.add(FileChange(path: parts[i + 2], oldPath: parts[i + 1], kind: kind));
+      out.add(
+        FileChange(path: parts[i + 2], oldPath: parts[i + 1], kind: kind),
+      );
       i += 3;
     } else {
       if (i + 1 >= parts.length) break;
