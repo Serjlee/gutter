@@ -165,12 +165,12 @@ class Repository {
       'stash',
       'list',
       '-z',
-      '--format=%H%x00%P%x00%ct%x00%gs',
+      '--format=%H%x00%P%x00%ct%x00%an%x00%ae%x00%gs',
     ], allowFailure: true);
     if (!res.ok) return const [];
     final f = res.stdout.split('\x00');
     final out = <StashEntry>[];
-    for (var i = 0; i + 4 <= f.length; i += 4) {
+    for (var i = 0; i + 6 <= f.length; i += 6) {
       final sha = f[i].trim();
       if (sha.isEmpty) continue;
       out.add(
@@ -179,7 +179,9 @@ class Repository {
           sha: sha,
           parents: f[i + 1].isEmpty ? const [] : f[i + 1].split(' '),
           time: int.tryParse(f[i + 2]) ?? 0,
-          message: f[i + 3],
+          authorName: f[i + 3],
+          authorEmail: f[i + 4],
+          message: f[i + 5],
         ),
       );
     }

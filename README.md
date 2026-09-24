@@ -13,7 +13,8 @@ fetch/push.
 
 - **Commit graph**: lane-colored branches, ref labels (local and remote
   merged into one label, tags), author-initials nodes, a WIP row for
-  uncommitted changes, search (`Ctrl/Cmd+F`) and keyboard navigation.
+  uncommitted changes, stashes shown where they were made (dotted line to
+  their base commit), search (`Ctrl/Cmd+F`) and keyboard navigation.
   It loads 20k commits by default and fetches more as you scroll.
 - **Tabs**: one per repository, with the session restored on start.
   - Only the **active tab auto-fetches** (every 5 minutes by default, and

@@ -355,6 +355,7 @@ class _GraphRowState extends State<_GraphRow> {
     final graph = tab.graph;
     final row = widget.row;
     final commit = graph.commitAt(row);
+    final stash = graph.stashAt(row);
     final sha = commit?.sha ?? wipSha;
     final selected = tab.selectedSha == sha;
     final laneColor = AppColors.lane(graph.layout.nodeColor[row]);
@@ -370,7 +371,7 @@ class _GraphRowState extends State<_GraphRow> {
       bg = AppColors.warning.withValues(alpha: 0.10);
     }
 
-    final refs = commit == null
+    final refs = commit == null || stash != null
         ? const <GitRef>[]
         : (tab.refsBySha[sha] ?? const <GitRef>[]);
     final msgColor = dimmed ? AppColors.textFaint : AppColors.text;
@@ -393,7 +394,9 @@ class _GraphRowState extends State<_GraphRow> {
                   showContextMenu(
                     context,
                     d.globalPosition,
-                    widget.actions.commitMenu(commit),
+                    stash != null
+                        ? widget.actions.stashMenu(stash)
+                        : widget.actions.commitMenu(commit),
                   ),
                 );
               },
@@ -424,6 +427,8 @@ class _GraphRowState extends State<_GraphRow> {
                       metrics: _metrics,
                       style: commit == null
                           ? NodeStyle.wip
+                          : stash != null
+                          ? NodeStyle.stash
                           : (commit.isMerge
                                 ? NodeStyle.merge
                                 : NodeStyle.commit),
@@ -443,7 +448,11 @@ class _GraphRowState extends State<_GraphRow> {
                           commit.subject,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: msgColor),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: stash != null ? dimColor : msgColor,
+                            fontStyle: stash != null ? FontStyle.italic : null,
+                          ),
                         ),
                 ),
               ),

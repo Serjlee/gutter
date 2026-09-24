@@ -21,20 +21,37 @@ import 'auto_fetch.dart';
 const wipSha = '__WIP__';
 
 /// Commits plus their graph layout. When [hasWip] the first row is the WIP
-/// pseudo-commit.
+/// pseudo-commit. Stashes are pseudo-commits among the others (see
+/// [stashAt]), linked to the commit they were made on.
 class GraphData {
   GraphData(
     this.commits,
     this.layout, {
     required this.hasWip,
+    List<Commit>? history,
+    this.stashes = const {},
     this.truncated = false,
-  });
+  }) : history = history ?? commits;
 
   static final empty = GraphData(const [], GraphLayout.empty, hasWip: false);
 
+  /// Rows after the WIP row: [history] with the stashes merged in.
   final List<Commit> commits;
   final GraphLayout layout;
   final bool hasWip;
+
+  /// The loaded history (no stashes).
+  final List<Commit> history;
+
+  /// Stashes shown in the graph, by sha.
+  final Map<String, StashEntry> stashes;
+
+  /// The stash shown at [row], if that row is a stash.
+  StashEntry? stashAt(int row) {
+    if (stashes.isEmpty) return null;
+    final c = commitAt(row);
+    return c == null ? null : stashes[c.sha];
+  }
 
   /// More history exists than was loaded.
   final bool truncated;
@@ -240,7 +257,10 @@ class RepoTabController extends ChangeNotifier {
     if (_disposed) return;
     final newRefs = results[0] as List<GitRef>;
     final newStatus = results[1] as WorkingTreeStatus;
-    stashes = results[2] as List<StashEntry>;
+    final newStashes = results[2] as List<StashEntry>;
+    final stashesChanged =
+        newStashes.map((s) => s.sha).join() != stashes.map((s) => s.sha).join();
+    stashes = newStashes;
     operation = results[3] as RepoOperation;
     headSha = results[4] as String?;
     rebaseProgress = operation == RepoOperation.rebase
@@ -272,7 +292,7 @@ class RepoTabController extends ChangeNotifier {
     if (forceLog || refsChanged) {
       _refsSignature = signature;
       await _reloadLog();
-    } else if (dirtyChanged) {
+    } else if (dirtyChanged || stashesChanged) {
       await _relayout();
     }
     if (_disposed) return;
@@ -309,24 +329,28 @@ class RepoTabController extends ChangeNotifier {
     try {
       final bytes = await repo.logBytes(maxCount: maxCommits);
       final wipParent = status.isClean ? null : headSha;
+      final stashList = stashes;
       final max = maxCommits;
-      graph = await Isolate.run(() => _buildGraph(bytes, wipParent, max));
+      graph = await Isolate.run(
+        () => _buildGraph(bytes, wipParent, stashList, max),
+      );
     } finally {
       loadingLog = false;
     }
   }
 
   Future<void> _relayout() async {
-    final commits = graph.commits;
+    final history = graph.history;
     final wipParent = status.isClean ? null : headSha;
+    final stashList = stashes;
     final truncated = graph.truncated;
-    if (commits.length < 5000) {
-      graph = _layoutGraph(commits, wipParent, truncated);
-    } else {
-      graph = await Isolate.run(
-        () => _layoutGraph(commits, wipParent, truncated),
-      );
-    }
+    GraphData layout() => layoutGraph(
+      history,
+      wipParent: wipParent,
+      stashes: stashList,
+      truncated: truncated,
+    );
+    graph = history.length < 5000 ? layout() : await Isolate.run(layout);
   }
 
   Future<void> loadMore() async {
@@ -837,22 +861,106 @@ int _diffSignature(FileDiff? d) {
   ]);
 }
 
-GraphData _buildGraph(Uint8List bytes, String? wipParent, int maxCount) {
+GraphData _buildGraph(
+  Uint8List bytes,
+  String? wipParent,
+  List<StashEntry> stashes,
+  int maxCount,
+) {
   final commits = parseLog(bytes);
-  return _layoutGraph(commits, wipParent, commits.length >= maxCount);
+  return layoutGraph(
+    commits,
+    wipParent: wipParent,
+    stashes: stashes,
+    truncated: commits.length >= maxCount,
+  );
 }
 
-GraphData _layoutGraph(
-  List<Commit> commits,
+/// Lays out [history] with the WIP row (when [wipParent] is set) and the
+/// [stashes] as pseudo-commits.
+@visibleForTesting
+GraphData layoutGraph(
+  List<Commit> history, {
   String? wipParent,
-  bool truncated,
-) {
+  List<StashEntry> stashes = const [],
+  bool truncated = false,
+}) {
+  final commits = mergeStashes(history, stashes);
+  final stashBySha = {
+    for (final s in stashes)
+      if (s.base != null) s.sha: s,
+  };
   final hasWip = wipParent != null;
   final off = hasWip ? 1 : 0;
   final layout = GraphLayout.computeFromParents(
     commits.length + off,
     (i) => hasWip && i == 0 ? wipSha : commits[i - off].sha,
     (i) => hasWip && i == 0 ? [wipParent] : commits[i - off].parents,
+    isDashed: stashBySha.isEmpty
+        ? (i) => hasWip && i == 0
+        : (i) =>
+              (hasWip && i == 0) ||
+              stashBySha.containsKey(commits[i - off].sha),
   );
-  return GraphData(commits, layout, hasWip: hasWip, truncated: truncated);
+  return GraphData(
+    commits,
+    layout,
+    hasWip: hasWip,
+    history: history,
+    stashes: stashBySha,
+    truncated: truncated,
+  );
+}
+
+/// [history] with a pseudo-commit per stash, placed by date but always
+/// above the commit it was made on. The pseudo-commit's only parent is that
+/// commit (its index/untracked parents aren't part of the history).
+@visibleForTesting
+List<Commit> mergeStashes(List<Commit> history, List<StashEntry> stashes) {
+  if (stashes.isEmpty) return history;
+  final bases = {
+    for (final s in stashes)
+      if (s.base != null) s.base!,
+  };
+  final baseRow = <String, int>{};
+  for (var i = 0; i < history.length && baseRow.length < bases.length; i++) {
+    if (bases.contains(history[i].sha)) baseRow[history[i].sha] = i;
+  }
+  final placed = <(int, int, Commit)>[]; // (position, order, pseudo-commit)
+  for (final s in stashes) {
+    final base = s.base;
+    if (base == null) continue;
+    var pos = baseRow[base] ?? history.length;
+    for (var i = 0; i < pos; i++) {
+      if (history[i].authorTime <= s.time) {
+        pos = i;
+        break;
+      }
+    }
+    placed.add((
+      pos,
+      placed.length,
+      Commit(
+        sha: s.sha,
+        parents: [base],
+        authorName: s.authorName,
+        authorEmail: s.authorEmail,
+        authorTime: s.time,
+        subject: s.message,
+      ),
+    ));
+  }
+  // Same position: newer stashes (lower index) first.
+  placed.sort(
+    (a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.compareTo(b.$2),
+  );
+  final out = <Commit>[];
+  var k = 0;
+  for (var i = 0; i <= history.length; i++) {
+    while (k < placed.length && placed[k].$1 == i) {
+      out.add(placed[k++].$3);
+    }
+    if (i < history.length) out.add(history[i]);
+  }
+  return out;
 }

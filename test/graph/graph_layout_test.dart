@@ -209,4 +209,68 @@ void main() {
       checkInvariants(commits, l);
     }
   });
+
+  group('dashed pseudo-commits', () {
+    bool isDashedEdge(List<int> e) => e[2] & GraphLayout.dashedBit != 0;
+
+    List<List<int>> rawEdges(GraphLayout l, int r) => l.edgesAt(r);
+
+    test('a stash on a branch tip: dashed line into the tip', () {
+      // stash (on b) , b , a
+      final commits = [
+        c('s', ['b']),
+        c('b', ['a']),
+        c('a'),
+      ];
+      final l = GraphLayout.computeFromParents(
+        3,
+        (i) => commits[i].sha,
+        (i) => commits[i].parents,
+        isDashed: (i) => i == 0,
+      );
+      expect(l.nodeLane[0], l.nodeLane[1]);
+      expect(rawEdges(l, 0).every(isDashedEdge), isTrue);
+      expect(rawEdges(l, 0), isNotEmpty);
+      // Below the tip the branch is solid again.
+      expect(rawEdges(l, 1).any(isDashedEdge), isFalse);
+      checkInvariants(commits, l);
+    });
+
+    test('a stash never takes over the branch lane', () {
+      // top (branch tip) , stash (on mid) , mid , root
+      final commits = [
+        c('top', ['mid']),
+        c('s', ['mid']),
+        c('mid', ['root']),
+        c('root'),
+      ];
+      final l = GraphLayout.computeFromParents(
+        4,
+        (i) => commits[i].sha,
+        (i) => commits[i].parents,
+        isDashed: (i) => i == 1,
+      );
+      // The branch keeps lane 0; the stash sits beside it.
+      expect(l.nodeLane[0], 0);
+      expect(l.nodeLane[2], 0);
+      expect(l.nodeLane[1], 1);
+      // The stash converges into mid with a dashed bend.
+      final bend = rawEdges(l, 1).where((e) => e[3] == EdgeKind.intoNode);
+      expect(bend, hasLength(1));
+      expect(isDashedEdge(bend.single), isTrue);
+      // The branch line through the stash row stays solid.
+      expect(
+        rawEdges(l, 0).where((e) => e[0] == 0).every((e) => !isDashedEdge(e)),
+        isTrue,
+      );
+      checkInvariants(commits, l);
+    });
+
+    test('without isDashed nothing is dashed', () {
+      final l = GraphLayout.compute(syntheticHistory(300, Random(3)));
+      for (var r = 0; r < l.rowCount; r++) {
+        expect(l.edgesAt(r).any(isDashedEdge), isFalse);
+      }
+    });
+  });
 }

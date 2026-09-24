@@ -39,6 +39,12 @@ class GraphLayout {
 
   static const blockShift = 6; // 64 rows per index block
 
+  /// Set on the color of edges drawn dashed: the line from a pseudo-row
+  /// (WIP, stash) to the commit it's based on. Mask it off with
+  /// [colorMask] to get the color index.
+  static const dashedBit = 1 << 24;
+  static const colorMask = dashedBit - 1;
+
   /// Lane (column) of each row's node.
   final Int32List nodeLane;
 
@@ -46,7 +52,8 @@ class GraphLayout {
   final Int32List nodeColor;
 
   /// Bent edges between row r and r+1 are `edges[edgeOffsets[r]*4 ..
-  /// edgeOffsets[r+1]*4]`, each as (fromLane, toLane, color, kind).
+  /// edgeOffsets[r+1]*4]`, each as (fromLane, toLane, color, kind). Edge
+  /// and run colors may carry [dashedBit].
   final Int32List edgeOffsets;
   final Int32List edges;
 
@@ -113,11 +120,15 @@ class GraphLayout {
     (i) => commits[i].parents,
   );
 
+  /// Lays out [n] rows. Rows where [isDashed] holds are pseudo-commits
+  /// (WIP, stashes): the line to their first parent is dashed and never
+  /// takes over a branch's lane.
   static GraphLayout computeFromParents(
     int n,
     String Function(int) shaOf,
-    List<String> Function(int) parentsOf,
-  ) {
+    List<String> Function(int) parentsOf, {
+    bool Function(int)? isDashed,
+  }) {
     final nodeLane = Int32List(n);
     final nodeColor = Int32List(n);
     final rowLanes = Int32List(n);
@@ -128,16 +139,20 @@ class GraphLayout {
     // Per lane: the commit it leads to, its color and its open run.
     final lanes = <String?>[];
     final laneColor = <int>[];
+    final laneDashed = <bool>[];
     final runStart = <int>[]; // -1: no open run
     // Commit sha -> lanes expecting it (usually one).
     final expect = <String, List<int>>{};
     var nextColor = 0;
     var maxLanes = 0;
 
+    int colorOf(int lane) =>
+        laneDashed[lane] ? laneColor[lane] | dashedBit : laneColor[lane];
+
     void closeRun(int lane, int lastRow) {
       final s = runStart[lane];
       if (s >= 0 && lastRow >= s) {
-        runs.add4(lane, laneColor[lane], s, lastRow);
+        runs.add4(lane, colorOf(lane), s, lastRow);
       }
       runStart[lane] = -1;
     }
@@ -155,15 +170,27 @@ class GraphLayout {
 
     int freeSlot() {
       final i = lanes.indexOf(null);
-      if (i >= 0) return i;
+      if (i >= 0) {
+        laneDashed[i] = false;
+        return i;
+      }
       lanes.add(null);
       laneColor.add(0);
+      laneDashed.add(false);
       runStart.add(-1);
       return lanes.length - 1;
     }
 
+    // The lane a commit is placed in: the leftmost of the lanes leading to
+    // it, preferring real branch lanes over dashed pseudo-commit lines.
     int leftmost(List<int> ls) {
-      var m = ls.first;
+      var m = -1;
+      for (final l in ls) {
+        if (laneDashed[l]) continue;
+        if (m < 0 || l < m) m = l;
+      }
+      if (m >= 0) return m;
+      m = ls.first;
       for (final l in ls) {
         if (l < m) m = l;
       }
@@ -194,6 +221,12 @@ class GraphLayout {
         laneColor[col] = color;
       } else {
         color = laneColor[col];
+        if (laneDashed[col]) {
+          // Only dashed lines lead here: they end at this node and the lane
+          // continues solid below it.
+          closeRun(col, r - 1);
+          laneDashed[col] = false;
+        }
       }
       nodeLane[r] = col;
       nodeColor[r] = color;
@@ -208,6 +241,10 @@ class GraphLayout {
       } else {
         // The node's lane continues to the first parent, keeping its run.
         setLane(col, parents[0]);
+        if (isDashed != null && isDashed(r)) {
+          closeRun(col, r - 1);
+          laneDashed[col] = true;
+        }
         if (runStart[col] < 0) runStart[col] = r;
         for (var pi = 1; pi < parents.length; pi++) {
           final p = parents[pi];
@@ -236,7 +273,7 @@ class GraphLayout {
           if (l == nextCol || newLanes.contains(l)) continue;
           // Lane l converges into the next node: its straight run ends here.
           closeRun(l, r - 1);
-          edges.add4(l, nextCol, laneColor[l], EdgeKind.intoNode);
+          edges.add4(l, nextCol, colorOf(l), EdgeKind.intoNode);
         }
       }
       for (final k in mergeTargets) {
@@ -248,6 +285,7 @@ class GraphLayout {
       while (lanes.isNotEmpty && lanes.last == null) {
         lanes.removeLast();
         laneColor.removeLast();
+        laneDashed.removeLast();
         runStart.removeLast();
       }
       if (lanes.length > maxLanes) maxLanes = lanes.length;

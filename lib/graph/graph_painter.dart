@@ -15,7 +15,7 @@ class GraphMetrics {
   double widthFor(int lanes) => laneWidth * lanes + 12;
 }
 
-enum NodeStyle { commit, merge, wip }
+enum NodeStyle { commit, merge, wip, stash }
 
 /// Paints one row of the commit graph: lower halves of the incoming edges,
 /// upper halves of the outgoing ones, and the node.
@@ -68,7 +68,33 @@ class GraphRowPainter extends CustomPainter {
       ..isAntiAlias = true;
     final alpha = dimmed ? 0.35 : 1.0;
 
-    Color c(int color) => AppColors.lane(color).withValues(alpha: alpha);
+    Color c(int color) =>
+        AppColors.lane(color & GraphLayout.colorMask).withValues(alpha: alpha);
+    bool dashed(int color) => color & GraphLayout.dashedBit != 0;
+
+    void line(Offset a, Offset b, int color) {
+      paint.color = c(color);
+      if (dashed(color)) {
+        _drawDashed(
+          canvas,
+          Path()
+            ..moveTo(a.dx, a.dy)
+            ..lineTo(b.dx, b.dy),
+          paint,
+        );
+      } else {
+        canvas.drawLine(a, b, paint);
+      }
+    }
+
+    void path(Path p, int color) {
+      paint.color = c(color);
+      if (dashed(color)) {
+        _drawDashed(canvas, p, paint);
+      } else {
+        canvas.drawPath(p, paint);
+      }
+    }
 
     // Straight lines: the lower half of the edges arriving from row-1 and the
     // upper half of the edges leaving towards row+1. Lines that only cross
@@ -77,14 +103,12 @@ class GraphRowPainter extends CustomPainter {
     layout.forEachStraight(row - 1, (lane, color) {
       final x = metrics.laneX(lane);
       if (x > maxX) return;
-      paint.color = c(color);
-      canvas.drawLine(Offset(x, 0), Offset(x, cy), paint);
+      line(Offset(x, 0), Offset(x, cy), color);
     });
     layout.forEachStraight(row, (lane, color) {
       final x = metrics.laneX(lane);
       if (x > maxX) return;
-      paint.color = c(color);
-      canvas.drawLine(Offset(x, cy), Offset(x, h), paint);
+      line(Offset(x, cy), Offset(x, h), color);
     });
 
     // Bends arriving from row-1, drawn in the top half.
@@ -96,21 +120,22 @@ class GraphRowPainter extends CustomPainter {
         final to = layout.edges[e * 4 + 1];
         final color = layout.edges[e * 4 + 2];
         final kind = layout.edges[e * 4 + 3];
-        paint.color = c(color);
         final x2 = metrics.laneX(to);
         if (kind == EdgeKind.intoNode) {
           // Down the lane, then a rounded corner into the node.
           final x1 = metrics.laneX(from);
           final r = _cornerRadius(x2 - x1, cy);
           final sign = x2 > x1 ? 1.0 : -1.0;
-          final path = Path()
-            ..moveTo(x1, 0)
-            ..lineTo(x1, cy - r)
-            ..quadraticBezierTo(x1, cy, x1 + sign * r, cy)
-            ..lineTo(x2, cy);
-          canvas.drawPath(path, paint);
+          path(
+            Path()
+              ..moveTo(x1, 0)
+              ..lineTo(x1, cy - r)
+              ..quadraticBezierTo(x1, cy, x1 + sign * r, cy)
+              ..lineTo(x2, cy),
+            color,
+          );
         } else {
-          canvas.drawLine(Offset(x2, 0), Offset(x2, cy), paint);
+          line(Offset(x2, 0), Offset(x2, cy), color);
         }
       }
     }
@@ -123,21 +148,22 @@ class GraphRowPainter extends CustomPainter {
       final to = layout.edges[e * 4 + 1];
       final color = layout.edges[e * 4 + 2];
       final kind = layout.edges[e * 4 + 3];
-      paint.color = c(color);
       final x1 = metrics.laneX(from);
       if (kind == EdgeKind.fromNode) {
         // Out of the node sideways, then a rounded corner down the lane.
         final x2 = metrics.laneX(to);
         final r = _cornerRadius(x2 - x1, cy);
         final sign = x2 > x1 ? 1.0 : -1.0;
-        final path = Path()
-          ..moveTo(x1, cy)
-          ..lineTo(x2 - sign * r, cy)
-          ..quadraticBezierTo(x2, cy, x2, cy + r)
-          ..lineTo(x2, h);
-        canvas.drawPath(path, paint);
+        path(
+          Path()
+            ..moveTo(x1, cy)
+            ..lineTo(x2 - sign * r, cy)
+            ..quadraticBezierTo(x2, cy, x2, cy + r)
+            ..lineTo(x2, h),
+          color,
+        );
       } else {
-        canvas.drawLine(Offset(x1, cy), Offset(x1, h), paint);
+        line(Offset(x1, cy), Offset(x1, h), color);
       }
     }
 
@@ -157,6 +183,23 @@ class GraphRowPainter extends CustomPainter {
           metrics.nodeRadius - 3,
           Paint()..color = AppColors.background,
         );
+      case NodeStyle.stash:
+        // A box with a stash glyph, like GitKraken.
+        final r = metrics.nodeRadius - 1;
+        final box = RRect.fromRectAndRadius(
+          Rect.fromCircle(center: center, radius: r),
+          const Radius.circular(4),
+        );
+        canvas.drawRRect(box, Paint()..color = AppColors.background);
+        canvas.drawRRect(
+          box,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2
+            ..color = color,
+        );
+        final tp = _iconPainter(Icons.inventory_2_outlined, color);
+        tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
       case NodeStyle.merge:
         canvas.drawCircle(center, 5, Paint()..color = color);
       case NodeStyle.commit:
@@ -184,6 +227,46 @@ class GraphRowPainter extends CustomPainter {
           ..strokeWidth = 1.5
           ..color = Colors.white.withValues(alpha: 0.85),
       );
+    }
+  }
+
+  static final _iconCache = <(int, int), TextPainter>{};
+
+  static TextPainter _iconPainter(IconData icon, Color color) {
+    return _iconCache.putIfAbsent((icon.codePoint, color.toARGB32()), () {
+      return TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(icon.codePoint),
+          style: TextStyle(
+            fontFamily: icon.fontFamily,
+            package: icon.fontPackage,
+            fontSize: 11,
+            height: 1,
+            color: color,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    });
+  }
+
+  /// Dash pattern for dashed edges. A half row (15 px at the default row
+  /// height) holds a whole number of periods, so dashes line up across
+  /// rows.
+  static const _dash = 3.0;
+  static const _gap = 2.0;
+
+  static void _drawDashed(Canvas canvas, Path path, Paint paint) {
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = paint.strokeWidth
+      ..strokeCap = StrokeCap.butt
+      ..color = paint.color
+      ..isAntiAlias = true;
+    for (final m in path.computeMetrics()) {
+      for (var d = 0.0; d < m.length; d += _dash + _gap) {
+        canvas.drawPath(m.extractPath(d, d + _dash), p);
+      }
     }
   }
 

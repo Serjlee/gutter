@@ -53,6 +53,9 @@ class CommitDetailsPanel extends StatelessWidget {
     }
     final row = tab.graph.rowOf(d.sha);
     final commit = row == null ? null : tab.graph.commitAt(row);
+    final stash = row == null ? null : tab.graph.stashAt(row);
+    // A stash's other parents (index, untracked files) aren't in the graph.
+    final parents = stash != null ? d.parents.take(1).toList() : d.parents;
     final refs = tab.refsBySha[d.sha] ?? const <GitRef>[];
     final authorDate = DateTime.fromMillisecondsSinceEpoch(d.authorTime * 1000);
     final differentCommitter =
@@ -75,7 +78,7 @@ class CommitDetailsPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'commit ',
+                    stash != null ? '${stash.ref} ' : 'commit ',
                     style: monoStyle(size: 12, color: AppColors.textDim),
                   ),
                   InkWell(
@@ -90,18 +93,20 @@ class CommitDetailsPanel extends StatelessWidget {
                   ),
                 ],
               ),
-              if (d.parents.isNotEmpty)
+              if (parents.isNotEmpty)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      d.parents.length > 1 ? 'parents ' : 'parent ',
+                      stash != null
+                          ? 'on '
+                          : (parents.length > 1 ? 'parents ' : 'parent '),
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textDim,
                       ),
                     ),
-                    for (final p in d.parents)
+                    for (final p in parents)
                       InkWell(
                         onTap: () => tab.jumpToSha(p),
                         child: Padding(

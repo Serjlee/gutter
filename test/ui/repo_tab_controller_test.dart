@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
 import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/git/models.dart';
+import 'package:gutter/graph/graph_layout.dart';
 import 'package:gutter/ui/repo/auto_fetch.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
 
@@ -91,6 +92,31 @@ void main() {
       expect(tab.status.unstaged.single.path, 'a.txt');
     });
 
+    test('stashes appear in the graph and go away when dropped', () async {
+      await tab.load();
+      t.write('a.txt', 'a\nb\nstashed\n');
+      await tab.repo.stashPush(message: 'try this');
+      await tab.refresh();
+      expect(tab.graph.hasWip, isFalse);
+      expect(tab.graph.commits.first.subject, contains('try this'));
+      final stash = tab.graph.stashAt(0)!;
+      expect(stash.ref, 'stash@{0}');
+      // Linked to HEAD with a dashed line.
+      expect(tab.graph.commits.first.parents, [tab.headSha]);
+      final dashed = tab.graph.layout
+          .edgesAt(0)
+          .where((e) => e[2] & GraphLayout.dashedBit != 0);
+      expect(dashed, isNotEmpty);
+      // Selecting it shows the stashed change.
+      await tab.select(stash.sha);
+      expect(tab.commitFiles.single.path, 'a.txt');
+
+      await tab.repo.stashDrop(0);
+      await tab.refresh();
+      expect(tab.graph.stashes, isEmpty);
+      expect(tab.graph.rowCount, 3);
+    });
+
     test('selects commits and stages selected lines from the diff', () async {
       await tab.load();
       final side = tab.graph.commits.firstWhere(
@@ -163,6 +189,68 @@ void main() {
       await sub.cancel();
       expect(tab.busy, isNull);
       expect(tab.operation, RepoOperation.none);
+    });
+  });
+
+  group('stashes in the graph', () {
+    Commit c(String sha, int time, [List<String> parents = const []]) => Commit(
+      sha: sha,
+      parents: parents,
+      authorName: 'a',
+      authorEmail: 'a@a',
+      authorTime: time,
+      subject: sha,
+    );
+    StashEntry s(int index, String sha, int time, String base) => StashEntry(
+      index: index,
+      sha: sha,
+      message: 'On main: $sha',
+      time: time,
+      parents: [base, 'index-$sha'],
+    );
+
+    final history = [
+      c('d', 400, ['c']),
+      c('c', 300, ['b']),
+      c('b', 200, ['a']),
+      c('a', 100),
+    ];
+
+    test('placed by date, linked only to the base commit', () {
+      final rows = mergeStashes(history, [s(0, 's0', 250, 'b')]);
+      expect(rows.map((r) => r.sha), ['d', 'c', 's0', 'b', 'a']);
+      expect(rows[2].parents, ['b']);
+      expect(rows[2].subject, 'On main: s0');
+    });
+
+    test('never below its base, even when older', () {
+      // Clock skew: the stash claims to be older than its base.
+      final rows = mergeStashes(history, [s(0, 's0', 50, 'c')]);
+      expect(rows.map((r) => r.sha), ['d', 's0', 'c', 'b', 'a']);
+    });
+
+    test('newer stashes first at the same spot; unloaded bases at the end', () {
+      final rows = mergeStashes(history, [
+        s(0, 's0', 500, 'd'),
+        s(1, 's1', 500, 'd'),
+        s(2, 's2', 10, 'zzz'),
+      ]);
+      expect(rows.map((r) => r.sha), ['s0', 's1', 'd', 'c', 'b', 'a', 's2']);
+    });
+
+    test('graph data maps rows to stashes and keeps the history', () {
+      final g = layoutGraph(
+        history,
+        wipParent: 'd',
+        stashes: [s(0, 's0', 250, 'b')],
+      );
+      expect(g.rowCount, 6);
+      expect(g.history, history);
+      expect(g.commitAt(0), isNull); // WIP
+      expect(g.rowOf('s0'), 3);
+      expect(g.stashAt(3)?.ref, 'stash@{0}');
+      expect(g.stashAt(2), isNull);
+      expect(g.rowOf('b'), 4);
     });
   });
 }

@@ -139,15 +139,27 @@ class StashEntry {
     required this.message,
     required this.time,
     required this.parents,
+    this.authorName = '',
+    this.authorEmail = '',
   });
 
   final int index;
   final String sha;
   final String message;
+
+  /// Seconds since epoch.
   final int time;
+
+  /// The commit the stash was made on, then its index (and untracked files)
+  /// commits.
   final List<String> parents;
+  final String authorName;
+  final String authorEmail;
 
   String get ref => 'stash@{$index}';
+
+  /// The commit the stash was made on.
+  String? get base => parents.isEmpty ? null : parents.first;
 }
 
 /// Change kinds used both for commit file lists and working tree status.
