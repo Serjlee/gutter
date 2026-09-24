@@ -119,8 +119,10 @@ flutter build macos --release
 ```
 
 - **Version label**: the home tab shows the build's version, which is
-  embedded at build time. Tagged CI releases set both values; to label a
-  local build, pass:
+  embedded at build time. Tagged CI releases set both values (and the
+  bundle version shown in macOS's About panel), and fail if the build
+  doesn't contain them (`tool/check_version.sh`). To label a local build,
+  pass:
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
 - **Update checks**: every 6 hours Gutter asks GitHub for the latest
   release of `serjlee/gutter` and shows a link on the home tab when a

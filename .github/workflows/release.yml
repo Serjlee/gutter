@@ -18,6 +18,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       commit: ${{ steps.v.outputs.commit }}
       label: ${{ steps.v.outputs.label }}
+      build_args: ${{ steps.v.outputs.build_args }}
     steps:
       - id: v
         run: |
@@ -29,10 +30,17 @@ jobs:
             version=""  # manual runs are dev builds: commit only
             label="dev-$commit"
           fi
+          # Embedded in the Dart code (home tab) and, for releases, in the
+          # bundle metadata (macOS About panel, Finder).
+          build_args="--dart-define=GUTTER_VERSION=$version --dart-define=GUTTER_COMMIT=$commit"
+          if [[ -n "$version" ]]; then
+            build_args="$build_args --build-name=$version --build-number=$GITHUB_RUN_NUMBER"
+          fi
           {
             echo "commit=$commit"
             echo "version=$version"
             echo "label=$label"
+            echo "build_args=$build_args"
           } >> "$GITHUB_OUTPUT"
 
   macos:
@@ -47,12 +55,16 @@ jobs:
 
       - name: Build
         env:
+          BUILD_ARGS: ${{ needs.version.outputs.build_args }}
+        run: |
+          # shellcheck disable=SC2086 # BUILD_ARGS is a list of flags
+          flutter build macos --release $BUILD_ARGS
+
+      - name: Check the embedded version
+        env:
           GUTTER_VERSION: ${{ needs.version.outputs.version }}
           GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
-        run: |
-          flutter build macos --release \
-            --dart-define=GUTTER_VERSION="$GUTTER_VERSION" \
-            --dart-define=GUTTER_COMMIT="$GUTTER_COMMIT"
+        run: tool/check_version.sh build/macos/Build/Products/Release/Gutter.app/Contents/Frameworks/App.framework/App "$GUTTER_VERSION" "$GUTTER_COMMIT"
 
       - name: Sign (ad-hoc) and verify
         working-directory: build/macos/Build/Products/Release
@@ -84,12 +96,16 @@ jobs:
 
       - name: Build
         env:
+          BUILD_ARGS: ${{ needs.version.outputs.build_args }}
+        run: |
+          # shellcheck disable=SC2086 # BUILD_ARGS is a list of flags
+          flutter build linux --release $BUILD_ARGS
+
+      - name: Check the embedded version
+        env:
           GUTTER_VERSION: ${{ needs.version.outputs.version }}
           GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
-        run: |
-          flutter build linux --release \
-            --dart-define=GUTTER_VERSION="$GUTTER_VERSION" \
-            --dart-define=GUTTER_COMMIT="$GUTTER_COMMIT"
+        run: tool/check_version.sh build/linux/x64/release/bundle/lib/libapp.so "$GUTTER_VERSION" "$GUTTER_COMMIT"
 
       - name: Package
         run: |
