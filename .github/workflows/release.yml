@@ -130,5 +130,13 @@ jobs:
 
           Requires `git` on the `PATH`.
           NOTES
-          gh release create "$GITHUB_REF_NAME" Gutter-macos-*.zip gutter-linux-x64-*.tar.gz \
-            --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md
+          assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Re-running a release: overwrite its assets, title and notes.
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md
+          fi
