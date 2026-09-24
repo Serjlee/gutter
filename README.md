@@ -38,8 +38,9 @@ fetch/push.
 
   ![Diff with syntax highlighting](docs/diff-highlight.png)
 
-- **Branches and history**: checkout (including remote branches as
-  tracking branches), create, rename and delete branches, tags, merge
+- **Branches and history**: checkout by double-click (on a remote branch
+  it checks out the local branch, creating it or fast-forwarding it to the
+  remote as needed), create, rename and delete branches, tags, merge
   (ff / no-ff / ff-only / squash), rebase, cherry-pick, revert,
   reset (soft / mixed / hard), stash, pull (ff-only / merge / rebase),
   push (sets the upstream automatically; if the remote rejects it, Gutter

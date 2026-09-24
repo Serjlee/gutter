@@ -484,18 +484,45 @@ class Repository {
   Future<void> checkout(String ref) => _mutate(() => _run(['checkout', ref]));
 
   /// Checks out a remote branch, creating/using a local tracking branch.
-  Future<void> checkoutRemote(GitRef remoteRef, List<GitRef> allRefs) =>
-      _mutate(() async {
-        final local = remoteRef.remoteBranchName;
-        final exists = allRefs.any(
-          (r) => r.type == RefType.localBranch && r.name == local,
-        );
-        if (exists) {
-          await _run(['checkout', local]);
-        } else {
-          await _run(['checkout', '-b', local, '--track', remoteRef.name]);
-        }
-      });
+  /// Checks out the local branch for [remoteRef], creating a tracking
+  /// branch if there is none, and fast-forwards it to the remote commit
+  /// when it is behind. A local branch that is ahead or has diverged is
+  /// only checked out: updating it would drop its own commits.
+  Future<RemoteCheckout> checkoutRemote(
+    GitRef remoteRef,
+    List<GitRef> allRefs,
+  ) => _mutate(() async {
+    final local = remoteRef.remoteBranchName;
+    final localRef = allRefs
+        .where((r) => r.type == RefType.localBranch && r.name == local)
+        .firstOrNull;
+    if (localRef == null) {
+      await _run(['checkout', '-b', local, '--track', remoteRef.name]);
+      return RemoteCheckout.created;
+    }
+    await _run(['checkout', local]);
+    if (localRef.sha == remoteRef.sha) return RemoteCheckout.upToDate;
+    if (await _isAncestor(localRef.sha, remoteRef.sha)) {
+      await _run(['merge', '--ff-only', remoteRef.sha]);
+      return RemoteCheckout.fastForwarded;
+    }
+    return await _isAncestor(remoteRef.sha, localRef.sha)
+        ? RemoteCheckout.ahead
+        : RemoteCheckout.diverged;
+  });
+
+  Future<bool> _isAncestor(String ancestor, String of) async {
+    final res = await _run([
+      'merge-base',
+      '--is-ancestor',
+      ancestor,
+      of,
+    ], allowFailure: true);
+    if (res.exitCode > 1) {
+      throw GitException(res.args, res.exitCode, res.stderr);
+    }
+    return res.exitCode == 0;
+  }
 
   Future<void> createBranch(
     String name, {

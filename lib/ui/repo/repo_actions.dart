@@ -24,7 +24,25 @@ class RepoActions {
 
   Future<void> checkoutRef(GitRef ref) async {
     if (ref.type == RefType.remoteBranch) {
-      await tab.run('Checkout', () => repo.checkoutRemote(ref, tab.refs));
+      RemoteCheckout? result;
+      final ok = await tab.run(
+        'Checkout',
+        () async => result = await repo.checkoutRemote(ref, tab.refs),
+      );
+      final local = ref.remoteBranchName;
+      if (!ok) return;
+      switch (result) {
+        case RemoteCheckout.fastForwarded:
+          tab.app.notify('Updated $local to ${ref.name}');
+        case RemoteCheckout.diverged:
+          tab.app.notify(
+            '$local and ${ref.name} have diverged: pull to merge or rebase',
+          );
+        case RemoteCheckout.ahead:
+          tab.app.notify('$local is ahead of ${ref.name}');
+        case RemoteCheckout.created || RemoteCheckout.upToDate || null:
+          break;
+      }
     } else if (ref.type == RefType.localBranch) {
       await tab.run('Checkout', () => repo.checkout(ref.name));
     } else {

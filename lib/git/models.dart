@@ -132,6 +132,22 @@ class GitRef {
       type == RefType.remoteBranch && remoteBranchName == 'HEAD';
 }
 
+/// What [Repository.checkoutRemote] did with the local branch.
+enum RemoteCheckout {
+  /// No local branch existed: a tracking branch was created.
+  created,
+  upToDate,
+
+  /// The local branch was behind and now matches the remote.
+  fastForwarded,
+
+  /// The local branch has commits the remote doesn't (left as is).
+  ahead,
+
+  /// Both have their own commits (left as is).
+  diverged,
+}
+
 class StashEntry {
   StashEntry({
     required this.index,

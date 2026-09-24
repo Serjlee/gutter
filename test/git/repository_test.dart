@@ -366,6 +366,49 @@ void main() {
     expect(await repo.stashes(), isEmpty);
   });
 
+  test('checking out a remote branch fast-forwards the local one', () async {
+    final a = t.commit('a', {'a.txt': 'a\n'});
+    final b = t.commit('b', {'a.txt': 'b\n'});
+    t.git(['checkout', '-q', '-b', 'side', a]);
+    final c = t.commit('c', {'c.txt': 'c\n'});
+    t.git(['checkout', '-q', 'main']);
+    // Local branches: behind (at a), ahead (at b), diverged (side, at c),
+    // up to date (at b). Remote-tracking refs as a fetch would leave them.
+    t.git(['branch', 'behind', a]);
+    t.git(['branch', 'ahead', b]);
+    t.git(['branch', 'same', b]);
+    t.git(['remote', 'add', 'origin', '/nonexistent/origin.git']);
+    t.git(['update-ref', 'refs/remotes/origin/behind', b]);
+    t.git(['update-ref', 'refs/remotes/origin/ahead', a]);
+    t.git(['update-ref', 'refs/remotes/origin/side', b]);
+    t.git(['update-ref', 'refs/remotes/origin/same', b]);
+    t.git(['update-ref', 'refs/remotes/origin/fresh', a]);
+
+    Future<RemoteCheckout> go(String name) async {
+      final refs = await repo.refs();
+      final remote = refs.firstWhere((r) => r.name == 'origin/$name');
+      return repo.checkoutRemote(remote, refs);
+    }
+
+    String head() => t.git(['rev-parse', 'HEAD']).trim();
+    String branch() => t.git(['branch', '--show-current']).trim();
+
+    expect(await go('behind'), RemoteCheckout.fastForwarded);
+    expect((branch(), head()), ('behind', b));
+
+    expect(await go('ahead'), RemoteCheckout.ahead);
+    expect((branch(), head()), ('ahead', b));
+
+    expect(await go('side'), RemoteCheckout.diverged);
+    expect((branch(), head()), ('side', c)); // local commits kept
+
+    expect(await go('same'), RemoteCheckout.upToDate);
+    expect((branch(), head()), ('same', b));
+
+    expect(await go('fresh'), RemoteCheckout.created);
+    expect((branch(), head()), ('fresh', a));
+  });
+
   test('remotes: fetch, checkout remote branch, push, pull', () async {
     t.commit('init', {'a.txt': 'a\n'});
     final remoteDir = await Directory.systemTemp.createTemp('gutter_remote_');
