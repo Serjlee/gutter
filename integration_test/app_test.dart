@@ -28,6 +28,15 @@ String git(String dir, List<String> args) {
   return r.stdout as String;
 }
 
+/// Fails with the full diagnostics if a frame reported an error (e.g. a
+/// layout overflow) since the last call.
+void expectNoErrors(WidgetTester tester, String step) {
+  final e = tester.takeException();
+  if (e != null) {
+    fail('$step: ${e is FlutterError ? e.toStringDeep() : e}');
+  }
+}
+
 /// Pumps frames until [done] holds, then one more so the UI reflects it.
 Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
   for (var i = 0; i < 200 && !done(); i++) {
@@ -50,7 +59,14 @@ void main() {
     git(dir, ['add', '.']);
     git(dir, ['commit', '-qm', 'first']);
     git(dir, ['checkout', '-qb', 'side']);
-    File(p.join(dir, 'b.txt')).writeAsStringSync('b\n');
+    // Code with a very long line, for split view and highlighting.
+    File(p.join(dir, 'b.dart')).writeAsStringSync(
+      '/* A block comment\n   spanning lines */\n'
+      'void main() {\n'
+      '  final s = "${'long ' * 80}";\n'
+      '  print(s);\n'
+      '}\n',
+    );
     git(dir, ['add', '.']);
     git(dir, ['commit', '-qm', 'side work']);
     git(dir, ['checkout', '-q', 'main']);
@@ -153,18 +169,35 @@ void main() {
     await tester.tap(find.text('side work'));
     await pumpUntil(tester, () => tab.details?.subject == 'side work');
     expect(find.text('1 CHANGED FILES'), findsOneWidget);
-    await tester.tap(find.text('b.txt').last);
+    await tester.tap(find.text('b.dart').last);
     await pumpUntil(tester, () => tab.diff != null);
     expect(find.text('Unified'), findsOneWidget);
 
-    // Zoom renders the whole shell at another scale.
-    app.setZoom(1.5);
-    await tester.pump(const Duration(milliseconds: 100));
-    app.setZoom(1.0);
+    // Split view with syntax highlighting, then zoomed in so the pane is
+    // narrow: nothing may overflow (layout errors fail the test).
+    expectNoErrors(tester, 'unified diff');
+    await tester.tap(find.text('Split'));
+    await tester.pump();
+    expectNoErrors(tester, 'split view');
+    await tester.tap(find.byKey(const ValueKey('syntax-toggle')));
+    await tester.pump();
+    expect(app.settings.syntaxHighlight, isTrue);
+    expect(find.textContaining('print(s);', findRichText: true), findsWidgets);
+    expectNoErrors(tester, 'split view, highlighted');
+    for (final zoom in [1.5, 2.0, 1.0]) {
+      app.setZoom(zoom);
+      await tester.pump(const Duration(milliseconds: 100));
+      expectNoErrors(tester, 'split view at zoom $zoom');
+    }
+    await tester.tap(find.text('File'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expectNoErrors(tester, 'file view');
+    expect(find.textContaining('print(s);', findRichText: true), findsWidgets);
+    await tester.tap(find.text('Unified'));
     await tester.pump(const Duration(seconds: 2));
 
     app.closeTab(0);
     await tester.pump();
-    expect(tester.takeException(), isNull);
+    expectNoErrors(tester, 'end');
   });
 }

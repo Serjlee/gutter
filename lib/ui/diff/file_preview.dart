@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../repo/repo_tab_controller.dart';
+import 'syntax.dart';
 
 const _imageExtensions = {
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', //
@@ -13,8 +14,16 @@ const _maxTextBytes = 2 * 1024 * 1024;
 
 /// Shows the full file content (text with line numbers, or an image).
 class FilePreview extends StatefulWidget {
-  const FilePreview({super.key, required this.tab, this.version});
+  const FilePreview({
+    super.key,
+    required this.tab,
+    this.version,
+    this.highlight = false,
+  });
   final RepoTabController tab;
+
+  /// Syntax-highlight text files (by file extension).
+  final bool highlight;
 
   /// Reloads when this changes identity (e.g. the diff was refreshed).
   final Object? version;
@@ -25,6 +34,31 @@ class FilePreview extends StatefulWidget {
 
 class _FilePreviewState extends State<FilePreview> {
   late Future<Uint8List?> _bytes = widget.tab.previewBytes();
+
+  // Decoded text (and highlight spans), cached per loaded file.
+  Uint8List? _decodedFor;
+  List<String> _lines = const [];
+  List<List<TextSpan>>? _spans;
+  bool? _spansHighlight;
+
+  void _decode(Uint8List bytes, String path) {
+    if (!identical(bytes, _decodedFor)) {
+      _decodedFor = bytes;
+      _lines = const LineSplitter()
+          .convert(utf8.decode(bytes, allowMalformed: true))
+          .map((l) => l.replaceAll('\t', '    '))
+          .toList();
+      _spansHighlight = null;
+    }
+    if (_spansHighlight != widget.highlight) {
+      _spansHighlight = widget.highlight;
+      final lang = languageForPath(path);
+      _spans = widget.highlight && lang != null
+          ? highlightLines(_lines.join('\n'), lang)
+          : null;
+    }
+  }
+
   bool _forceText = false;
 
   @override
@@ -91,9 +125,9 @@ class _FilePreviewState extends State<FilePreview> {
             ),
           );
         }
-        final lines = const LineSplitter().convert(
-          utf8.decode(bytes, allowMalformed: true),
-        );
+        _decode(bytes, path);
+        final lines = _lines;
+        final spans = _spans;
         final numWidth = '${lines.length}'.length * 8.0 + 16;
         return Container(
           color: AppColors.background,
@@ -113,12 +147,19 @@ class _FilePreviewState extends State<FilePreview> {
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Text(
-                      lines[i].replaceAll('\t', '    '),
+                    child: Text.rich(
+                      TextSpan(
+                        style: monoStyle(size: 12.5),
+                        text: spans == null || i >= spans.length
+                            ? lines[i]
+                            : null,
+                        children: spans == null || i >= spans.length
+                            ? null
+                            : spans[i],
+                      ),
                       maxLines: 1,
                       softWrap: false,
                       overflow: TextOverflow.fade,
-                      style: monoStyle(size: 12.5),
                     ),
                   ),
                 ],

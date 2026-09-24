@@ -23,6 +23,9 @@ class Settings {
   /// Show working-tree files as a folder tree instead of a flat list.
   bool fileTree = false;
 
+  /// Syntax highlighting in diffs and file previews (costs CPU on big files).
+  bool syntaxHighlight = false;
+
   /// Periodically look up the latest Gutter release on GitHub.
   bool checkForUpdates = true;
 
@@ -42,6 +45,7 @@ class Settings {
     'diffSplit': diffSplit,
     'fileTree': fileTree,
     'checkForUpdates': checkForUpdates,
+    'syntaxHighlight': syntaxHighlight,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -62,7 +66,8 @@ class Settings {
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
       ..fileTree = j['fileTree'] == true
-      ..checkForUpdates = j['checkForUpdates'] != false;
+      ..checkForUpdates = j['checkForUpdates'] != false
+      ..syntaxHighlight = j['syntaxHighlight'] == true;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

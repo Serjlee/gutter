@@ -12,6 +12,7 @@ import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'file_preview.dart';
+import 'syntax.dart';
 
 const _lineHeight = 19.0;
 const _maxLinesBeforeConfirm = 6000;
@@ -39,6 +40,51 @@ class _DiffViewState extends State<DiffView> {
   final _hScroll = ScrollController();
 
   RepoTabController get tab => widget.tab;
+
+  // Syntax highlighting of the current diff: [hunk][line] -> spans.
+  List<List<List<TextSpan>?>>? _spans;
+  FileDiff? _spansFor;
+  String? _spansLang;
+
+  bool get _highlightOn => tab.app.settings.syntaxHighlight;
+
+  /// Highlight spans per diff line, computed once per diff. Each side of a
+  /// hunk is highlighted as a whole so multi-line constructs are right.
+  List<List<List<TextSpan>?>>? _highlightFor(FileDiff diff, String path) {
+    final lang = languageForPath(path);
+    if (!_highlightOn || lang == null) return null;
+    if (identical(diff, _spansFor) && lang == _spansLang) return _spans;
+    _spansFor = diff;
+    _spansLang = lang;
+    final out = <List<List<TextSpan>?>>[];
+    for (final hunk in diff.hunks) {
+      final oldText = <String>[], newText = <String>[];
+      final oldIdx = <int, int>{}, newIdx = <int, int>{};
+      for (var i = 0; i < hunk.lines.length; i++) {
+        final l = hunk.lines[i];
+        final text = _expandTabs(l.text);
+        if (l.type == DiffLineType.context || l.type == DiffLineType.remove) {
+          oldIdx[i] = oldText.length;
+          oldText.add(text);
+        }
+        if (l.type == DiffLineType.context || l.type == DiffLineType.add) {
+          newIdx[i] = newText.length;
+          newText.add(text);
+        }
+      }
+      final oldSpans = highlightLines(oldText.join('\n'), lang);
+      final newSpans = highlightLines(newText.join('\n'), lang);
+      out.add([
+        for (var i = 0; i < hunk.lines.length; i++)
+          switch (hunk.lines[i].type) {
+            DiffLineType.remove => oldSpans?[oldIdx[i]!],
+            DiffLineType.add || DiffLineType.context => newSpans?[newIdx[i]!],
+            DiffLineType.noNewline => null,
+          },
+      ]);
+    }
+    return _spans = out;
+  }
 
   @override
   void dispose() {
@@ -170,6 +216,7 @@ class _DiffViewState extends State<DiffView> {
       final CommitFileTarget t => t.file.oldPath,
       final WorkingFileTarget t => t.entry.oldPath,
     };
+    final lang = languageForPath(target.path);
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -177,81 +224,140 @@ class _DiffViewState extends State<DiffView> {
         color: AppColors.panelAlt,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        children: [
-          ChangeKindBadge(kind),
-          const SizedBox(width: 8),
-          Expanded(
-            child: PathLabel(target.path, oldPath: oldPath, fontSize: 13),
-          ),
-          if (diff != null && !diff.isBinary)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text.rich(
-                TextSpan(
-                  children: [
+      child: LayoutBuilder(
+        builder: (context, c) {
+          // Narrow panes (or zoomed in): file actions become icon buttons.
+          final compact = c.maxWidth < 720;
+          return Row(
+            children: [
+              ChangeKindBadge(kind),
+              const SizedBox(width: 8),
+              Expanded(
+                child: PathLabel(target.path, oldPath: oldPath, fontSize: 13),
+              ),
+              if (diff != null && !diff.isBinary)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text.rich(
                     TextSpan(
-                      text: '+${diff.additions} ',
-                      style: const TextStyle(color: AppColors.diffAddText),
+                      children: [
+                        TextSpan(
+                          text: '+${diff.additions} ',
+                          style: const TextStyle(color: AppColors.diffAddText),
+                        ),
+                        TextSpan(
+                          text: '-${diff.deletions}',
+                          style: const TextStyle(color: AppColors.diffDelText),
+                        ),
+                      ],
                     ),
-                    TextSpan(
-                      text: '-${diff.deletions}',
-                      style: const TextStyle(color: AppColors.diffDelText),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              if (target is WorkingFileTarget &&
+                  !target.entry.conflicted &&
+                  compact) ...[
+                if (target.staged)
+                  SmallIconButton(
+                    icon: Icons.remove_circle_outline,
+                    tooltip: 'Unstage file',
+                    color: AppColors.warning,
+                    onPressed: () => tab.unstageEntries([target.entry]),
+                  )
+                else ...[
+                  SmallIconButton(
+                    icon: Icons.delete_outline,
+                    tooltip: 'Discard file',
+                    color: AppColors.danger,
+                    onPressed: () => actions.discard([target.entry]),
+                  ),
+                  SmallIconButton(
+                    icon: Icons.add_circle_outline,
+                    tooltip: 'Stage file',
+                    color: AppColors.success,
+                    onPressed: () => tab.stageEntries([target.entry]),
+                  ),
+                ],
+              ],
+              if (target is WorkingFileTarget &&
+                  !target.entry.conflicted &&
+                  !compact) ...[
+                if (target.staged)
+                  TextButton.icon(
+                    onPressed: () => tab.unstageEntries([target.entry]),
+                    icon: const Icon(Icons.remove_circle_outline, size: 16),
+                    label: const Text('Unstage file'),
+                  )
+                else ...[
+                  TextButton.icon(
+                    onPressed: () => actions.discard([target.entry]),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      size: 16,
+                      color: AppColors.danger,
                     ),
+                    label: const Text(
+                      'Discard file',
+                      style: TextStyle(color: AppColors.danger),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => tab.stageEntries([target.entry]),
+                    icon: const Icon(Icons.add_circle_outline, size: 16),
+                    label: const Text('Stage file'),
+                  ),
+                ],
+              ],
+              const SizedBox(width: 4),
+              SmallIconButton(
+                key: const ValueKey('syntax-toggle'),
+                icon: Icons.palette_outlined,
+                tooltip: lang == null
+                    ? 'No syntax highlighting for this file type'
+                    : (_highlightOn
+                          ? 'Syntax highlighting: on'
+                          : 'Syntax highlighting: off'),
+                color: _highlightOn ? AppColors.accent : AppColors.textFaint,
+                onPressed: lang == null
+                    ? null
+                    : () => tab.app.setSyntaxHighlight(!_highlightOn),
+              ),
+              const SizedBox(width: 4),
+              if (c.maxWidth < 480)
+                AppDropdown<_Mode>(
+                  key: const ValueKey('diff-mode'),
+                  value: _mode,
+                  items: const [
+                    (_Mode.unified, 'Unified', null),
+                    (_Mode.split, 'Split', null),
+                    (_Mode.file, 'File', null),
                   ],
+                  onChanged: _setMode,
+                )
+              else
+                SegmentedButton<_Mode>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity(horizontal: -4, vertical: -4),
+                    textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+                  ),
+                  segments: const [
+                    ButtonSegment(value: _Mode.unified, label: Text('Unified')),
+                    ButtonSegment(value: _Mode.split, label: Text('Split')),
+                    ButtonSegment(value: _Mode.file, label: Text('File')),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: (s) => _setMode(s.first),
                 ),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-          if (target is WorkingFileTarget && !target.entry.conflicted) ...[
-            if (target.staged)
-              TextButton.icon(
-                onPressed: () => tab.unstageEntries([target.entry]),
-                icon: const Icon(Icons.remove_circle_outline, size: 16),
-                label: const Text('Unstage file'),
-              )
-            else ...[
-              TextButton.icon(
-                onPressed: () => actions.discard([target.entry]),
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: 16,
-                  color: AppColors.danger,
-                ),
-                label: const Text(
-                  'Discard file',
-                  style: TextStyle(color: AppColors.danger),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () => tab.stageEntries([target.entry]),
-                icon: const Icon(Icons.add_circle_outline, size: 16),
-                label: const Text('Stage file'),
+              const SizedBox(width: 6),
+              SmallIconButton(
+                icon: Icons.close,
+                tooltip: 'Close (Esc)',
+                onPressed: tab.closeDiff,
               ),
             ],
-          ],
-          const SizedBox(width: 8),
-          SegmentedButton<_Mode>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity(horizontal: -4, vertical: -4),
-              textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-            ),
-            segments: const [
-              ButtonSegment(value: _Mode.unified, label: Text('Unified')),
-              ButtonSegment(value: _Mode.split, label: Text('Split')),
-              ButtonSegment(value: _Mode.file, label: Text('File')),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => _setMode(s.first),
-          ),
-          const SizedBox(width: 6),
-          SmallIconButton(
-            icon: Icons.close,
-            tooltip: 'Close (Esc)',
-            onPressed: tab.closeDiff,
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -292,7 +398,12 @@ class _DiffViewState extends State<DiffView> {
 
   Widget _body(DiffTarget target, FileDiff? diff) {
     if (_mode == _Mode.file) {
-      return FilePreview(key: _previewKey(target), tab: tab, version: diff);
+      return FilePreview(
+        key: _previewKey(target),
+        tab: tab,
+        version: diff,
+        highlight: _highlightOn,
+      );
     }
     if (tab.diffError != null) {
       return Center(
@@ -377,6 +488,7 @@ class _DiffViewState extends State<DiffView> {
         max(hunk.oldStart + hunk.oldCount, hunk.newStart + hunk.newCount),
       );
     }
+    final spans = _highlightFor(diff, tab.diffTarget!.path);
     final noWidth = max(3, '$maxNo'.length) * _charWidth + 12;
     final contentWidth = noWidth * 2 + 20 + maxLen * _charWidth + 40;
     return _scrollable(
@@ -391,6 +503,7 @@ class _DiffViewState extends State<DiffView> {
           final line = diff.hunks[h].lines[l];
           return _UnifiedLine(
             line: line,
+            spans: spans?[h][l],
             numberWidth: noWidth,
             selected: _selection[h]?.contains(l) ?? false,
             selectable: _canSelect && line.isChange,
@@ -464,14 +577,12 @@ class _DiffViewState extends State<DiffView> {
   Widget _splitBody(FileDiff diff) {
     // Each row: (hunk, leftLine?, rightLine?) ; header rows have both -1.
     final rows = <(int, int?, int?)>[];
-    var maxLen = 0;
     for (var h = 0; h < diff.hunks.length; h++) {
       rows.add((h, -1, -1));
       final lines = diff.hunks[h].lines;
       var i = 0;
       while (i < lines.length) {
         final l = lines[i];
-        maxLen = max(maxLen, _visualLength(l.text));
         if (l.type == DiffLineType.context) {
           rows.add((h, i, i));
           i++;
@@ -480,14 +591,12 @@ class _DiffViewState extends State<DiffView> {
         } else {
           final dels = <int>[], adds = <int>[];
           while (i < lines.length && lines[i].type == DiffLineType.remove) {
-            maxLen = max(maxLen, _visualLength(lines[i].text));
             dels.add(i++);
             if (i < lines.length && lines[i].type == DiffLineType.noNewline) {
               i++;
             }
           }
           while (i < lines.length && lines[i].type == DiffLineType.add) {
-            maxLen = max(maxLen, _visualLength(lines[i].text));
             adds.add(i++);
             if (i < lines.length && lines[i].type == DiffLineType.noNewline) {
               i++;
@@ -503,45 +612,39 @@ class _DiffViewState extends State<DiffView> {
         }
       }
     }
-    final half = maxLen * _charWidth + 70;
-    return LayoutBuilder(
-      builder: (context, c) {
-        final paneW = max(c.maxWidth / 2, half);
-        return _scrollable(
-          paneW * 2,
-          ListView.builder(
-            controller: _vScroll,
-            itemExtent: _lineHeight,
-            itemCount: rows.length,
-            itemBuilder: (context, i) {
-              final (h, left, right) = rows[i];
-              if (left == -1 && right == -1) return _hunkHeader(diff, h);
-              final lines = diff.hunks[h].lines;
-              Widget side(int? idx, bool isLeft) {
-                if (idx == null) {
-                  return Container(width: paneW, color: AppColors.panel);
-                }
-                final line = lines[idx];
-                return SizedBox(
-                  width: paneW,
-                  child: _SplitLine(
-                    line: line,
-                    number: isLeft ? line.oldNo : line.newNo,
-                    selected: _selection[h]?.contains(idx) ?? false,
-                    selectable: _canSelect && line.isChange,
-                    onToggle: (shift) => _toggleLine(h, idx, shift: shift),
-                  ),
-                );
-              }
+    final spans = _highlightFor(diff, tab.diffTarget!.path);
+    // Two half-width panes that always fit the view; long lines wrap and
+    // both sides of a row keep the same height.
+    return ListView.builder(
+      controller: _vScroll,
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final (h, left, right) = rows[i];
+        if (left == -1 && right == -1) {
+          return SizedBox(height: _lineHeight, child: _hunkHeader(diff, h));
+        }
+        final lines = diff.hunks[h].lines;
+        Widget side(int? idx, bool isLeft) {
+          if (idx == null) return Container(color: AppColors.panel);
+          final line = lines[idx];
+          return _SplitLine(
+            line: line,
+            spans: spans?[h][idx],
+            number: isLeft ? line.oldNo : line.newNo,
+            selected: _selection[h]?.contains(idx) ?? false,
+            selectable: _canSelect && line.isChange,
+            onToggle: (shift) => _toggleLine(h, idx, shift: shift),
+          );
+        }
 
-              return Row(
-                children: [
-                  side(left, true),
-                  Container(width: 1, color: AppColors.border),
-                  side(right, false),
-                ],
-              );
-            },
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: side(left, true)),
+              Container(width: 1, color: AppColors.border),
+              Expanded(child: side(right, false)),
+            ],
           ),
         );
       },
@@ -573,6 +676,7 @@ String _expandTabs(String s) => s.replaceAll('\t', '    ');
 class _UnifiedLine extends StatelessWidget {
   const _UnifiedLine({
     required this.line,
+    this.spans,
     required this.numberWidth,
     required this.selected,
     required this.selectable,
@@ -580,6 +684,7 @@ class _UnifiedLine extends StatelessWidget {
   });
 
   final DiffLine line;
+  final List<TextSpan>? spans;
   final double numberWidth;
   final bool selected;
   final bool selectable;
@@ -627,18 +732,11 @@ class _UnifiedLine extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              line.type == DiffLineType.noNewline
-                  ? line.text
-                  : _expandTabs(line.text),
+            child: Text.rich(
+              _lineSpan(line, spans, fg),
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.clip,
-              style: monoStyle(size: 12.5, color: fg).copyWith(
-                fontStyle: line.type == DiffLineType.noNewline
-                    ? FontStyle.italic
-                    : null,
-              ),
             ),
           ),
         ],
@@ -650,6 +748,7 @@ class _UnifiedLine extends StatelessWidget {
 class _SplitLine extends StatelessWidget {
   const _SplitLine({
     required this.line,
+    this.spans,
     required this.number,
     required this.selected,
     required this.selectable,
@@ -657,6 +756,7 @@ class _SplitLine extends StatelessWidget {
   });
 
   final DiffLine line;
+  final List<TextSpan>? spans;
   final int? number;
   final bool selected;
   final bool selectable;
@@ -667,35 +767,59 @@ class _SplitLine extends StatelessWidget {
     final (bg, fg) = _colors(line.type, selected);
     return Container(
       color: bg,
+      constraints: const BoxConstraints(minHeight: _lineHeight),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Gutter(
             selectable: selectable,
             selected: selected,
             onToggle: onToggle,
-            child: SizedBox(
+            child: Container(
               width: 48,
+              alignment: Alignment.topRight,
+              padding: const EdgeInsets.only(top: 1),
               child: Text(
                 number?.toString() ?? '',
-                textAlign: TextAlign.right,
                 style: monoStyle(size: 11.5, color: AppColors.textFaint),
               ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              _expandTabs(line.text),
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.clip,
-              style: monoStyle(size: 12.5, color: fg),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text.rich(_lineSpan(line, spans, fg), softWrap: true),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// The text of a diff line: highlighted [spans] when available, otherwise
+/// plain text in the diff color [fg].
+TextSpan _lineSpan(DiffLine line, List<TextSpan>? spans, Color fg) {
+  if (line.type == DiffLineType.noNewline) {
+    return TextSpan(
+      text: line.text,
+      style: monoStyle(
+        size: 12.5,
+        color: fg,
+      ).copyWith(fontStyle: FontStyle.italic),
+    );
+  }
+  if (spans != null) {
+    return TextSpan(
+      style: monoStyle(size: 12.5, color: AppColors.text),
+      children: spans,
+    );
+  }
+  return TextSpan(
+    text: _expandTabs(line.text),
+    style: monoStyle(size: 12.5, color: fg),
+  );
 }
 
 (Color?, Color) _colors(DiffLineType t, bool selected) {

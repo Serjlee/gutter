@@ -74,12 +74,14 @@ class _RepoViewState extends State<RepoView> {
                   builder: (context, c) {
                     // Keep side panels from squeezing the graph out.
                     final maxSide = max(200.0, c.maxWidth * 0.3);
+                    final minSide = min(120.0, maxSide);
+                    final minDetails = min(220.0, maxSide);
                     final sideW = min(
                       settings.sidebarWidth,
                       maxSide * 0.8,
-                    ).clamp(120.0, maxSide);
+                    ).clamp(minSide, maxSide);
                     final detailsW = settings.detailsWidth.clamp(
-                      220.0,
+                      minDetails,
                       maxSide,
                     );
                     return Row(
@@ -92,7 +94,7 @@ class _RepoViewState extends State<RepoView> {
                         ResizeHandle(
                           onDrag: (dx) => setState(
                             () => settings.sidebarWidth = (sideW + dx).clamp(
-                              120.0,
+                              minSide,
                               maxSide,
                             ),
                           ),
@@ -148,171 +150,193 @@ class RepoToolbar extends StatelessWidget {
         color: AppColors.toolbar,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        children: [
-          // Repo + branch.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tab.name,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textDim,
-                  ),
-                ),
-                InkWell(
-                  onTap: tab.jumpToHead,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.call_split,
-                        size: 14,
-                        color: AppColors.accent,
-                      ),
-                      const SizedBox(width: 4),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 220),
-                        child: Text(
-                          branch ??
-                              'detached ${tab.headSha?.substring(0, 7) ?? ''}',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (head != null && (head.ahead > 0 || head.behind > 0))
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Text(
-                            '↑${head.ahead} ↓${head.behind}',
+      child: LayoutBuilder(
+        builder: (context, c) => Row(
+          children: [
+            // Branch and actions scroll sideways when the toolbar is narrow.
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Repo + branch.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tab.name,
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppColors.textDim,
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ToolbarButton(
-            icon: Icons.download,
-            label: 'Pull',
-            tooltip: 'Pull (fast-forward only)',
-            busy: busy == 'Pull',
-            onPressed: idle ? () => tab.pull(PullMode.ffOnly) : null,
-            menu: [
-              menuItem('Fetch all', () => tab.fetch(), icon: Icons.sync),
-              menuItem(
-                'Pull (fast-forward only)',
-                () => tab.pull(PullMode.ffOnly),
-                icon: Icons.fast_forward,
-              ),
-              menuItem(
-                'Pull (merge)',
-                () => tab.pull(PullMode.merge),
-                icon: Icons.merge,
-              ),
-              menuItem(
-                'Pull (rebase)',
-                () => tab.pull(PullMode.rebase),
-                icon: Icons.low_priority,
-              ),
-            ],
-          ),
-          ToolbarButton(
-            icon: Icons.upload,
-            label: 'Push',
-            busy: busy == 'Push' || busy == 'Force push',
-            onPressed: idle ? () => tab.push() : null,
-            menu: [
-              menuItem('Push', () => tab.push(), icon: Icons.upload),
-              menuItem(
-                'Force push (with lease)…',
-                actions.forcePush,
-                icon: Icons.warning_amber,
-                danger: true,
-              ),
-            ],
-          ),
-          ToolbarButton(
-            icon: Icons.sync,
-            label: 'Fetch',
-            tooltip: _fetchTooltip(),
-            busy: tab.fetching,
-            onPressed: tab.fetching ? null : () => tab.fetch(),
-          ),
-          const _ToolbarDivider(),
-          ToolbarButton(
-            icon: Icons.call_split,
-            label: 'Branch',
-            onPressed: idle ? () => actions.createBranch() : null,
-          ),
-          ToolbarButton(
-            icon: Icons.inventory_2_outlined,
-            label: 'Stash',
-            busy: busy == 'Stash',
-            onPressed: idle && tab.isDirty ? actions.stash : null,
-          ),
-          ToolbarButton(
-            icon: Icons.outbox,
-            label: 'Pop',
-            busy: busy == 'Pop stash',
-            onPressed: idle && tab.stashes.isNotEmpty
-                ? () => actions.popStash()
-                : null,
-          ),
-          const Spacer(),
-          if (busy != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$busy…',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textDim,
+                          InkWell(
+                            onTap: tab.jumpToHead,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.call_split,
+                                  size: 14,
+                                  color: AppColors.accent,
+                                ),
+                                const SizedBox(width: 4),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 220,
+                                  ),
+                                  child: Text(
+                                    branch ??
+                                        'detached ${tab.headSha?.substring(0, 7) ?? ''}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (head != null &&
+                                    (head.ahead > 0 || head.behind > 0))
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: Text(
+                                      '↑${head.ahead} ↓${head.behind}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textDim,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          if (tab.fetchError != null)
-            Tooltip(
-              message: 'Last auto-fetch failed:\n${tab.fetchError}',
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.cloud_off,
-                  size: 18,
-                  color: AppColors.warning,
+                    const SizedBox(width: 12),
+                    ToolbarButton(
+                      icon: Icons.download,
+                      label: 'Pull',
+                      tooltip: 'Pull (fast-forward only)',
+                      busy: busy == 'Pull',
+                      onPressed: idle ? () => tab.pull(PullMode.ffOnly) : null,
+                      menu: [
+                        menuItem(
+                          'Fetch all',
+                          () => tab.fetch(),
+                          icon: Icons.sync,
+                        ),
+                        menuItem(
+                          'Pull (fast-forward only)',
+                          () => tab.pull(PullMode.ffOnly),
+                          icon: Icons.fast_forward,
+                        ),
+                        menuItem(
+                          'Pull (merge)',
+                          () => tab.pull(PullMode.merge),
+                          icon: Icons.merge,
+                        ),
+                        menuItem(
+                          'Pull (rebase)',
+                          () => tab.pull(PullMode.rebase),
+                          icon: Icons.low_priority,
+                        ),
+                      ],
+                    ),
+                    ToolbarButton(
+                      icon: Icons.upload,
+                      label: 'Push',
+                      busy: busy == 'Push' || busy == 'Force push',
+                      onPressed: idle ? () => tab.push() : null,
+                      menu: [
+                        menuItem('Push', () => tab.push(), icon: Icons.upload),
+                        menuItem(
+                          'Force push (with lease)…',
+                          actions.forcePush,
+                          icon: Icons.warning_amber,
+                          danger: true,
+                        ),
+                      ],
+                    ),
+                    ToolbarButton(
+                      icon: Icons.sync,
+                      label: 'Fetch',
+                      tooltip: _fetchTooltip(),
+                      busy: tab.fetching,
+                      onPressed: tab.fetching ? null : () => tab.fetch(),
+                    ),
+                    const _ToolbarDivider(),
+                    ToolbarButton(
+                      icon: Icons.call_split,
+                      label: 'Branch',
+                      onPressed: idle ? () => actions.createBranch() : null,
+                    ),
+                    ToolbarButton(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Stash',
+                      busy: busy == 'Stash',
+                      onPressed: idle && tab.isDirty ? actions.stash : null,
+                    ),
+                    ToolbarButton(
+                      icon: Icons.outbox,
+                      label: 'Pop',
+                      busy: busy == 'Pop stash',
+                      onPressed: idle && tab.stashes.isNotEmpty
+                          ? () => actions.popStash()
+                          : null,
+                    ),
+                  ],
                 ),
               ),
             ),
-          _SearchBox(tab: tab, focus: searchFocus),
-          SmallIconButton(
-            icon: Icons.refresh,
-            tooltip: 'Refresh (F5)',
-            onPressed: () => tab.refresh(forceLog: true),
-          ),
-        ],
+            if (busy != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$busy…',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (tab.fetchError != null)
+              Tooltip(
+                message: 'Last auto-fetch failed:\n${tab.fetchError}',
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(
+                    Icons.cloud_off,
+                    size: 18,
+                    color: AppColors.warning,
+                  ),
+                ),
+              ),
+            _SearchBox(
+              tab: tab,
+              focus: searchFocus,
+              width: c.maxWidth < 900 ? 170 : 260,
+            ),
+            SmallIconButton(
+              icon: Icons.refresh,
+              tooltip: 'Refresh (F5)',
+              onPressed: () => tab.refresh(forceLog: true),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -341,9 +365,10 @@ class _ToolbarDivider extends StatelessWidget {
 }
 
 class _SearchBox extends StatefulWidget {
-  const _SearchBox({required this.tab, required this.focus});
+  const _SearchBox({required this.tab, required this.focus, this.width = 260});
   final RepoTabController tab;
   final FocusNode focus;
+  final double width;
 
   @override
   State<_SearchBox> createState() => _SearchBoxState();
@@ -365,7 +390,7 @@ class _SearchBoxState extends State<_SearchBox> {
     final tab = widget.tab;
     final hits = tab.searchHits.length;
     return SizedBox(
-      width: 260,
+      width: widget.width,
       height: 32,
       child: CallbackShortcuts(
         bindings: {

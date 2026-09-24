@@ -185,6 +185,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSyntaxHighlight(bool value) {
+    settings.syntaxHighlight = value;
+    save();
+    notifyListeners();
+  }
+
   void setFileTree(bool value) {
     settings.fileTree = value;
     save();
