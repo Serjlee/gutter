@@ -146,6 +146,22 @@ jobs:
             --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             repo "gutter-linux-x64-${{ needs.version.outputs.label }}.flatpak" \
             dev.gutter.gutter
+      - name: Smoke test
+        run: |
+          sudo apt-get install -y xvfb
+          flatpak install --user -y --noninteractive gutter-linux-x64-*.flatpak
+          # Every library resolves in the runtime.
+          if flatpak run --command=sh dev.gutter.gutter -c \
+            'ldd /app/lib/gutter/gutter /app/lib/gutter/lib/*.so' | grep 'not found'; then
+            exit 1
+          fi
+          # git runs on the host, as the app does it.
+          dbus-run-session -- flatpak run --command=flatpak-spawn \
+            dev.gutter.gutter --host git --version
+          # The app starts and keeps running.
+          code=0
+          dbus-run-session -- xvfb-run -a timeout 20 flatpak run dev.gutter.gutter || code=$?
+          test "$code" -eq 124
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak
