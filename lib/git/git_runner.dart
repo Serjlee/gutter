@@ -3,13 +3,29 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'command_log.dart';
+
+export 'command_log.dart' show CommandLog, GitLogEntry;
+
 class GitException implements Exception {
-  GitException(this.args, this.exitCode, this.stderr, [this.stdout = '']);
+  GitException(
+    this.args,
+    this.exitCode,
+    this.stderr, {
+    this.stdout = '',
+    this.entry,
+  });
+
+  GitException.fromResult(GitResult r)
+    : this(r.args, r.exitCode, r.stderr, stdout: r.stdout, entry: r.entry);
 
   final List<String> args;
   final int exitCode;
   final String stderr;
   final String stdout;
+
+  /// The command in its repository's log, when it has one.
+  final GitLogEntry? entry;
 
   /// Best human-readable message git gave us.
   String get message {
@@ -25,36 +41,24 @@ class GitException implements Exception {
 }
 
 class GitResult {
-  GitResult(this.args, this.exitCode, this.stdoutBytes, this.stderr);
+  GitResult(
+    this.args,
+    this.exitCode,
+    this.stdoutBytes,
+    this.stderr, {
+    this.entry,
+  });
 
   final List<String> args;
   final int exitCode;
   final Uint8List stdoutBytes;
   final String stderr;
+  final GitLogEntry? entry;
 
   String? _stdout;
   String get stdout =>
       _stdout ??= utf8.decode(stdoutBytes, allowMalformed: true);
   bool get ok => exitCode == 0;
-}
-
-/// One executed command, for the output log.
-class GitLogEntry {
-  GitLogEntry({
-    required this.args,
-    required this.cwd,
-    required this.started,
-    required this.duration,
-    required this.exitCode,
-    required this.stderr,
-  });
-
-  final List<String> args;
-  final String cwd;
-  final DateTime started;
-  final Duration duration;
-  final int exitCode;
-  final String stderr;
 }
 
 /// Simple async counting semaphore.
@@ -138,11 +142,6 @@ class GitRunner {
   /// Limits concurrent network operations (fetch/pull/push/clone).
   static final network = Semaphore(2);
 
-  /// Recent command log, newest last. Listeners are notified on append.
-  static final log = <GitLogEntry>[];
-  static final _logController = StreamController<GitLogEntry>.broadcast();
-  static Stream<GitLogEntry> get onLog => _logController.stream;
-
   /// Whether Gutter runs in a Flatpak sandbox. There, git runs on the host
   /// (through `flatpak-spawn --host`), so it's the user's own git, with
   /// their config, credential helpers, signing keys and hook tools.
@@ -217,22 +216,42 @@ class GitRunner {
     'GIT_MERGE_AUTOEDIT': 'no',
     'LC_ALL': 'C',
     'LANG': 'C',
-    // Never block on ssh host-key prompts.
-    'GIT_SSH_COMMAND':
-        Platform.environment['GIT_SSH_COMMAND'] ?? 'ssh -oBatchMode=yes',
   };
 
+  /// Environment for commands that may connect over ssh: never block on a
+  /// passphrase or host-key prompt, unless the user set up how git runs ssh
+  /// (core.sshCommand, GIT_SSH_COMMAND or GIT_SSH), which our
+  /// GIT_SSH_COMMAND would override.
+  Future<Map<String, String>> sshEnvironment(
+    String cwd, {
+    CommandLog? log,
+  }) async {
+    final env = Platform.environment;
+    if (env.containsKey('GIT_SSH_COMMAND') || env.containsKey('GIT_SSH')) {
+      return const {};
+    }
+    final res = await run(
+      ['config', '--get', 'core.sshCommand'],
+      cwd: cwd,
+      allowFailure: true,
+      log: log,
+    );
+    if (res.ok && res.stdout.trim().isNotEmpty) return const {};
+    return const {'GIT_SSH_COMMAND': 'ssh -oBatchMode=yes'};
+  }
+
   /// Runs git and returns the result. Throws [GitException] on non-zero exit
-  /// unless [allowFailure] is true.
+  /// unless [allowFailure] is true. With a [log], the command is recorded
+  /// there.
   Future<GitResult> run(
     List<String> args, {
     required String cwd,
     List<int>? stdin,
     Map<String, String>? env,
     bool allowFailure = false,
-    bool logCommand = true,
+    CommandLog? log,
   }) async {
-    final started = DateTime.now();
+    final entry = log?.start(args, cwd: cwd, expectFailure: allowFailure);
     final sw = Stopwatch()..start();
     final environment = {...baseEnvironment(), ...?env};
     final (exe, argv) = command(
@@ -242,12 +261,25 @@ class GitRunner {
       env: environment,
       flatpak: inFlatpak,
     );
-    final process = await Process.start(
-      exe,
-      argv,
-      workingDirectory: cwd,
-      environment: environment,
-    );
+    final Process process;
+    try {
+      process = await Process.start(
+        exe,
+        argv,
+        workingDirectory: cwd,
+        environment: environment,
+      );
+    } catch (e) {
+      if (entry != null) {
+        entry
+          ..duration = sw.elapsed
+          ..startError = e is ProcessException
+              ? 'Couldn\'t run ${e.executable}: ${e.message}'
+              : e.toString();
+        log!.changed(entry);
+      }
+      rethrow;
+    }
     final out = BytesBuilder(copy: false);
     final err = BytesBuilder(copy: false);
     final outDone = process.stdout.forEach(out.add);
@@ -260,23 +292,19 @@ class GitRunner {
     final code = await process.exitCode;
     sw.stop();
     final stderr = utf8.decode(err.takeBytes(), allowMalformed: true);
-    final result = GitResult(args, code, out.takeBytes(), stderr);
-    if (logCommand) {
-      final entry = GitLogEntry(
-        args: args,
-        cwd: cwd,
-        started: started,
-        duration: sw.elapsed,
-        exitCode: code,
-        stderr: stderr,
-      );
-      log.add(entry);
-      if (log.length > 500) log.removeRange(0, log.length - 500);
-      _logController.add(entry);
+    final result = GitResult(args, code, out.takeBytes(), stderr, entry: entry);
+    if (entry != null) {
+      entry
+        ..duration = sw.elapsed
+        ..exitCode = code
+        ..stderr = _truncate(stderr);
+      if (code != 0) entry.stdout = _truncate(result.stdout);
+      log!.changed(entry);
     }
-    if (code != 0 && !allowFailure) {
-      throw GitException(args, code, stderr, result.stdout);
-    }
+    if (code != 0 && !allowFailure) throw GitException.fromResult(result);
     return result;
   }
+
+  static String _truncate(String s, [int max = 16000]) =>
+      s.length <= max ? s : '${s.substring(0, max)}\n… (truncated)';
 }

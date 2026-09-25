@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../git/git_errors.dart';
 import '../git/git_runner.dart';
 import '../git/repository.dart';
 import '../scan/repo_scanner.dart';
@@ -47,6 +48,21 @@ class AppController extends ChangeNotifier {
 
   void notify(String text, {bool error = false}) =>
       _messages.add(AppMessage(text, error: error));
+
+  /// Reports a failure readably ("Pull failed: …"). The toast offers the
+  /// full output: [onDetails] shows it (e.g. in a tab's output panel),
+  /// else a dialog does.
+  void notifyError(Object e, {String? action, VoidCallback? onDetails}) {
+    final summary = summarizeGitError(e);
+    _messages.add(
+      AppMessage(
+        action == null ? summary : '$action failed: $summary',
+        error: true,
+        details: gitErrorDetails(e),
+        onDetails: onDetails,
+      ),
+    );
+  }
 
   /// Reopens the tabs from the last session.
   Future<void> restoreSession() async {
@@ -292,7 +308,13 @@ class AppController extends ChangeNotifier {
 }
 
 class AppMessage {
-  AppMessage(this.text, {this.error = false});
+  AppMessage(this.text, {this.error = false, this.details, this.onDetails});
   final String text;
   final bool error;
+
+  /// The full error output, shown by a "Details" button.
+  final String? details;
+
+  /// Shows the details some other way than a dialog.
+  final VoidCallback? onDetails;
 }

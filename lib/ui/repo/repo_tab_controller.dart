@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app/app_controller.dart';
+import '../../git/git_errors.dart';
 import '../../git/git_runner.dart';
 import '../../git/models.dart';
 import '../../git/parsers/diff_parser.dart';
@@ -182,7 +183,10 @@ class RepoTabController extends ChangeNotifier {
 
   // Fetch.
   DateTime? lastFetch;
+
+  /// Why the last fetch failed (readable), and the failed command.
   String? fetchError;
+  GitLogEntry? fetchErrorEntry;
   bool fetching = false;
 
   bool _active = false;
@@ -261,7 +265,8 @@ class RepoTabController extends ChangeNotifier {
       if (forceLog) _refsSignature = '';
       return _refreshing;
     }
-    final f = _doRefresh(forceLog);
+    // Logged as background commands: they run every few seconds.
+    final f = CommandLog.background(() => _doRefresh(forceLog));
     _refreshing = f;
     try {
       await f;
@@ -488,6 +493,7 @@ class RepoTabController extends ChangeNotifier {
     }
     commitMessage.dispose();
     scrollToRow.dispose();
+    outputFocus.dispose();
     super.dispose();
   }
 
@@ -748,9 +754,40 @@ class RepoTabController extends ChangeNotifier {
 
   // ------------------------------------------------------------- commands
 
-  void _reportError(Object e) {
-    final msg = e is GitException ? e.message : e.toString();
-    app.notify(msg, error: true);
+  void _reportError(Object e, [String? action]) {
+    final entry = e is GitException ? e.entry : null;
+    app.notifyError(
+      e,
+      action: action,
+      onDetails: entry == null ? null : () => showOutput(entry),
+    );
+  }
+
+  // Output panel.
+
+  /// Whether the output panel (the log of this tab's git commands) is open.
+  bool outputOpen = false;
+  double outputHeight = 220;
+
+  /// Whether the panel lists the background refreshes too.
+  bool outputShowsBackground = false;
+
+  /// The entry the panel should reveal and expand.
+  final outputFocus = ValueNotifier<int?>(null);
+
+  void toggleOutput() {
+    outputOpen = !outputOpen;
+    _notify();
+  }
+
+  /// Opens the output panel, revealing [entry] if given.
+  void showOutput([GitLogEntry? entry]) {
+    outputOpen = true;
+    if (entry != null) {
+      if (entry.background) outputShowsBackground = true;
+      outputFocus.value = entry.id;
+    }
+    _notify();
   }
 
   /// Runs a git command with busy indication, error reporting and a refresh.
@@ -770,7 +807,7 @@ class RepoTabController extends ChangeNotifier {
       if (success != null) app.notify(success);
     } catch (e) {
       ok = false;
-      if (onError == null || !onError(e)) _reportError(e);
+      if (onError == null || !onError(e)) _reportError(e, label);
     } finally {
       busy = null;
       try {
@@ -788,9 +825,11 @@ class RepoTabController extends ChangeNotifier {
     try {
       await repo.fetch();
       fetchError = null;
+      fetchErrorEntry = null;
     } catch (e) {
-      fetchError = e is GitException ? e.message : e.toString();
-      if (!auto) _reportError(e);
+      fetchError = summarizeGitError(e);
+      fetchErrorEntry = e is GitException ? e.entry : null;
+      if (!auto) _reportError(e, 'Fetch');
     } finally {
       lastFetch = DateTime.now();
       fetching = false;

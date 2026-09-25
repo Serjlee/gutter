@@ -8,13 +8,35 @@ import '../../git/models.dart';
 
 /// Vertical drag handle between two panes.
 class ResizeHandle extends StatelessWidget {
-  const ResizeHandle({super.key, required this.onDrag, this.onEnd});
+  const ResizeHandle({
+    super.key,
+    required this.onDrag,
+    this.onEnd,
+    this.vertical = false,
+  });
 
+  /// Called with the drag distance: horizontal, or vertical for a
+  /// [vertical] handle (one between stacked panels).
   final ValueChanged<double> onDrag;
   final VoidCallback? onEnd;
+  final bool vertical;
 
   @override
   Widget build(BuildContext context) {
+    if (vertical) {
+      return MouseRegion(
+        cursor: SystemMouseCursors.resizeRow,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
+          onVerticalDragEnd: (_) => onEnd?.call(),
+          child: const SizedBox(
+            height: 5,
+            child: Center(child: Divider(height: 1, color: AppColors.border)),
+          ),
+        ),
+      );
+    }
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
       child: GestureDetector(

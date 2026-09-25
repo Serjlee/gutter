@@ -12,6 +12,7 @@ import '../diff/diff_view.dart';
 import '../graph_view/commit_graph_view.dart';
 import '../sidebar/sidebar.dart';
 import '../widgets/common.dart';
+import 'output_panel.dart';
 import 'repo_actions.dart';
 import 'repo_tab_controller.dart';
 
@@ -123,6 +124,7 @@ class _RepoViewState extends State<RepoView> {
                   },
                 ),
               ),
+              OutputPanel(tab: tab),
             ],
           );
         },
@@ -315,18 +317,7 @@ class RepoToolbar extends StatelessWidget {
                   ],
                 ),
               ),
-            if (tab.fetchError != null)
-              Tooltip(
-                message: 'Last auto-fetch failed:\n${tab.fetchError}',
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    Icons.cloud_off,
-                    size: 18,
-                    color: AppColors.warning,
-                  ),
-                ),
-              ),
+            if (tab.fetchError != null) _FetchFailed(tab: tab),
             _SearchBox(
               tab: tab,
               focus: searchFocus,
@@ -353,6 +344,42 @@ class RepoToolbar extends StatelessWidget {
         ? 'Fetch all remotes\n$auto'
         : 'Fetch all remotes\nLast fetch: ${relativeTime(last)}\n$auto';
   }
+}
+
+/// Shown while the last fetch failed; opens the failed command's output.
+class _FetchFailed extends StatelessWidget {
+  const _FetchFailed({required this.tab});
+  final RepoTabController tab;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Tooltip(
+      message: 'Last fetch failed: ${tab.fetchError}\nClick for details',
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: const ValueKey('fetch-failed'),
+          borderRadius: BorderRadius.circular(4),
+          onTap: () => tab.showOutput(tab.fetchErrorEntry),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_off, size: 16, color: AppColors.warning),
+                SizedBox(width: 5),
+                Text(
+                  'Fetch failed',
+                  style: TextStyle(fontSize: 12, color: AppColors.warning),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _ToolbarDivider extends StatelessWidget {

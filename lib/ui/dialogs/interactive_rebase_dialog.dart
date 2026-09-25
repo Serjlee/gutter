@@ -23,7 +23,7 @@ Future<void> showInteractiveRebase(
     steps = await tab.repo.rebaseCandidates(base);
     hasMerges = await tab.repo.rangeHasMerges(base);
   } catch (e) {
-    tab.app.notify('$e', error: true);
+    tab.app.notifyError(e);
     return;
   }
   if (steps.isEmpty) {

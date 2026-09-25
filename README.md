@@ -67,6 +67,12 @@ fetch/push.
   progress, with continue / skip / abort. For each conflicted file you
   can take ours or theirs, mark it resolved, or open it in an external
   editor.
+- **Errors and output**: failures get a short explanation (credentials,
+  SSH keys, the network, local changes in the way…) and a **Details**
+  button. It opens the tab's **Output** panel (collapsed at the bottom)
+  on the failed command. The panel lists every git command the tab ran,
+  with its output, duration and exit code. The automatic refreshes are
+  hidden unless you ask for them.
 - **UI zoom** for high-DPI screens: `Ctrl/Cmd +`, `Ctrl/Cmd -`,
   `Ctrl/Cmd 0`, or `Ctrl/Cmd` + mouse wheel (50–300%). The level is saved.
 

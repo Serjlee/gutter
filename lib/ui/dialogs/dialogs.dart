@@ -13,6 +13,32 @@ Future<T?> showAppDialog<T>({
   animationStyle: AnimationStyle.noAnimation,
 );
 
+/// Shows a failed command and its full output.
+Future<void> showErrorDetails(BuildContext context, String details) =>
+    showAppDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Error details', style: TextStyle(fontSize: 17)),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 420),
+          child: SingleChildScrollView(
+            child: SelectableText(details, style: monoStyle(size: 12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Clipboard.setData(ClipboardData(text: details)),
+            child: const Text('Copy'),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+
 /// Asks for confirmation. Returns true if confirmed.
 Future<bool> confirm(
   BuildContext context, {

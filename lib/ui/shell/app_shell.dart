@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
+import '../dialogs/dialogs.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
 import 'tab_strip.dart';
@@ -76,7 +77,11 @@ class _AppShellState extends State<AppShell> {
       text: TextSpan(text: m.text, style: const TextStyle(fontSize: 12.5)),
       textDirection: TextDirection.ltr,
     )..layout()).width;
-    final width = (textWidth + 90).clamp(200.0, maxWidth);
+    final hasDetails = m.onDetails != null || m.details != null;
+    final width = (textWidth + (hasDetails ? 170 : 90)).clamp(
+      200.0,
+      maxWidth + (hasDetails ? 80 : 0),
+    );
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -90,6 +95,15 @@ class _AppShellState extends State<AppShell> {
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           showCloseIcon: true,
           closeIconColor: AppColors.textDim,
+          action: hasDetails
+              ? SnackBarAction(
+                  label: 'Details',
+                  textColor: AppColors.accent,
+                  onPressed:
+                      m.onDetails ??
+                      () => showErrorDetails(context, m.details!),
+                )
+              : null,
           content: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

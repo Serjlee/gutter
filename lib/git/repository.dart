@@ -26,6 +26,9 @@ class Repository {
   /// Absolute path to the working tree root.
   final String path;
   final GitRunner git;
+
+  /// Every git command run for this repository.
+  final commands = CommandLog();
   final _mutex = Mutex();
   String? _gitDir;
 
@@ -47,7 +50,6 @@ class Repository {
         ['rev-parse', '--show-toplevel'],
         cwd: dir,
         allowFailure: true,
-        logCommand: false,
       );
       final out = res.stdout.trim();
       if (res.ok && out.isNotEmpty) {
@@ -77,7 +79,11 @@ class Repository {
     final parent = p.dirname(dir);
     await Directory(parent).create(recursive: true);
     await GitRunner.network.run(
-      () => r.run(['clone', '--progress', url, dir], cwd: parent),
+      () async => r.run(
+        ['clone', '--progress', url, dir],
+        cwd: parent,
+        env: await r.sshEnvironment(parent),
+      ),
     );
   }
 
@@ -92,6 +98,7 @@ class Repository {
     stdin: stdin,
     env: env,
     allowFailure: allowFailure,
+    log: commands,
   );
 
   Future<String> _out(List<String> args) async => (await _run(args)).stdout;
@@ -99,8 +106,12 @@ class Repository {
   /// Serializes mutating commands.
   Future<T> _mutate<T>(Future<T> Function() body) => _mutex.run(body);
 
-  Future<GitResult> _net(List<String> args) =>
-      GitRunner.network.run(() => _mutate(() => _run(args)));
+  Future<GitResult> _net(List<String> args) => GitRunner.network.run(
+    () => _mutate(
+      () async =>
+          _run(args, env: await git.sshEnvironment(path, log: commands)),
+    ),
+  );
 
   Future<String> gitDir() async {
     return _gitDir ??= p.normalize(
@@ -157,7 +168,7 @@ class Repository {
           res.stderr.contains('unknown revision')) {
         return Uint8List(0);
       }
-      throw GitException(res.args, res.exitCode, res.stderr);
+      throw GitException.fromResult(res);
     }
     return res.stdoutBytes;
   }
@@ -362,7 +373,7 @@ class Repository {
       ], allowFailure: true);
     }
     if (res.exitCode > 1) {
-      throw GitException(res.args, res.exitCode, res.stderr);
+      throw GitException.fromResult(res);
     }
     final diffs = parseDiff(res.stdout);
     return diffs.isEmpty ? null : diffs.first;
@@ -542,7 +553,7 @@ class Repository {
       of,
     ], allowFailure: true);
     if (res.exitCode > 1) {
-      throw GitException(res.args, res.exitCode, res.stderr);
+      throw GitException.fromResult(res);
     }
     return res.exitCode == 0;
   }

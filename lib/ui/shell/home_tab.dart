@@ -47,7 +47,7 @@ class _HomeTabState extends State<HomeTab> {
       await Repository.init(dir, runner: app.git);
       await app.openRepo(dir);
     } catch (e) {
-      app.notify('$e', error: true);
+      app.notifyError(e, action: 'Init');
     }
   }
 
@@ -88,7 +88,7 @@ class _HomeTabState extends State<HomeTab> {
       await Repository.clone(url, dest, runner: app.git);
       await app.openRepo(dest);
     } catch (e) {
-      app.notify('Clone failed: $e', error: true);
+      app.notifyError(e, action: 'Clone');
     }
   }
 
