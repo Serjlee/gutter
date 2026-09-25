@@ -46,6 +46,8 @@ fetch/push.
   reset (soft / mixed / hard), stash, pull (ff-only / merge / rebase),
   push (sets the upstream automatically; if the remote rejects it, Gutter
   offers a force push with lease).
+  With uncommitted changes, a rebase, reset or rebasing pull first asks
+  whether to stash or discard them, or cancel.
 - **Multiple commits**: Shift-click selects a range in the graph and
   Ctrl/Cmd-click adds or removes commits. Selected commits can be
   cherry-picked together (oldest first), or squashed into one when

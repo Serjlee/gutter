@@ -449,6 +449,11 @@ class Repository {
     }
   });
 
+  /// Discards all staged and unstaged changes to tracked files (untracked
+  /// files are left alone).
+  Future<void> discardTracked() =>
+      _mutate(() => _run(['reset', '--hard', 'HEAD']));
+
   /// Mark an untracked file as intent-to-add so its hunks can be staged.
   Future<void> intentToAdd(String filePath) =>
       _mutate(() => _run(['add', '-N', '--', filePath]));

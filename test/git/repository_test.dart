@@ -374,6 +374,23 @@ void main() {
     expect(await repo.log(maxCount: 0), hasLength(5));
   });
 
+  test(
+    'discardTracked drops staged and unstaged changes, keeps untracked',
+    () async {
+      t.commit('base', {'a.txt': 'a\n', 'b.txt': 'b\n'});
+      t.write('a.txt', 'changed\n');
+      t.write('b.txt', 'staged\n');
+      t.git(['add', 'b.txt']);
+      t.write('new.txt', 'untracked\n');
+      await repo.discardTracked();
+      expect(t.read('a.txt'), 'a\n');
+      expect(t.read('b.txt'), 'b\n');
+      expect(t.read('new.txt'), 'untracked\n');
+      final s = await repo.status();
+      expect(s.entries.map((e) => e.path), ['new.txt']);
+    },
+  );
+
   test('cherry-picks several commits in order', () async {
     t.commit('base', {'a.txt': 'a\n'});
     t.git(['checkout', '-q', '-b', 'side']);

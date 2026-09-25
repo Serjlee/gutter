@@ -6,6 +6,7 @@ import '../../git/rebase_plan.dart';
 import '../../git/repository.dart';
 import '../dialogs/dialogs.dart';
 import '../dialogs/interactive_rebase_dialog.dart';
+import '../dialogs/work_in_progress.dart';
 import '../widgets/common.dart';
 import 'repo_tab_controller.dart';
 
@@ -201,7 +202,9 @@ class RepoActions {
       message: 'Rebase $branch onto $label?',
       confirmLabel: 'Rebase',
     );
-    if (ok) await tab.run('Rebase', () => repo.rebase(ref));
+    if (!ok || !context.mounted) return;
+    if (!await resolveWorkInProgress(context, tab, action: 'rebase')) return;
+    await tab.run('Rebase', () => repo.rebase(ref));
   }
 
   /// Interactive rebase of [commit] and its descendants up to HEAD.
@@ -218,6 +221,15 @@ class RepoActions {
   }
 
   // ------------------------------------------------------------- commits
+
+  /// Pulls; a rebasing pull first deals with uncommitted changes.
+  Future<void> pull(PullMode mode) async {
+    if (mode == PullMode.rebase &&
+        !await resolveWorkInProgress(context, tab, action: 'rebase')) {
+      return;
+    }
+    await tab.pull(mode);
+  }
 
   Future<void> cherryPick(Commit c) async {
     final ok = await confirm(
@@ -339,17 +351,15 @@ class RepoActions {
           ],
         );
     if (m == null || !context.mounted) return;
-    if (m == ResetMode.hard) {
-      final ok = await confirm(
-        context,
-        title: 'Hard reset',
-        message:
-            'Reset $branch to ${_short(c.sha)} and discard all uncommitted changes?',
-        confirmLabel: 'Reset hard',
-        danger: true,
-      );
-      if (!ok) return;
-    }
+    // A soft or mixed reset keeps uncommitted changes; a hard one would
+    // lose them, so it doesn't offer to keep them.
+    final go = await resolveWorkInProgress(
+      context,
+      tab,
+      action: 'reset',
+      allowKeep: m != ResetMode.hard,
+    );
+    if (!go) return;
     await tab.run('Reset', () => repo.reset(c.sha, m));
   }
 

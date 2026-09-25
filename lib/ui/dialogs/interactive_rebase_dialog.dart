@@ -6,6 +6,7 @@ import '../../git/rebase_plan.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'dialogs.dart';
+import 'work_in_progress.dart';
 
 /// Opens the interactive rebase editor for `base..HEAD` (null base: root).
 Future<void> showInteractiveRebase(
@@ -16,13 +17,6 @@ Future<void> showInteractiveRebase(
   bool Function(List<RebaseStep> steps)? prepare,
   Set<String> initialSelection = const {},
 }) async {
-  if (tab.isDirty) {
-    tab.app.notify(
-      'Commit or stash your changes before an interactive rebase.',
-      error: true,
-    );
-    return;
-  }
   List<RebaseStep> steps;
   bool hasMerges;
   try {
@@ -49,7 +43,8 @@ Future<void> showInteractiveRebase(
       initialSelection: initialSelection,
     ),
   );
-  if (plan == null) return;
+  if (plan == null || !context.mounted) return;
+  if (!await resolveWorkInProgress(context, tab, action: 'rebase')) return;
   await tab.run(
     'Interactive rebase',
     () => tab.repo.rebaseInteractive(base, plan),

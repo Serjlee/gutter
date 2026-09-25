@@ -222,7 +222,9 @@ class RepoToolbar extends StatelessWidget {
                       label: 'Pull',
                       tooltip: 'Pull (fast-forward only)',
                       busy: busy == 'Pull',
-                      onPressed: idle ? () => tab.pull(PullMode.ffOnly) : null,
+                      onPressed: idle
+                          ? () => actions.pull(PullMode.ffOnly)
+                          : null,
                       menu: [
                         menuItem(
                           'Fetch all',
@@ -231,17 +233,17 @@ class RepoToolbar extends StatelessWidget {
                         ),
                         menuItem(
                           'Pull (fast-forward only)',
-                          () => tab.pull(PullMode.ffOnly),
+                          () => actions.pull(PullMode.ffOnly),
                           icon: Icons.fast_forward,
                         ),
                         menuItem(
                           'Pull (merge)',
-                          () => tab.pull(PullMode.merge),
+                          () => actions.pull(PullMode.merge),
                           icon: Icons.merge,
                         ),
                         menuItem(
                           'Pull (rebase)',
-                          () => tab.pull(PullMode.rebase),
+                          () => actions.pull(PullMode.rebase),
                           icon: Icons.low_priority,
                         ),
                       ],
