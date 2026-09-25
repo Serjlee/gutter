@@ -32,7 +32,15 @@ class Repository {
   String get name => p.basename(path);
 
   /// Returns the worktree root containing [dir], or null if not a repo.
-  static Future<String?> findRoot(String dir, {GitRunner? runner}) async {
+  static Future<String?> findRoot(String dir, {GitRunner? runner}) async =>
+      (await probe(dir, runner: runner)).root;
+
+  /// The repository root containing [dir], or why there is none: not a
+  /// repository, or git couldn't run there (see [explainGitFailure]).
+  static Future<({String? root, String? error})> probe(
+    String dir, {
+    GitRunner? runner,
+  }) async {
     final r = runner ?? GitRunner();
     try {
       final res = await r.run(
@@ -41,11 +49,21 @@ class Repository {
         allowFailure: true,
         logCommand: false,
       );
-      if (!res.ok) return null;
       final out = res.stdout.trim();
-      return out.isEmpty ? null : p.normalize(out);
-    } on ProcessException {
-      return null;
+      if (res.ok && out.isNotEmpty) {
+        return (root: p.normalize(out), error: null);
+      }
+      return (
+        root: null,
+        error: explainGitFailure(res.stderr, gitPath: r.gitPath),
+      );
+    } on ProcessException catch (e) {
+      return (
+        root: null,
+        error:
+            'Couldn\'t run git at ${r.gitPath} (${e.message}). Install git, '
+            'or set its path in the home tab settings.',
+      );
     }
   }
 

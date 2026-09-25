@@ -160,8 +160,12 @@ flutter build macos --release
 - **macOS**: the app sandbox is disabled (see `macos/Runner/*.entitlements`)
   because Gutter runs `git` and reads repositories anywhere on disk.
 - **git location**: Gutter looks for git on `PATH`, then in
-  `/opt/homebrew/bin`, `/usr/local/bin` and `/usr/bin`. You can override
-  it in the settings on the home tab.
+  `/opt/homebrew/bin`, `/usr/local/bin` and `/usr/bin`. On macOS it tries
+  Homebrew's first: apps opened from Finder don't get your shell's `PATH`,
+  and `/usr/bin/git` only works once Apple's command line tools are
+  installed. You can override it in the settings on the home tab. If a
+  repository can't be opened, the error says why (git missing, a folder
+  macOS protects, and so on).
 - **Authentication**: fetch, pull and push use your existing git setup
   (SSH agent, credential helper). Gutter never shows a password prompt,
   so an operation that needs one fails with git's error message instead

@@ -95,6 +95,36 @@ class Mutex {
   }
 }
 
+/// A readable reason for git failing in a folder, from its stderr: git
+/// failing to run at all (e.g. macOS's stub without the command line tools,
+/// or a folder macOS won't let it read) otherwise looks like "not a git
+/// repository".
+String explainGitFailure(String stderr, {required String gitPath}) {
+  final s = stderr.toLowerCase();
+  if (s.contains('not a git repository')) return 'Not a git repository';
+  if (s.contains('xcrun: error') ||
+      s.contains('invalid active developer path') ||
+      s.contains('xcode-select')) {
+    return 'The git at $gitPath needs Apple\'s command line tools: run '
+        '`xcode-select --install`, or set another git (e.g. Homebrew\'s) '
+        'in the home tab settings.';
+  }
+  if (s.contains('operation not permitted')) {
+    return 'macOS blocked access to this folder. Allow Gutter in System '
+        'Settings → Privacy & Security → Files and Folders (or Full Disk '
+        'Access), then try again.';
+  }
+  if (s.contains('dubious ownership')) {
+    return 'git refuses this repository because another user owns it '
+        '(see `git config --global --add safe.directory <path>`).';
+  }
+  final first = stderr
+      .split('\n')
+      .map((l) => l.trim())
+      .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+  return first.isEmpty ? 'git failed' : first;
+}
+
 /// Spawns the system git binary.
 class GitRunner {
   GitRunner({String? gitPath}) : gitPath = gitPath ?? resolveGitPath();
@@ -112,10 +142,14 @@ class GitRunner {
   static String resolveGitPath() {
     final exe = Platform.isWindows ? 'git.exe' : 'git';
     final pathEnv = Platform.environment['PATH'] ?? '';
+    // Apps started from Finder/Dock only get /usr/bin:/bin:… on PATH, where
+    // /usr/bin/git is a stub that fails until Apple's command line tools
+    // are installed: prefer Homebrew's git, as a terminal would.
+    const homebrew = ['/opt/homebrew/bin', '/usr/local/bin'];
     final dirs = [
+      if (Platform.isMacOS) ...homebrew,
       ...pathEnv.split(Platform.isWindows ? ';' : ':'),
-      '/opt/homebrew/bin',
-      '/usr/local/bin',
+      ...homebrew,
       '/usr/bin',
       '/bin',
     ];

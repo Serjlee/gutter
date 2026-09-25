@@ -69,9 +69,16 @@ class AppController extends ChangeNotifier {
     bool activate = true,
     bool persist = true,
   }) async {
-    final root = await Repository.findRoot(path, runner: git);
+    final (:root, :error) = await Repository.probe(path, runner: git);
     if (root == null) {
-      if (persist) notify('Not a git repository: $path', error: true);
+      if (persist) {
+        notify(
+          error == null || error == 'Not a git repository'
+              ? 'Not a git repository: $path'
+              : 'Couldn\'t open $path: $error',
+          error: true,
+        );
+      }
       return false;
     }
     final existing = tabs.indexWhere((t) => t.repo.path == root);
