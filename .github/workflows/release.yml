@@ -131,7 +131,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cat > notes.md <<'NOTES'
+          # Release notes: the tag's message (annotated tags; lightweight
+          # ones have none) without any signature, then install notes.
+          read -r obj_type obj_sha < <(gh api \
+            "repos/$GH_REPO/git/ref/tags/$GITHUB_REF_NAME" \
+            --jq '.object.type + " " + .object.sha')
+          : > notes.md
+          if [[ "$obj_type" == tag ]]; then
+            gh api "repos/$GH_REPO/git/tags/$obj_sha" --jq .message \
+              | sed -e '/^-----BEGIN PGP SIGNATURE-----/,$d' \
+                    -e '/^-----BEGIN SSH SIGNATURE-----/,$d' > message.md
+            if [[ -n "$(tr -d '[:space:]' < message.md)" ]]; then
+              { cat message.md; printf '\n---\n\n'; } > notes.md
+            fi
+          fi
+          cat >> notes.md <<'NOTES'
           **macOS** (`Gutter-macos-*.zip`): universal build for Apple Silicon and Intel, ad-hoc signed and not notarized.
           1. Unzip and move `Gutter.app` to `/Applications`.
           2. Clear the download quarantine flag (needed after every update):
