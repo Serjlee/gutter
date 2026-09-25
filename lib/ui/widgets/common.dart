@@ -57,6 +57,7 @@ class ToolbarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final color = enabled ? AppColors.text : AppColors.textFaint;
+    final hasMenu = menu != null;
     final iconBox = SizedBox(
       height: 20,
       width: 20,
@@ -67,57 +68,91 @@ class ToolbarButton extends StatelessWidget {
             )
           : Icon(icon, size: 19, color: color),
     );
-    // Every button is the same block (10 px padding each side); a menu's
-    // arrow sits right beside the icon, inside the block, so buttons with
-    // and without one are spaced alike.
+    // With a menu, the top row is the icon plus a slot for the arrow, and
+    // the label is centered under both. The right padding is smaller: the
+    // triangle (~8 px) sits in the middle of its slot, so the space to the
+    // next button stays the same as between buttons without a menu.
     Widget button = InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: EdgeInsets.fromLTRB(10, 4, hasMenu ? 5 : 10, 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (menu == null)
-              iconBox
-            else
+            if (hasMenu)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   iconBox,
-                  PopupMenuButton<VoidCallback>(
-                    popUpAnimationStyle: AnimationStyle.noAnimation,
-                    tooltip: 'More options',
-                    itemBuilder: (_) => menu!,
-                    onSelected: (cb) => cb(),
-                    // The triangle is ~8 px wide inside its 18 px glyph box:
-                    // a 9 px box makes its visible edge the button's edge.
-                    child: const SizedBox(
-                      width: 9,
-                      height: 20,
-                      child: OverflowBox(
-                        maxWidth: 18,
-                        child: Icon(
-                          Icons.arrow_drop_down,
-                          size: 18,
-                          color: AppColors.textDim,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(width: _arrowSlot),
                 ],
-              ),
+              )
+            else
+              iconBox,
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 11, color: color)),
+            if (hasMenu)
+              // No wider than the icon row, so the arrow button (pinned to
+              // the right edge) stays over its slot.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 20 + _arrowSlot),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: color),
+                ),
+              )
+            else
+              Text(label, style: TextStyle(fontSize: 11, color: color)),
           ],
         ),
       ),
     );
     if (tooltip != null) button = Tooltip(message: tooltip, child: button);
+    if (hasMenu) {
+      // The arrow is a button of its own over its slot, reaching the
+      // button's top and right edges and down to the label.
+      button = Stack(
+        children: [
+          button,
+          Positioned(
+            top: 0,
+            right: 0,
+            width: _arrowSlot + 5,
+            height: 4 + 20 + 2,
+            child: PopupMenuButton<VoidCallback>(
+              popUpAnimationStyle: AnimationStyle.noAnimation,
+              tooltip: 'More options',
+              itemBuilder: (_) => menu!,
+              onSelected: (cb) => cb(),
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.only(top: 4, right: 5),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    height: 20,
+                    child: Icon(
+                      Icons.arrow_drop_down,
+                      size: 18,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     // Its own (transparent) Material: ink is painted on the nearest one,
     // which would otherwise sit under the toolbar's background.
     return Material(type: MaterialType.transparency, child: button);
   }
+
+  /// Width of the menu arrow's slot next to the icon.
+  static const _arrowSlot = 18.0;
 }
 
 PopupMenuItem<VoidCallback> menuItem(
