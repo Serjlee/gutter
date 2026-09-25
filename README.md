@@ -15,7 +15,8 @@ fetch/push.
   merged into one label, tags), author-initials nodes, a WIP row for
   uncommitted changes, stashes shown where they were made (dotted line to
   their base commit), search (`Ctrl/Cmd+F`) and keyboard navigation.
-  It loads 20k commits by default and fetches more as you scroll.
+  It loads 20k commits by default and fetches more as you scroll (the
+  batch size, or All, is set on the home tab).
 - **Tabs**: one per repository, with the session restored on start.
   - Only the **active tab auto-fetches** (every 5 minutes by default, and
     never while the window is unfocused).

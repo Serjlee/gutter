@@ -475,9 +475,17 @@ class _SettingsForm extends StatelessWidget {
               (2000, '2,000', null),
               (20000, '20,000', null),
               (100000, '100,000', null),
+              (0, 'All', null),
             ],
             onChanged: app.setMaxCommits,
           ),
+          info:
+              'How many commits a repository loads when it opens. '
+              'Scrolling to the bottom of the graph loads the next batch '
+              'of the same size, so older history is always reachable.\n\n'
+              'All loads the whole history at once: simplest, but slower '
+              'to open very large repositories.\n\n'
+              'Applies to repositories opened from now on.',
         ),
         _row('Git executable', _GitPathField(app: app), expand: true),
       ],
@@ -486,21 +494,95 @@ class _SettingsForm extends StatelessWidget {
 
   /// A label and its control; with [expand] the control takes the rest of
   /// the row (text fields) instead of the label.
-  Widget _row(String label, Widget control, {bool expand = false}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        if (expand) ...[
-          Text(label, style: const TextStyle(fontSize: 13)),
-          const SizedBox(width: 12),
-          Expanded(child: control),
-        ] else ...[
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
-          control,
+  /// A label and its control; with [expand] the control takes the rest of
+  /// the row (text fields) instead of the label. [info] adds an info icon
+  /// after the label that explains the setting (hover or click).
+  Widget _row(
+    String label,
+    Widget control, {
+    bool expand = false,
+    String? info,
+  }) {
+    final text = Text(label, style: const TextStyle(fontSize: 13));
+    final labelWidget = info == null
+        ? text
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: text),
+              const SizedBox(width: 4),
+              _InfoIcon(message: info, label: label),
+            ],
+          );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          if (expand) ...[
+            labelWidget,
+            const SizedBox(width: 12),
+            Expanded(child: control),
+          ] else ...[
+            Expanded(
+              child: Align(alignment: Alignment.centerLeft, child: labelWidget),
+            ),
+            control,
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
+}
+
+/// An ⓘ that explains a setting in a popover, on hover or click.
+class _InfoIcon extends StatefulWidget {
+  const _InfoIcon({required this.message, required this.label});
+  final String message;
+  final String label;
+
+  @override
+  State<_InfoIcon> createState() => _InfoIconState();
+}
+
+class _InfoIconState extends State<_InfoIcon> {
+  final _tooltip = GlobalKey<TooltipState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      key: _tooltip,
+      message: widget.message,
+      showDuration: const Duration(seconds: 12),
+      waitDuration: const Duration(milliseconds: 200),
+      constraints: const BoxConstraints(maxWidth: 300),
+      padding: const EdgeInsets.all(12),
+      textStyle: const TextStyle(
+        fontSize: 12.5,
+        color: AppColors.text,
+        height: 1.4,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.toolbar,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: GestureDetector(
+        key: ValueKey('info-${widget.label}'),
+        onTap: () => _tooltip.currentState?.ensureTooltipVisible(),
+        child: const MouseRegion(
+          cursor: SystemMouseCursors.help,
+          child: Icon(Icons.info_outline, size: 15, color: AppColors.textDim),
+        ),
+      ),
+    );
+  }
 }
 
 class _GitPathField extends StatefulWidget {

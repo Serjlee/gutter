@@ -121,6 +121,7 @@ class Repository {
 
   /// Raw output for [parseLog]; lets callers parse (and lay out) in an
   /// isolate of their own.
+  /// [maxCount] 0 loads the whole history.
   Future<Uint8List> logBytes({int maxCount = 20000}) async {
     final res = await _run([
       'log',
@@ -129,8 +130,7 @@ class Repository {
       '--date-order',
       '-z',
       '--format=$logFormat',
-      '-n',
-      '$maxCount',
+      if (maxCount > 0) ...['-n', '$maxCount'],
     ], allowFailure: true);
     if (!res.ok) {
       // Empty repository (no commits yet).

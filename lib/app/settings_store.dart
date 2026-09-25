@@ -13,6 +13,8 @@ class Settings {
   List<String> recentRepos = [];
   double zoom = 1.0;
   int fetchIntervalMinutes = 5;
+
+  /// Commits loaded at first and per "load more" (0: all).
   int maxCommits = 20000;
   String? gitPath;
   double sidebarWidth = 240;

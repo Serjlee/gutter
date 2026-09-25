@@ -971,7 +971,7 @@ GraphData _buildGraph(
     commits,
     wipParent: wipParent,
     stashes: stashes,
-    truncated: commits.length >= maxCount,
+    truncated: maxCount > 0 && commits.length >= maxCount,
   );
 }
 

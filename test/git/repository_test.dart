@@ -366,6 +366,14 @@ void main() {
     expect(await repo.stashes(), isEmpty);
   });
 
+  test('log loads a page of commits, or all of them with maxCount 0', () async {
+    for (var i = 0; i < 5; i++) {
+      t.commit('c$i', {'f.txt': '$i\n'});
+    }
+    expect(await repo.log(maxCount: 2), hasLength(2));
+    expect(await repo.log(maxCount: 0), hasLength(5));
+  });
+
   test('cherry-picks several commits in order', () async {
     t.commit('base', {'a.txt': 'a\n'});
     t.git(['checkout', '-q', '-b', 'side']);
