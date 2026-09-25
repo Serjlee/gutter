@@ -137,40 +137,52 @@ class _RepoTabState extends State<_RepoTab> {
                       ),
                     ),
                   ),
+                  // The minimum width can exceed a short name's: keep the
+                  // close button at the right edge anyway.
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (working)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 6),
-                          child: SizedBox(
-                            width: 10,
-                            height: 10,
-                            child: CircularProgressIndicator(strokeWidth: 1.5),
-                          ),
-                        )
-                      else if (tab.operation.name != 'none')
-                        const Padding(
-                          padding: EdgeInsets.only(right: 6),
-                          child: Icon(
-                            Icons.warning_amber,
-                            size: 13,
-                            color: AppColors.warning,
-                          ),
-                        ),
                       Flexible(
-                        child: Text(
-                          tab.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: widget.active
-                                ? AppColors.text
-                                : AppColors.textDim,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (working)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5,
+                                  ),
+                                ),
+                              )
+                            else if (tab.operation.name != 'none')
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(
+                                  Icons.warning_amber,
+                                  size: 13,
+                                  color: AppColors.warning,
+                                ),
+                              ),
+                            Flexible(
+                              child: Text(
+                                tab.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: widget.active
+                                      ? AppColors.text
+                                      : AppColors.textDim,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 4),
                       SizedBox(
                         width: 22,
                         child: (_hover || widget.active)
