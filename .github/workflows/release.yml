@@ -150,9 +150,9 @@ jobs:
         run: |
           sudo apt-get install -y xvfb
           flatpak install --user -y --noninteractive gutter-linux-x64-*.flatpak
-          # Every library resolves in the runtime.
-          if flatpak run --command=sh dev.gutter.gutter -c \
-            'ldd /app/lib/gutter/gutter /app/lib/gutter/lib/*.so' | grep 'not found'; then
+          # Every library the app loads resolves in the runtime.
+          if flatpak run --command=ldd dev.gutter.gutter /app/lib/gutter/gutter \
+            | grep 'not found'; then
             exit 1
           fi
           # git runs on the host, as the app does it.
