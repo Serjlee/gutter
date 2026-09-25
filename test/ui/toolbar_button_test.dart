@@ -58,13 +58,13 @@ void main() {
     for (final b in tester.widgetList(find.byType(ToolbarButton))) {
       expect(tester.getSize(find.byWidget(b)).width, ToolbarButton.width);
     }
-    // The arrow's target covers its slot and the space to the right edge,
+    // The arrow's target covers the space from the icon to the right edge,
     // down to the label.
     final arrow = tester.getSize(find.byType(PopupMenuButton<VoidCallback>));
-    expect(arrow, const Size(18 + (ToolbarButton.width - 20 - 18) / 2, 26));
+    expect(arrow, const Size((ToolbarButton.width - 20) / 2, 26));
   });
 
-  testWidgets('the label is centered under the icon and the arrow', (
+  testWidgets('icon and label are centered; the arrow is right of the icon', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -74,7 +74,7 @@ void main() {
           body: Center(
             child: ToolbarButton(
               icon: Icons.download,
-              label: 'Pu', // test font: 22 px, narrower than the icon row
+              label: 'Pull',
               onPressed: () {},
               menu: const [],
             ),
@@ -82,16 +82,13 @@ void main() {
         ),
       ),
     );
-    final icon = tester.getRect(find.byIcon(Icons.download));
-    final arrow = tester.getRect(find.byType(PopupMenuButton<VoidCallback>));
-    final label = tester.getRect(find.text('Pu'));
-    // Between the icon box's left edge and the arrow slot's right edge
-    // (the arrow button minus the space to the button's right edge).
-    final rowLeft = icon.left;
-    final slotRight = arrow.right - (ToolbarButton.width - 20 - 18) / 2;
-    expect(label.center.dx, closeTo((rowLeft + slotRight) / 2, 0.01));
-    expect(slotRight - rowLeft, 20 + 18);
     final button = tester.getRect(find.byType(ToolbarButton));
+    final icon = tester.getRect(find.byIcon(Icons.download));
+    final label = tester.getRect(find.text('Pull'));
+    final arrow = tester.getRect(find.byType(PopupMenuButton<VoidCallback>));
+    expect(icon.center.dx, closeTo(button.center.dx, 0.01));
     expect(label.center.dx, closeTo(button.center.dx, 0.01));
+    expect(arrow.left, icon.right);
+    expect(arrow.right, button.right);
   });
 }

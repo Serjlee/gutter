@@ -68,9 +68,8 @@ class ToolbarButton extends StatelessWidget {
             )
           : Icon(icon, size: 19, color: color),
     );
-    // Every button has the same width, whatever its label. With a menu, the
-    // top row is the icon plus a slot for the arrow, centered like the
-    // label, so the label sits under both.
+    // Every button has the same width, whatever its label; the icon and the
+    // label are centered in it. A menu's arrow sits right of the icon.
     Widget button = InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(4),
@@ -81,16 +80,7 @@ class ToolbarButton extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (hasMenu)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    iconBox,
-                    const SizedBox(width: _arrowSlot),
-                  ],
-                )
-              else
-                iconBox,
+              iconBox,
               const SizedBox(height: 2),
               Text(
                 label,
@@ -105,16 +95,15 @@ class ToolbarButton extends StatelessWidget {
     );
     if (tooltip != null) button = Tooltip(message: tooltip, child: button);
     if (hasMenu) {
-      // The arrow is a button of its own over its slot, reaching the
-      // button's top and right edges and down to the label.
-      const side = (width - 20 - _arrowSlot) / 2;
+      // The arrow is a button of its own, from the icon to the button's
+      // right edge and from its top down to the label.
       button = Stack(
         children: [
           button,
           Positioned(
             top: 0,
             right: 0,
-            width: _arrowSlot + side,
+            width: _arrowSlot,
             height: 4 + 20 + 2,
             child: PopupMenuButton<VoidCallback>(
               popUpAnimationStyle: AnimationStyle.noAnimation,
@@ -123,7 +112,7 @@ class ToolbarButton extends StatelessWidget {
               onSelected: (cb) => cb(),
               borderRadius: BorderRadius.circular(4),
               child: const Padding(
-                padding: EdgeInsets.only(top: 4, right: side),
+                padding: EdgeInsets.only(top: 4),
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: SizedBox(
@@ -149,8 +138,8 @@ class ToolbarButton extends StatelessWidget {
   /// Width of every toolbar button, with or without a menu.
   static const width = 60.0;
 
-  /// Width of the menu arrow's slot next to the icon.
-  static const _arrowSlot = 18.0;
+  /// Width of the menu arrow's button, between the icon and the edge.
+  static const _arrowSlot = (width - 20) / 2;
 }
 
 PopupMenuItem<VoidCallback> menuItem(
