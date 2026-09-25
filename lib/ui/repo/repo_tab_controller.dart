@@ -21,10 +21,23 @@ import 'auto_fetch.dart';
 enum PushOutcome {
   pushed,
 
-  /// The remote has commits the branch doesn't: a force push would
-  /// overwrite them.
+  /// The remote has commits the branch doesn't (or, for a tag, another
+  /// tag by that name): a force push would overwrite them.
   rejected,
   failed,
+}
+
+/// The remote branch a local branch pushes to.
+class PushTarget {
+  const PushTarget(this.remote, this.branch, {required this.setUpstream});
+  final String remote;
+  final String branch;
+
+  /// The branch has no upstream yet: the push sets this one.
+  final bool setUpstream;
+
+  @override
+  String toString() => '$remote/$branch';
 }
 
 /// Sha used for the pseudo "work in progress" row.
@@ -844,44 +857,98 @@ class RepoTabController extends ChangeNotifier {
 
   Future<void> pull(PullMode mode) => run('Pull', () => repo.pull(mode));
 
-  /// Pushes the current branch. A plain push the remote rejects as
-  /// non-fast-forward returns [PushOutcome.rejected] without reporting an
-  /// error, so the caller can offer a force push.
-  Future<PushOutcome> push({bool force = false}) async {
-    final branch = currentBranch;
+  /// Where [branch] pushes to: its upstream, or else the same name on the
+  /// default remote, which the push then sets as its upstream. Null when
+  /// there's no remote.
+  PushTarget? pushTarget(String branch) {
+    String? upstream;
+    for (final r in refs) {
+      if (r.type == RefType.localBranch && r.name == branch) {
+        upstream = r.upstream;
+        break;
+      }
+    }
+    if (upstream == null && branch == currentBranch) {
+      final u = status.branch.upstream; // e.g. origin/main
+      if (u != null) upstream = 'refs/remotes/$u';
+    }
+    const prefix = 'refs/remotes/';
+    if (upstream != null && upstream.startsWith(prefix)) {
+      final short = upstream.substring(prefix.length);
+      // The longest remote name that prefixes it: remote names can hold
+      // slashes too.
+      String? remote;
+      for (final r in remotes) {
+        if (short.startsWith('${r.name}/') &&
+            (remote == null || r.name.length > remote.length)) {
+          remote = r.name;
+        }
+      }
+      remote ??= short.contains('/')
+          ? short.substring(0, short.indexOf('/'))
+          : null;
+      if (remote != null) {
+        return PushTarget(
+          remote,
+          short.substring(remote.length + 1),
+          setUpstream: false,
+        );
+      }
+    }
+    final remote = remotes.any((r) => r.name == 'origin')
+        ? 'origin'
+        : (remotes.isEmpty ? null : remotes.first.name);
+    if (remote == null) return null;
+    // A branch tracking something that isn't a remote branch keeps it.
+    return PushTarget(remote, branch, setUpstream: upstream == null);
+  }
+
+  /// Pushes [branch] (default: the current one). A plain push the remote
+  /// rejects as non-fast-forward returns [PushOutcome.rejected] without
+  /// reporting an error, so the caller can offer a force push.
+  Future<PushOutcome> push({String? branch, bool force = false}) async {
+    branch ??= currentBranch;
     if (branch == null) {
       app.notify('Cannot push: HEAD is detached', error: true);
       return PushOutcome.failed;
     }
-    final upstream = status.branch.upstream;
-    String? remote;
-    String? remoteBranch;
-    if (upstream != null) {
-      final i = upstream.indexOf('/');
-      remote = upstream.substring(0, i);
-      remoteBranch = upstream.substring(i + 1);
-    } else {
-      remote = remotes.any((r) => r.name == 'origin')
-          ? 'origin'
-          : (remotes.isEmpty ? null : remotes.first.name);
-      if (remote == null) {
-        app.notify('No remote configured', error: true);
-        return PushOutcome.failed;
-      }
+    final target = pushTarget(branch);
+    if (target == null) {
+      app.notify('No remote configured', error: true);
+      return PushOutcome.failed;
     }
     var rejected = false;
     final ok = await run(
       force ? 'Force push' : 'Push',
       () => repo.push(
-        branch: branch,
-        remote: remote,
-        remoteBranch: remoteBranch,
-        setUpstream: upstream == null,
+        branch: branch!,
+        remote: target.remote,
+        remoteBranch: target.branch,
+        setUpstream: target.setUpstream,
         forceWithLease: force,
       ),
-      success: 'Pushed $branch to $remote',
+      success: 'Pushed $branch to $target',
       onError: (e) =>
           rejected = !force && Repository.isNonFastForwardRejection(e),
+    );
+    if (ok) return PushOutcome.pushed;
+    return rejected ? PushOutcome.rejected : PushOutcome.failed;
+  }
+
+  /// Pushes tag [name] to [remote]; [force] replaces a different tag of the
+  /// same name there. A plain push the remote rejects because it has
+  /// another tag by that name returns [PushOutcome.rejected] quietly.
+  Future<PushOutcome> pushTag(
+    String name,
+    String remote, {
+    bool force = false,
+  }) async {
+    var rejected = false;
+    final ok = await run(
+      force ? 'Force push tag' : 'Push tag',
+      () => repo.pushTag(remote, name, force: force),
+      success: 'Pushed tag $name to $remote',
+      onError: (e) => rejected = !force && Repository.isTagExistsRejection(e),
     );
     if (ok) return PushOutcome.pushed;
     return rejected ? PushOutcome.rejected : PushOutcome.failed;

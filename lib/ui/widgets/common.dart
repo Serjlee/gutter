@@ -282,6 +282,9 @@ Future<void> showContextMenu(
   final cb = await showMenu<VoidCallback>(
     context: context,
     popUpAnimationStyle: AnimationStyle.noAnimation,
+    // Wider than the default cap (280), so labels naming a remote branch
+    // fit; menus still size to their content.
+    constraints: const BoxConstraints(minWidth: 112, maxWidth: 420),
     position: RelativeRect.fromRect(
       Rect.fromLTWH(local.dx, local.dy, 0, 0),
       Offset.zero & overlay.size,

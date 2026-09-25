@@ -71,6 +71,14 @@ void main() {
       t.dispose();
     });
 
+    /// Loads the tab and waits for its remotes (loaded in the background).
+    Future<void> loadWithRemotes() async {
+      await tab.load();
+      for (var i = 0; i < 200 && tab.remotes.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
     test('loads graph, refs and a WIP row when dirty', () async {
       await tab.load();
       expect(tab.loadError, isNull);
@@ -172,6 +180,73 @@ void main() {
         expect(errors, hasLength(1));
       },
     );
+
+    test('pushes any branch, and tags, offering force when rejected', () async {
+      final remote = await Directory.systemTemp.createTemp('gutter_remote_');
+      addTearDown(() => remote.deleteSync(recursive: true));
+      Process.runSync('git', ['init', '-q', '--bare', remote.path]);
+      t.git(['remote', 'add', 'origin', remote.path]);
+      t.git(['push', '-q', '-u', 'origin', 'main']);
+      await loadWithRemotes();
+      String remoteSha(String ref) =>
+          (Process.runSync('git', ['-C', remote.path, 'rev-parse', ref]).stdout
+                  as String)
+              .trim();
+      String sha(String ref) => t.git(['rev-parse', ref]).trim();
+
+      // A branch without upstream goes to origin, under its own name.
+      var target = tab.pushTarget('side')!;
+      expect('$target', 'origin/side');
+      expect(target.setUpstream, isTrue);
+      target = tab.pushTarget('main')!;
+      expect('$target', 'origin/main');
+      expect(target.setUpstream, isFalse);
+
+      // Pushing a branch that isn't checked out.
+      expect(await tab.push(branch: 'side'), PushOutcome.pushed);
+      expect(remoteSha('side'), sha('side'));
+      expect(
+        t.git(['rev-parse', '--abbrev-ref', 'side@{u}']).trim(),
+        'origin/side',
+      );
+      expect(tab.currentBranch, 'main');
+
+      // Rewritten locally: rejected quietly, then forced.
+      final errors = <String>[];
+      final sub = app.messages.listen((m) {
+        if (m.error) errors.add(m.text);
+      });
+      addTearDown(sub.cancel);
+      t.git(['branch', '-f', 'side', 'main']);
+      await tab.refresh();
+      expect(await tab.push(branch: 'side'), PushOutcome.rejected);
+      expect(await tab.push(branch: 'side', force: true), PushOutcome.pushed);
+      expect(remoteSha('side'), sha('main'));
+
+      // A tag moved locally after it was pushed.
+      t.git(['tag', 'v1', 'main~1']);
+      expect(await tab.pushTag('v1', 'origin'), PushOutcome.pushed);
+      t.git(['tag', '-f', 'v1', 'main']);
+      expect(await tab.pushTag('v1', 'origin'), PushOutcome.rejected);
+      expect(
+        await tab.pushTag('v1', 'origin', force: true),
+        PushOutcome.pushed,
+      );
+      expect(remoteSha('v1'), sha('main'));
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, isEmpty);
+    });
+
+    test('push targets handle remote names with slashes', () async {
+      t.git(['remote', 'add', 'team/fork', '/nonexistent/fork.git']);
+      t.git(['config', 'branch.side.remote', 'team/fork']);
+      t.git(['config', 'branch.side.merge', 'refs/heads/feature/x']);
+      await loadWithRemotes();
+      final target = tab.pushTarget('side')!;
+      expect(target.remote, 'team/fork');
+      expect(target.branch, 'feature/x');
+      expect(target.setUpstream, isFalse);
+    });
 
     test('multi-selects commits with toggle and range', () async {
       await tab.load();

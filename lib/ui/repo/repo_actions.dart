@@ -394,14 +394,42 @@ class RepoActions {
     if (ok) await tab.run('Delete tag', () => repo.deleteTag(tag.name));
   }
 
+  /// Pushes [tag]; if the remote has another tag by that name, offers to
+  /// replace it.
   Future<void> pushTag(GitRef tag) async {
     final remote = _defaultRemote();
     if (remote == null) return;
-    await tab.run(
-      'Push tag',
-      () => repo.pushTag(remote, tag.name),
-      success: 'Pushed tag ${tag.name} to $remote',
+    if (await tab.pushTag(tag.name, remote) != PushOutcome.rejected) return;
+    if (!context.mounted) return;
+    final ok = await confirm(
+      context,
+      title: 'Tag exists on $remote',
+      message:
+          '$remote already has a tag ${tag.name} on a different commit. '
+          'Force push to move it to ${_short(tag.sha)}?\n\n'
+          'Clones that already fetched the old tag keep it until they '
+          'delete it.',
+      confirmLabel: 'Force push',
+      danger: true,
     );
+    if (ok) await tab.pushTag(tag.name, remote, force: true);
+  }
+
+  Future<void> forcePushTag(GitRef tag) async {
+    final remote = _defaultRemote();
+    if (remote == null) return;
+    final ok = await confirm(
+      context,
+      title: 'Force push tag',
+      message:
+          'Force push tag ${tag.name} (${_short(tag.sha)}) to $remote? It '
+          'replaces a tag of the same name there.\n\n'
+          'Clones that already fetched the old tag keep it until they '
+          'delete it.',
+      confirmLabel: 'Force push',
+      danger: true,
+    );
+    if (ok) await tab.pushTag(tag.name, remote, force: true);
   }
 
   Future<void> deleteRemoteTag(GitRef tag) async {
@@ -422,9 +450,9 @@ class RepoActions {
     }
   }
 
-  String? _defaultRemote() {
+  String? _defaultRemote({bool quiet = false}) {
     if (tab.remotes.isEmpty) {
-      tab.app.notify('No remote configured', error: true);
+      if (!quiet) tab.app.notify('No remote configured', error: true);
       return null;
     }
     return tab.remotes.any((r) => r.name == 'origin')
@@ -470,13 +498,13 @@ class RepoActions {
     if (ok) await tab.run('Drop stash', () => repo.stashDrop(s.index));
   }
 
-  /// Pushes; if the remote rejects it because it has commits the branch
-  /// doesn't, offers a force push.
-  Future<void> push() async {
-    if (await tab.push() != PushOutcome.rejected) return;
-    if (!context.mounted) return;
-    final branch = tab.currentBranch;
-    final target = tab.status.branch.upstream ?? 'The remote branch';
+  /// Pushes [branch] (default: the current one); if the remote rejects it
+  /// because it has commits the branch doesn't, offers a force push.
+  Future<void> push([String? branch]) async {
+    branch ??= tab.currentBranch;
+    if (await tab.push(branch: branch) != PushOutcome.rejected) return;
+    if (!context.mounted || branch == null) return;
+    final target = tab.pushTarget(branch) ?? 'The remote branch';
     final ok = await confirm(
       context,
       title: 'Push rejected',
@@ -488,19 +516,34 @@ class RepoActions {
       confirmLabel: 'Force push',
       danger: true,
     );
-    if (ok) await tab.push(force: true);
+    if (ok) await tab.push(branch: branch, force: true);
   }
 
-  Future<void> forcePush() async {
+  /// Force pushes (with lease) [branch] (default: the current one), after
+  /// saying where to and what it replaces.
+  Future<void> forcePush([String? branch]) async {
+    branch ??= tab.currentBranch;
+    if (branch == null) {
+      tab.app.notify('Cannot push: HEAD is detached', error: true);
+      return;
+    }
+    final target = tab.pushTarget(branch);
+    if (target == null) {
+      tab.app.notify('No remote configured', error: true);
+      return;
+    }
     final ok = await confirm(
       context,
-      title: 'Force push',
+      title: 'Force push $branch',
       message:
-          'Force push ${tab.currentBranch} (with lease)? Remote commits not in your branch will be lost.',
+          'Force push $branch to $target (with lease)? Commits on $target '
+          'that aren\'t in $branch will be lost.\n\n'
+          'With lease: if $target has commits you haven\'t fetched yet, the '
+          'push is refused instead.',
       confirmLabel: 'Force push',
       danger: true,
     );
-    if (ok) await tab.push(force: true);
+    if (ok) await tab.push(branch: branch, force: true);
   }
 
   Future<void> discard(List<StatusEntry> entries) async {
@@ -598,6 +641,7 @@ class RepoActions {
     final branch = tab.currentBranch ?? 'HEAD';
     switch (ref.type) {
       case RefType.localBranch:
+        final target = tab.pushTarget(ref.name);
         return [
           if (!ref.isHead)
             menuItem(
@@ -633,13 +677,27 @@ class RepoActions {
             () => setUpstream(ref),
             icon: Icons.cloud_outlined,
           ),
-          if (!ref.isHead)
+          const PopupMenuDivider(),
+          menuItem(
+            target == null ? 'Push' : 'Push to $target',
+            () => push(ref.name),
+            icon: Icons.upload,
+          ),
+          menuItem(
+            target == null ? 'Force push…' : 'Force push to $target…',
+            () => forcePush(ref.name),
+            icon: Icons.warning_amber,
+            danger: true,
+          ),
+          if (!ref.isHead) ...[
+            const PopupMenuDivider(),
             menuItem(
               'Delete ${ref.name}',
               () => deleteBranch(ref),
               icon: Icons.delete_outline,
               danger: true,
             ),
+          ],
           const PopupMenuDivider(),
           menuItem(
             'Copy branch name',
@@ -683,6 +741,7 @@ class RepoActions {
           ),
         ];
       case RefType.tag:
+        final remote = _defaultRemote(quiet: true);
         return [
           menuItem(
             'Checkout tag (detached)',
@@ -694,7 +753,18 @@ class RepoActions {
             () => createBranch(at: ref.sha),
             icon: Icons.call_split,
           ),
-          menuItem('Push tag', () => pushTag(ref), icon: Icons.cloud_upload),
+          const PopupMenuDivider(),
+          menuItem(
+            remote == null ? 'Push tag' : 'Push tag to $remote',
+            () => pushTag(ref),
+            icon: Icons.upload,
+          ),
+          menuItem(
+            remote == null ? 'Force push tag…' : 'Force push tag to $remote…',
+            () => forcePushTag(ref),
+            icon: Icons.warning_amber,
+            danger: true,
+          ),
           const PopupMenuDivider(),
           menuItem(
             'Delete tag',

@@ -596,8 +596,8 @@ class Repository {
   Future<void> deleteTag(String name) =>
       _mutate(() => _run(['tag', '-d', name]));
 
-  Future<void> pushTag(String remote, String name) =>
-      _net(['push', remote, 'refs/tags/$name']);
+  Future<void> pushTag(String remote, String name, {bool force = false}) =>
+      _net(['push', if (force) '--force', remote, 'refs/tags/$name']);
 
   Future<void> deleteRemoteTag(String remote, String name) =>
       _net(['push', remote, '--delete', 'refs/tags/$name']);
@@ -758,6 +758,14 @@ class Repository {
     final err = error.stderr;
     return err.contains('[rejected]') &&
         (err.contains('(non-fast-forward)') || err.contains('(fetch first)'));
+  }
+
+  /// Whether a tag push failed because the remote has a different tag of
+  /// that name (a force push would replace it).
+  static bool isTagExistsRejection(Object error) {
+    if (error is! GitException) return false;
+    final err = error.stderr;
+    return err.contains('[rejected]') && err.contains('(already exists)');
   }
 
   /// Pushes [branch] (default: current). Sets upstream on [remote] when the
