@@ -57,11 +57,19 @@ class ToolbarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final color = enabled ? AppColors.text : AppColors.textFaint;
+    final hasMenu = menu != null;
+    const radius = Radius.circular(4);
+    // Its own (transparent) Material: ink is painted on the nearest one,
+    // which would otherwise sit under the toolbar's background.
     Widget button = InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: hasMenu
+          ? const BorderRadius.horizontal(left: radius)
+          : const BorderRadius.all(radius),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        // With a menu, the arrow provides the right-hand padding, so the
+        // whole button (arrow included) is spaced like the others.
+        padding: EdgeInsets.fromLTRB(10, 4, hasMenu ? 2 : 10, 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -82,22 +90,42 @@ class ToolbarButton extends StatelessWidget {
       ),
     );
     if (tooltip != null) button = Tooltip(message: tooltip, child: button);
-    if (menu == null) return button;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        button,
-        PopupMenuButton<VoidCallback>(
-          popUpAnimationStyle: AnimationStyle.noAnimation,
-          tooltip: 'More options',
-          padding: EdgeInsets.zero,
-          iconSize: 16,
-          icon: const Icon(Icons.arrow_drop_down, color: AppColors.textDim),
-          itemBuilder: (_) => menu!,
-          onSelected: (cb) => cb(),
+    if (hasMenu) {
+      // The arrow's hover area spans the button's full height.
+      button = IntrinsicHeight(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            button,
+            PopupMenuButton<VoidCallback>(
+              popUpAnimationStyle: AnimationStyle.noAnimation,
+              tooltip: 'More options',
+              itemBuilder: (_) => menu!,
+              onSelected: (cb) => cb(),
+              // A compact arrow right next to the button (the default icon
+              // button would add a 40 px hit area and its padding).
+              // Level with the button's icon.
+              child: const Padding(
+                padding: EdgeInsets.only(top: 4, right: 4),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    height: 20,
+                    child: Icon(
+                      Icons.arrow_drop_down,
+                      size: 18,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
+      );
+    }
+    return Material(type: MaterialType.transparency, child: button);
   }
 }
 
@@ -313,17 +341,21 @@ class SmallIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Icon(
-            icon,
-            size: size,
-            color: onPressed == null
-                ? AppColors.textFaint
-                : (color ?? AppColors.textDim),
+      // Own Material so the ink shows on colored backgrounds.
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Icon(
+              icon,
+              size: size,
+              color: onPressed == null
+                  ? AppColors.textFaint
+                  : (color ?? AppColors.textDim),
+            ),
           ),
         ),
       ),
