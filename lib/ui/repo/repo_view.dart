@@ -359,9 +359,10 @@ class _ToolbarDivider extends StatelessWidget {
   const _ToolbarDivider();
   @override
   Widget build(BuildContext context) => Container(
+    // No margin: it sits in the usual gap between two buttons, so the
+    // spacing stays even.
     width: 1,
     height: 28,
-    margin: const EdgeInsets.symmetric(horizontal: 6),
     color: AppColors.border,
   );
 }

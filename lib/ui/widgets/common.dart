@@ -57,32 +57,56 @@ class ToolbarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final color = enabled ? AppColors.text : AppColors.textFaint;
-    final hasMenu = menu != null;
-    const radius = Radius.circular(4);
-    // Its own (transparent) Material: ink is painted on the nearest one,
-    // which would otherwise sit under the toolbar's background.
+    final iconBox = SizedBox(
+      height: 20,
+      width: 20,
+      child: busy
+          ? const Padding(
+              padding: EdgeInsets.all(2),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 19, color: color),
+    );
+    // Every button is the same block (10 px padding each side); a menu's
+    // arrow sits right beside the icon, inside the block, so buttons with
+    // and without one are spaced alike.
     Widget button = InkWell(
       onTap: onPressed,
-      borderRadius: hasMenu
-          ? const BorderRadius.horizontal(left: radius)
-          : const BorderRadius.all(radius),
+      borderRadius: BorderRadius.circular(4),
       child: Padding(
-        // With a menu, the arrow provides the right-hand padding, so the
-        // whole button (arrow included) is spaced like the others.
-        padding: EdgeInsets.fromLTRB(10, 4, hasMenu ? 2 : 10, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              height: 20,
-              width: 20,
-              child: busy
-                  ? const Padding(
-                      padding: EdgeInsets.all(2),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(icon, size: 19, color: color),
-            ),
+            if (menu == null)
+              iconBox
+            else
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  iconBox,
+                  PopupMenuButton<VoidCallback>(
+                    popUpAnimationStyle: AnimationStyle.noAnimation,
+                    tooltip: 'More options',
+                    itemBuilder: (_) => menu!,
+                    onSelected: (cb) => cb(),
+                    // The triangle is ~8 px wide inside its 18 px glyph box:
+                    // a 9 px box makes its visible edge the button's edge.
+                    child: const SizedBox(
+                      width: 9,
+                      height: 20,
+                      child: OverflowBox(
+                        maxWidth: 18,
+                        child: Icon(
+                          Icons.arrow_drop_down,
+                          size: 18,
+                          color: AppColors.textDim,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 2),
             Text(label, style: TextStyle(fontSize: 11, color: color)),
           ],
@@ -90,41 +114,8 @@ class ToolbarButton extends StatelessWidget {
       ),
     );
     if (tooltip != null) button = Tooltip(message: tooltip, child: button);
-    if (hasMenu) {
-      // The arrow's hover area spans the button's full height.
-      button = IntrinsicHeight(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            button,
-            PopupMenuButton<VoidCallback>(
-              popUpAnimationStyle: AnimationStyle.noAnimation,
-              tooltip: 'More options',
-              itemBuilder: (_) => menu!,
-              onSelected: (cb) => cb(),
-              // A compact arrow right next to the button (the default icon
-              // button would add a 40 px hit area and its padding).
-              // Level with the button's icon.
-              child: const Padding(
-                padding: EdgeInsets.only(top: 4, right: 4),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    height: 20,
-                    child: Icon(
-                      Icons.arrow_drop_down,
-                      size: 18,
-                      color: AppColors.textDim,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    // Its own (transparent) Material: ink is painted on the nearest one,
+    // which would otherwise sit under the toolbar's background.
     return Material(type: MaterialType.transparency, child: button);
   }
 }
