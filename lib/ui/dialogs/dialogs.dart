@@ -91,11 +91,14 @@ Future<String?> promptText(
   String initial = '',
   String confirmLabel = 'OK',
   String? hint,
+  bool optional = false,
 }) async {
   final r = await promptFields(
     context,
     title: title,
-    fields: [FieldSpec(label, initial: initial, hint: hint)],
+    fields: [
+      FieldSpec(label, initial: initial, hint: hint, optional: optional),
+    ],
     confirmLabel: confirmLabel,
   );
   return r?.first;

@@ -433,7 +433,8 @@ class RepoActions {
       context,
       title: 'Stash changes',
       label: 'Message',
-      hint: 'Optional description',
+      hint: 'What you were working on',
+      optional: true,
       confirmLabel: 'Stash',
     );
     if (msg == null) return;
