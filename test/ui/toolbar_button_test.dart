@@ -35,7 +35,7 @@ void main() {
     expect(picked, 1);
   });
 
-  testWidgets('button sizes, with and without an arrow', (tester) async {
+  testWidgets('every button has the same width', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTheme(),
@@ -43,23 +43,25 @@ void main() {
           body: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ToolbarButton(icon: Icons.download, label: 'A', menu: const []),
-              const ToolbarButton(icon: Icons.sync, label: 'B'),
+              ToolbarButton(
+                icon: Icons.download,
+                label: 'Pull',
+                menu: const [],
+              ),
+              const ToolbarButton(icon: Icons.sync, label: 'Pop'),
+              const ToolbarButton(icon: Icons.sync, label: 'Branch'),
             ],
           ),
         ),
       ),
     );
-    // A plain button is its content plus 10 px on both sides; with a menu,
-    // the top row is the icon plus the 18 px arrow slot, then 5 px.
-    final withArrow = tester.getSize(find.byType(ToolbarButton).first).width;
-    final plain = tester.getSize(find.byType(ToolbarButton).last).width;
-    expect(plain, 10 + 20 + 10);
-    expect(withArrow, 10 + 20 + 18 + 5);
-    // The arrow's target covers its slot and the right padding, down to
-    // the label.
+    for (final b in tester.widgetList(find.byType(ToolbarButton))) {
+      expect(tester.getSize(find.byWidget(b)).width, ToolbarButton.width);
+    }
+    // The arrow's target covers its slot and the space to the right edge,
+    // down to the label.
     final arrow = tester.getSize(find.byType(PopupMenuButton<VoidCallback>));
-    expect(arrow, const Size(18 + 5, 26));
+    expect(arrow, const Size(18 + (ToolbarButton.width - 20 - 18) / 2, 26));
   });
 
   testWidgets('the label is centered under the icon and the arrow', (
@@ -84,10 +86,12 @@ void main() {
     final arrow = tester.getRect(find.byType(PopupMenuButton<VoidCallback>));
     final label = tester.getRect(find.text('Pu'));
     // Between the icon box's left edge and the arrow slot's right edge
-    // (the arrow button minus the 5 px right padding).
+    // (the arrow button minus the space to the button's right edge).
     final rowLeft = icon.left;
-    final slotRight = arrow.right - 5;
+    final slotRight = arrow.right - (ToolbarButton.width - 20 - 18) / 2;
     expect(label.center.dx, closeTo((rowLeft + slotRight) / 2, 0.01));
     expect(slotRight - rowLeft, 20 + 18);
+    final button = tester.getRect(find.byType(ToolbarButton));
+    expect(label.center.dx, closeTo(button.center.dx, 0.01));
   });
 }

@@ -68,44 +68,38 @@ class ToolbarButton extends StatelessWidget {
             )
           : Icon(icon, size: 19, color: color),
     );
-    // With a menu, the top row is the icon plus a slot for the arrow, and
-    // the label is centered under both. The right padding is smaller: the
-    // triangle (~8 px) sits in the middle of its slot, so the space to the
-    // next button stays the same as between buttons without a menu.
+    // Every button has the same width, whatever its label. With a menu, the
+    // top row is the icon plus a slot for the arrow, centered like the
+    // label, so the label sits under both.
     Widget button = InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(10, 4, hasMenu ? 5 : 10, 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasMenu)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  iconBox,
-                  const SizedBox(width: _arrowSlot),
-                ],
-              )
-            else
-              iconBox,
-            const SizedBox(height: 2),
-            if (hasMenu)
-              // No wider than the icon row, so the arrow button (pinned to
-              // the right edge) stays over its slot.
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 20 + _arrowSlot),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: color),
-                ),
-              )
-            else
-              Text(label, style: TextStyle(fontSize: 11, color: color)),
-          ],
+      child: SizedBox(
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasMenu)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    iconBox,
+                    const SizedBox(width: _arrowSlot),
+                  ],
+                )
+              else
+                iconBox,
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: color),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -113,13 +107,14 @@ class ToolbarButton extends StatelessWidget {
     if (hasMenu) {
       // The arrow is a button of its own over its slot, reaching the
       // button's top and right edges and down to the label.
+      const side = (width - 20 - _arrowSlot) / 2;
       button = Stack(
         children: [
           button,
           Positioned(
             top: 0,
             right: 0,
-            width: _arrowSlot + 5,
+            width: _arrowSlot + side,
             height: 4 + 20 + 2,
             child: PopupMenuButton<VoidCallback>(
               popUpAnimationStyle: AnimationStyle.noAnimation,
@@ -128,7 +123,7 @@ class ToolbarButton extends StatelessWidget {
               onSelected: (cb) => cb(),
               borderRadius: BorderRadius.circular(4),
               child: const Padding(
-                padding: EdgeInsets.only(top: 4, right: 5),
+                padding: EdgeInsets.only(top: 4, right: side),
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: SizedBox(
@@ -150,6 +145,9 @@ class ToolbarButton extends StatelessWidget {
     // which would otherwise sit under the toolbar's background.
     return Material(type: MaterialType.transparency, child: button);
   }
+
+  /// Width of every toolbar button, with or without a menu.
+  static const width = 60.0;
 
   /// Width of the menu arrow's slot next to the icon.
   static const _arrowSlot = 18.0;
