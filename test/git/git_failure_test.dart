@@ -36,6 +36,14 @@ void main() {
       explain("fatal: detected dubious ownership in repository at '/r'"),
       contains('safe.directory'),
     );
+    // The Flatpak's host git is missing.
+    expect(
+      explain(
+        'Failed to start command: Failed to execute child process “git” '
+        '(No such file or directory)',
+      ),
+      contains('install git'),
+    );
     expect(explain('\nfatal: something else\nmore\n'), 'fatal: something else');
   });
 
@@ -54,5 +62,30 @@ void main() {
     );
     expect(r.root, isNull);
     expect(r.error, contains("Couldn't run git at /nonexistent/git"));
+  });
+
+  test('in a Flatpak, git runs on the host with the environment', () {
+    const env = {'GIT_EDITOR': 'true', 'GIT_SEQUENCE_EDITOR': "cp '/r/a b'"};
+    (String, List<String>) cmd({required bool flatpak}) => GitRunner.command(
+      'git',
+      ['status'],
+      cwd: '/r',
+      env: env,
+      flatpak: flatpak,
+    );
+    var (exe, args) = cmd(flatpak: false);
+    expect(exe, 'git');
+    expect(args, ['status']);
+    (exe, args) = cmd(flatpak: true);
+    expect(exe, 'flatpak-spawn');
+    expect(args, [
+      '--host',
+      '--watch-bus',
+      '--directory=/r',
+      '--env=GIT_EDITOR=true',
+      "--env=GIT_SEQUENCE_EDITOR=cp '/r/a b'",
+      'git',
+      'status',
+    ]);
   });
 }

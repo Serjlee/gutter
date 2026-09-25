@@ -126,14 +126,31 @@ Other things to know:
 - The first time you scan a folder under Documents or Desktop, macOS asks
   for access. Click Allow.
 - **Releases**: `git tag -a v0.1.0 -m "What's new…" && git push origin
-  v0.1.0` builds the macOS zip and a Linux tarball and publishes them as a
-  GitHub Release (`.github/workflows/release.yml`). The tag's message
-  (from `-m`, or the editor with a bare `git tag -a v0.1.0`) opens the
-  release notes, before the install instructions; a lightweight tag gets
-  the instructions only. CI on `main` and pull requests runs on Linux only.
+  v0.1.0` builds the macOS zip, a Linux tarball and a Flatpak bundle, and
+  publishes them as a GitHub Release (`.github/workflows/release.yml`).
+  The tag's message (from `-m`, or the editor with a bare `git tag -a
+  v0.1.0`) opens the release notes, before the install instructions; a
+  lightweight tag gets the instructions only. CI on `main` and pull requests runs on Linux only.
 - **Signing later**: with a Developer ID certificate, the workflow could
   sign and notarize the app (hardened runtime + `xcrun notarytool`). The
   quarantine step would then go away.
+
+## Install on Linux
+
+From the [Releases](https://github.com/serjlee/gutter/releases) page,
+either:
+
+- **Flatpak**: `flatpak install --user gutter-linux-x64-<version>.flatpak`
+  (it fetches the Freedesktop runtime from Flathub), then open Gutter from
+  your app menu or run `flatpak run dev.gutter.gutter`. It runs your
+  system's git through `flatpak-spawn --host`, so your config, credential
+  helpers, signing keys and hooks work as in a terminal. It can read files
+  anywhere (`--filesystem=host`).
+- **Tarball**: extract `gutter-linux-x64-<version>.tar.gz` and run
+  `./gutter`. Needs GTK 3.
+
+Both need `git` installed. To build the Flatpak locally, see
+`linux/flatpak/dev.gutter.gutter.yml`.
 
 ## Building
 

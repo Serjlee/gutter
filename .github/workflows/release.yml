@@ -118,9 +118,42 @@ jobs:
           name: linux
           path: gutter-linux-x64-*.tar.gz
 
+  flatpak:
+    needs: [version, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+      - name: Unpack the Linux bundle
+        run: |
+          mkdir -p build/linux/x64/release/bundle
+          tar xzf gutter-linux-x64-*.tar.gz --strip-components=1 \
+            -C build/linux/x64/release/bundle
+      - run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+      - name: Build
+        run: |
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub \
+            --disable-rofiles-fuse --force-clean --repo=repo \
+            build/flatpak linux/flatpak/dev.gutter.gutter.yml
+      - name: Bundle
+        run: |
+          # The runtime comes from Flathub when the bundle is installed.
+          flatpak build-bundle \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            repo "gutter-linux-x64-${{ needs.version.outputs.label }}.flatpak" \
+            dev.gutter.gutter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: gutter-linux-x64-*.flatpak
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [macos, linux]
+    needs: [macos, linux, flatpak]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -156,11 +189,13 @@ jobs:
 
           Or run `tool/install_macos.sh` from the repository, which downloads, installs and clears the flag.
 
-          **Linux** (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3.
+          **Linux**, either:
+          - Flatpak (`gutter-linux-x64-*.flatpak`): `flatpak install --user gutter-linux-x64-*.flatpak`, then `flatpak run dev.gutter.gutter` or open Gutter from your app menu. It runs your system's git.
+          - Tarball (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3.
 
           Requires `git` on the `PATH`.
           NOTES
-          assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz)
+          assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz gutter-linux-x64-*.flatpak)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             # Re-running a release: overwrite its assets, title and notes.
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

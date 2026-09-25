@@ -114,6 +114,10 @@ String explainGitFailure(String stderr, {required String gitPath}) {
         'Settings → Privacy & Security → Files and Folders (or Full Disk '
         'Access), then try again.';
   }
+  if (s.contains('failed to start command')) {
+    return 'Couldn\'t run $gitPath on your system. The Flatpak runs the '
+        'system\'s git: install git (e.g. with your package manager).';
+  }
   if (s.contains('dubious ownership')) {
     return 'git refuses this repository because another user owns it '
         '(see `git config --global --add safe.directory <path>`).';
@@ -139,7 +143,39 @@ class GitRunner {
   static final _logController = StreamController<GitLogEntry>.broadcast();
   static Stream<GitLogEntry> get onLog => _logController.stream;
 
+  /// Whether Gutter runs in a Flatpak sandbox. There, git runs on the host
+  /// (through `flatpak-spawn --host`), so it's the user's own git, with
+  /// their config, credential helpers, signing keys and hook tools.
+  static final inFlatpak =
+      Platform.isLinux && File('/.flatpak-info').existsSync();
+
+  /// The executable and arguments that run git with [args] in [cwd] and
+  /// [env] added to the environment; [flatpak] wraps it in
+  /// `flatpak-spawn --host`, which doesn't pass the environment on.
+  static (String, List<String>) command(
+    String gitPath,
+    List<String> args, {
+    required String cwd,
+    required Map<String, String> env,
+    required bool flatpak,
+  }) {
+    if (!flatpak) return (gitPath, args);
+    return (
+      'flatpak-spawn',
+      [
+        '--host',
+        '--watch-bus', // the host git dies with the app
+        '--directory=$cwd',
+        for (final e in env.entries) '--env=${e.key}=${e.value}',
+        gitPath,
+        ...args,
+      ],
+    );
+  }
+
   static String resolveGitPath() {
+    // The host's PATH, not the sandbox's, decides.
+    if (inFlatpak) return 'git';
     final exe = Platform.isWindows ? 'git.exe' : 'git';
     final pathEnv = Platform.environment['PATH'] ?? '';
     // Apps started from Finder/Dock only get /usr/bin:/bin:… on PATH, where
@@ -198,11 +234,19 @@ class GitRunner {
   }) async {
     final started = DateTime.now();
     final sw = Stopwatch()..start();
-    final process = await Process.start(
+    final environment = {...baseEnvironment(), ...?env};
+    final (exe, argv) = command(
       gitPath,
       [..._baseArgs, ...args],
+      cwd: cwd,
+      env: environment,
+      flatpak: inFlatpak,
+    );
+    final process = await Process.start(
+      exe,
+      argv,
       workingDirectory: cwd,
-      environment: {...baseEnvironment(), ...?env},
+      environment: environment,
     );
     final out = BytesBuilder(copy: false);
     final err = BytesBuilder(copy: false);

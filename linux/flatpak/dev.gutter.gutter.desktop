@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Gutter
+Comment=A fast, local-only git client
+Exec=gutter
+Icon=dev.gutter.gutter
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;
+StartupWMClass=gutter

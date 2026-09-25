@@ -1,0 +1,43 @@
+# Packages the release bundle (build/linux/x64/release/bundle) as a Flatpak.
+# git runs on the host through flatpak-spawn, so it's the user's own git.
+#
+#   flutter build linux --release
+#   flatpak-builder --user --install-deps-from=flathub --force-clean \
+#     --repo=build/flatpak-repo build/flatpak linux/flatpak/dev.gutter.gutter.yml
+#   flatpak build-bundle build/flatpak-repo gutter.flatpak dev.gutter.gutter
+app-id: dev.gutter.gutter
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: gutter
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # The update check (GitHub's latest release).
+  - --share=network
+  # Repositories can be anywhere.
+  - --filesystem=host
+  # Runs git on the host (flatpak-spawn --host).
+  - --talk-name=org.freedesktop.Flatpak
+modules:
+  - name: gutter
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/gutter /app/bin
+      - cp -a bundle/. /app/lib/gutter/
+      - ln -s /app/lib/gutter/gutter /app/bin/gutter
+      - install -Dm644 dev.gutter.gutter.desktop -t /app/share/applications
+      - install -Dm644 dev.gutter.gutter.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 icon_256.png /app/share/icons/hicolor/256x256/apps/dev.gutter.gutter.png
+    sources:
+      - type: dir
+        path: ../../build/linux/x64/release/bundle
+        dest: bundle
+      - type: file
+        path: dev.gutter.gutter.desktop
+      - type: file
+        path: dev.gutter.gutter.metainfo.xml
+      - type: file
+        path: ../../assets/icon/icon_256.png
