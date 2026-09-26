@@ -26,6 +26,33 @@ static void set_window_icon(GtkWindow* window) {
   gtk_window_set_icon_from_file(window, path, nullptr);
 }
 
+// Gutter is always dark: ask GTK for the dark variant of the theme (title
+// bar buttons, dialogs; with server-side decorations, a hint to the window
+// manager), and make GNOME's header bar compact and the color of the tab
+// strip below it, instead of a tall, light theme default.
+static void style_window_chrome() {
+  GtkSettings* settings = gtk_settings_get_default();
+  if (settings != nullptr) {
+    g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE,
+                 nullptr);
+  }
+  g_autoptr(GtkCssProvider) css = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(
+      css,
+      "headerbar, headerbar:backdrop {"
+      "  min-height: 0; padding: 0 6px; background: #1b1d23;"
+      "  border-bottom: 1px solid #363b45; box-shadow: none; }"
+      "headerbar .title { font-size: 12px; font-weight: normal;"
+      "  color: #8b93a1; }"
+      "headerbar:backdrop .title { color: #5e6573; }"
+      "headerbar button.titlebutton { min-height: 20px; min-width: 20px;"
+      "  padding: 2px; margin: 4px 0; }",
+      -1, nullptr);
+  gtk_style_context_add_provider_for_screen(
+      gdk_screen_get_default(), GTK_STYLE_PROVIDER(css),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -34,6 +61,7 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  style_window_chrome();
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -57,11 +85,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "gutter");
+    gtk_header_bar_set_title(header_bar, "Gutter");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "gutter");
+    gtk_window_set_title(window, "Gutter");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -75,7 +103,7 @@ static void my_application_activate(GApplication* application) {
   GdkRGBA background_color;
   // Background defaults to black, override it here if necessary, e.g. #00000000
   // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  gdk_rgba_parse(&background_color, "#1b1d23");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
