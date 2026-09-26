@@ -1,7 +1,7 @@
 # Gutter
 
 A fast git client for macOS and Linux, inspired by GitKraken. Built with
-Flutter on top of your system `git`: no accounts, no cloud features.
+Flutter on top of your system `git`.
 
 > **Disclaimer:** This app was heavily vibe coded with Claude Opus 5.5. Mostly out of spite of GitKraken becoming ever so bloated and unstable.
 
@@ -55,25 +55,15 @@ Apple's command line tools). You can pick another on the home tab.
 ## Features
 
 - **Commit graph**: lane-colored branches, merged local/remote ref labels,
-  tags, a WIP row, stashes next to the commit they were made on, author
-  pictures (GitHub avatars, or initials), search and keyboard navigation.
-  History loads in batches as you scroll.
+  tags, with support for stashes, search, avatars, and more.
 - **Tabs**, one per repository, restored on start. Only the active tab
   auto-fetches.
 - **Repository discovery**: every repository under a folder is found in
   the background. Open, clone or init from the home tab.
-- **Staging** of files, hunks or single lines.
 - **Diffs**: unified, split or full file (images too), with optional
   syntax highlighting.
-- **Branches and history**: checkout (double-click; on a remote branch it
-  updates the local one), branches and tags, merge, rebase, cherry-pick,
-  revert, reset, stash, pull and push (with force push, from the toolbar
-  or a branch's menu).
-- **Multiple commits**: Shift/Ctrl-click to cherry-pick several commits or
-  squash them.
 - **Interactive rebase** without a text editor, with keyboard shortcuts
   and actions on several commits at once.
-- **Conflicts**: continue / skip / abort, take ours or theirs per file.
 - **Errors explained**, with the full output one click away in each tab's
   **Output** panel, which logs every git command it ran.
 - **UI zoom** for high-DPI screens.
@@ -128,13 +118,10 @@ Besides your own fetch, pull and push, Gutter makes two kinds of requests:
   Gutter, and shows a link on the home tab when there's a newer one.
 - **GitHub avatars** (repositories on GitHub only): each author's picture
   is requested from GitHub's avatar server by commit email, as rows come
-  into view. Emails without a GitHub account keep their initials, and that
-  answer is remembered for a week (`avatars.json`, next to the settings).
-  Can be turned off on the home tab.
+  into view.
 
 Fetch, pull and push use your git setup (SSH agent, credential helper).
-Gutter never shows a password prompt: an operation that needs one fails
-with an explanation instead of hanging.
+Gutter never shows a password prompt
 
 ## Development
 
