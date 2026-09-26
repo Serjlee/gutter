@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -65,67 +66,73 @@ class _RepoViewState extends State<RepoView> {
             );
           }
           final settings = tab.app.settings;
-          return Column(
-            children: [
-              RepoToolbar(tab: tab, searchFocus: searchFocus),
-              if (tab.operation != RepoOperation.none)
-                OperationBanner(tab: tab),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    // Keep side panels from squeezing the graph out.
-                    final maxSide = max(200.0, c.maxWidth * 0.3);
-                    final minSide = min(120.0, maxSide);
-                    final minDetails = min(220.0, maxSide);
-                    final sideW = min(
-                      settings.sidebarWidth,
-                      maxSide * 0.8,
-                    ).clamp(minSide, maxSide);
-                    final detailsW = settings.detailsWidth.clamp(
-                      minDetails,
-                      maxSide,
-                    );
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: sideW,
-                          child: Sidebar(tab: tab),
-                        ),
-                        ResizeHandle(
-                          onDrag: (dx) => setState(
-                            () => settings.sidebarWidth = (sideW + dx).clamp(
-                              minSide,
-                              maxSide,
-                            ),
+          // The mouse's back button leaves the diff, like Esc.
+          return Listener(
+            onPointerDown: (e) {
+              if (e.buttons & kBackMouseButton != 0 && tab.diffTarget != null) {
+                tab.closeDiff();
+              }
+            },
+            child: Column(
+              children: [
+                RepoToolbar(tab: tab, searchFocus: searchFocus),
+                if (tab.operation != RepoOperation.none)
+                  OperationBanner(tab: tab),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      // Keep side panels from squeezing the graph out.
+                      final maxSide = max(200.0, c.maxWidth * 0.3);
+                      final minSide = min(120.0, maxSide);
+                      final minDetails = min(220.0, maxSide);
+                      final sideW = min(
+                        settings.sidebarWidth,
+                        maxSide * 0.8,
+                      ).clamp(minSide, maxSide);
+                      final detailsW = settings.detailsWidth.clamp(
+                        minDetails,
+                        maxSide,
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: sideW,
+                            child: Sidebar(tab: tab),
                           ),
-                          onEnd: tab.app.save,
-                        ),
-                        Expanded(
-                          child: tab.diffTarget != null
-                              ? DiffView(tab: tab)
-                              : CommitGraphView(tab: tab),
-                        ),
-                        ResizeHandle(
-                          onDrag: (dx) => setState(
-                            () => settings.detailsWidth = (detailsW - dx).clamp(
-                              220.0,
-                              maxSide,
+                          ResizeHandle(
+                            onDrag: (dx) => setState(
+                              () => settings.sidebarWidth = (sideW + dx).clamp(
+                                minSide,
+                                maxSide,
+                              ),
                             ),
+                            onEnd: tab.app.save,
                           ),
-                          onEnd: tab.app.save,
-                        ),
-                        SizedBox(
-                          width: detailsW,
-                          child: DetailsPanel(tab: tab),
-                        ),
-                      ],
-                    );
-                  },
+                          Expanded(
+                            child: tab.diffTarget != null
+                                ? DiffView(tab: tab)
+                                : CommitGraphView(tab: tab),
+                          ),
+                          ResizeHandle(
+                            onDrag: (dx) => setState(
+                              () => settings.detailsWidth = (detailsW - dx)
+                                  .clamp(220.0, maxSide),
+                            ),
+                            onEnd: tab.app.save,
+                          ),
+                          SizedBox(
+                            width: detailsW,
+                            child: DetailsPanel(tab: tab),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-              OutputPanel(tab: tab),
-            ],
+                OutputPanel(tab: tab),
+              ],
+            ),
           );
         },
       ),
