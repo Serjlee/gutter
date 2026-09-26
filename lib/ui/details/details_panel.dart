@@ -285,7 +285,7 @@ class CommitDetailsPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
           child: Row(
             children: [
-              _Avatar(name: d.authorName, sha: d.sha),
+              _Avatar(name: d.authorName, email: d.authorEmail, tab: tab),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -328,9 +328,10 @@ class CommitDetailsPanel extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.sha});
+  const _Avatar({required this.name, required this.email, required this.tab});
   final String name;
-  final String sha;
+  final String email;
+  final RepoTabController tab;
 
   @override
   Widget build(BuildContext context) {
@@ -340,17 +341,34 @@ class _Avatar extends StatelessWidget {
         : (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
               .toUpperCase();
     final color = AppColors.lane(name.hashCode.abs());
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: color.withValues(alpha: 0.8),
-      child: Text(
-        initials,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      ),
+    // The GitHub picture, when there is one, over the generated initials.
+    return ListenableBuilder(
+      listenable: tab.app.avatars,
+      builder: (context, _) {
+        final image = tab.avatarFor(email);
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: color.withValues(alpha: 0.8),
+          child: image != null
+              ? ClipOval(
+                  child: RawImage(
+                    image: image,
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                )
+              : Text(
+                  initials,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+        );
+      },
     );
   }
 }

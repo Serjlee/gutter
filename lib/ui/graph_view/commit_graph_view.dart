@@ -103,7 +103,12 @@ class _CommitGraphViewState extends State<CommitGraphView> {
   void initState() {
     super.initState();
     tab.scrollToRow.addListener(_onScrollRequest);
+    tab.app.avatars.addListener(_onAvatars);
     _scroll.addListener(_onScroll);
+  }
+
+  void _onAvatars() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -119,6 +124,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
   @override
   void dispose() {
     tab.scrollToRow.removeListener(_onScrollRequest);
+    tab.app.avatars.removeListener(_onAvatars);
     _scroll.dispose();
     _focus.dispose();
     super.dispose();
@@ -451,6 +457,9 @@ class _GraphRowState extends State<_GraphRow> {
                                 ? NodeStyle.merge
                                 : NodeStyle.commit),
                       initials: commit?.initials ?? '',
+                      avatar: commit == null || stash != null
+                          ? null
+                          : tab.avatarFor(commit.authorEmail),
                       isHead: commit != null && sha == tab.headSha,
                       dimmed: dimmed,
                     ),

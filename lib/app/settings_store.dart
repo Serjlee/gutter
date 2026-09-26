@@ -28,6 +28,9 @@ class Settings {
   /// Syntax highlighting in diffs and file previews (costs CPU on big files).
   bool syntaxHighlight = false;
 
+  /// Show GitHub profile pictures for commit authors of GitHub repositories.
+  bool githubAvatars = true;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -44,6 +47,7 @@ class Settings {
     'diffSplit': diffSplit,
     'fileTree': fileTree,
     'syntaxHighlight': syntaxHighlight,
+    'githubAvatars': githubAvatars,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -64,7 +68,8 @@ class Settings {
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
       ..fileTree = j['fileTree'] == true
-      ..syntaxHighlight = j['syntaxHighlight'] == true;
+      ..syntaxHighlight = j['syntaxHighlight'] == true
+      ..githubAvatars = j['githubAvatars'] != false;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

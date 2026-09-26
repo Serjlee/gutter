@@ -3,11 +3,13 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app/app_controller.dart';
+import '../../app/avatars.dart';
 import '../../git/git_errors.dart';
 import '../../git/git_runner.dart';
 import '../../git/models.dart';
@@ -388,6 +390,14 @@ class RepoTabController extends ChangeNotifier {
       loadingLog = false;
     }
   }
+
+  /// Whether the repository has a GitHub remote: its authors get their
+  /// GitHub pictures.
+  bool get onGitHub => remotes.any((r) => githubRepoOf(r.fetchUrl) != null);
+
+  /// The GitHub picture of the author with [email], when there is one.
+  ui.Image? avatarFor(String email) =>
+      onGitHub ? app.avatars.imageFor(email) : null;
 
   Future<void> _relayout() async {
     final history = graph.history;

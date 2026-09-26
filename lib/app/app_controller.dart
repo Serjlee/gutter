@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -8,19 +9,35 @@ import '../git/git_runner.dart';
 import '../git/repository.dart';
 import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
+import 'avatars.dart';
 import 'settings_store.dart';
 import 'update_checker.dart';
 import 'zoom.dart';
 
 /// Top-level app state: settings, open tabs, window focus, repo discovery.
 class AppController extends ChangeNotifier {
-  AppController(this.store, this.settings, {UpdateChecker? updates})
-    : updates = updates ?? UpdateChecker() {
+  AppController(
+    this.store,
+    this.settings, {
+    UpdateChecker? updates,
+    AvatarService? avatars,
+  }) : updates = updates ?? UpdateChecker(),
+       avatars =
+           avatars ??
+           AvatarService(
+             cacheFile: store == null
+                 ? null
+                 : File(p.join(store.file.parent.path, 'avatars.json')),
+             enabled: settings.githubAvatars,
+           ) {
     git = GitRunner(gitPath: settings.gitPath);
   }
 
   /// Latest-release lookup shown on the home tab.
   final UpdateChecker updates;
+
+  /// GitHub profile pictures of commit authors.
+  final AvatarService avatars;
 
   final SettingsStore? store;
   final Settings settings;
@@ -208,6 +225,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setGithubAvatars(bool value) {
+    settings.githubAvatars = value;
+    avatars.setEnabled(value);
+    save();
+    notifyListeners();
+  }
+
   void setSyntaxHighlight(bool value) {
     settings.syntaxHighlight = value;
     save();
@@ -302,6 +326,7 @@ class AppController extends ChangeNotifier {
     }
     store?.saveNow(settings);
     updates.dispose();
+    avatars.dispose();
     _messages.close();
     super.dispose();
   }

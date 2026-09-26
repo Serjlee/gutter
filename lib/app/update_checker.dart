@@ -36,9 +36,7 @@ class ReleaseInfo {
 /// Fetches the latest published release, or null if there is none.
 typedef ReleaseFetcher = Future<ReleaseInfo?> Function();
 
-/// Periodically looks up the latest GitHub release of Gutter. This is the
-/// app's only network request of its own (git fetch/push aside); it can be
-/// turned off in settings.
+/// Periodically looks up the latest GitHub release of Gutter.
 class UpdateChecker extends ChangeNotifier {
   UpdateChecker({
     this.current = AppVersion.current,

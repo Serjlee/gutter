@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
@@ -26,6 +28,7 @@ class GraphRowPainter extends CustomPainter {
     required this.metrics,
     required this.style,
     required this.initials,
+    this.avatar,
     this.isHead = false,
     this.dimmed = false,
   });
@@ -35,6 +38,9 @@ class GraphRowPainter extends CustomPainter {
   final GraphMetrics metrics;
   final NodeStyle style;
   final String initials;
+
+  /// The author's picture, drawn instead of [initials] when there is one.
+  final ui.Image? avatar;
   final bool isHead;
   final bool dimmed;
 
@@ -205,6 +211,28 @@ class GraphRowPainter extends CustomPainter {
       case NodeStyle.commit:
         final r = metrics.nodeRadius;
         canvas.drawCircle(center, r, Paint()..color = color);
+        final image = avatar;
+        if (image != null) {
+          // Inside the lane-colored ring.
+          final inner = Rect.fromCircle(center: center, radius: r - 2);
+          canvas.save();
+          canvas.clipPath(Path()..addOval(inner));
+          canvas.drawImageRect(
+            image,
+            Rect.fromLTWH(
+              0,
+              0,
+              image.width.toDouble(),
+              image.height.toDouble(),
+            ),
+            inner,
+            Paint()
+              ..filterQuality = FilterQuality.medium
+              ..color = Color.fromRGBO(0, 0, 0, alpha),
+          );
+          canvas.restore();
+          break;
+        }
         canvas.drawCircle(
           center,
           r - 2,
@@ -292,5 +320,6 @@ class GraphRowPainter extends CustomPainter {
       old.isHead != isHead ||
       old.dimmed != dimmed ||
       old.initials != initials ||
+      old.avatar != avatar ||
       old.metrics.laneWidth != metrics.laneWidth;
 }

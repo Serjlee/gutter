@@ -176,7 +176,15 @@ flutter build macos --release
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
 - **Update checks**: every 6 hours Gutter asks GitHub for the latest
   release of `serjlee/gutter` and shows a link on the home tab when a
-  newer one exists. It's the app's only network request of its own.
+  newer one exists.
+- **GitHub avatars**: for repositories on GitHub, commit authors show
+  their GitHub profile pictures. Gutter asks GitHub's avatar server for
+  each author's picture by commit email as rows come into view (no API
+  calls, so no rate limits or tokens). Authors whose email isn't on a
+  GitHub account keep their initials; that answer is remembered for a
+  week in `avatars.json` next to the settings. It can be turned off on the
+  home tab. Besides this and the update check, Gutter makes no network
+  requests of its own.
 - **Icons**: the app icons and the home tab logo are generated from
   `assets/icon/source.png` by `tool/make_icons.sh` (needs ImageMagick).
 - **Linux** also needs `clang cmake ninja-build pkg-config libgtk-3-dev`.

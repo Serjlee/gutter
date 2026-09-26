@@ -487,6 +487,22 @@ class _SettingsForm extends StatelessWidget {
               'to open very large repositories.\n\n'
               'Applies to repositories opened from now on.',
         ),
+        _row(
+          'GitHub avatars',
+          AppDropdown<bool>(
+            key: const ValueKey('github-avatars'),
+            value: s.githubAvatars,
+            items: const [(true, 'On', null), (false, 'Off', null)],
+            onChanged: app.setGithubAvatars,
+          ),
+          info:
+              'For repositories on GitHub, shows the authors\' GitHub '
+              'profile pictures instead of their initials.\n\n'
+              'Gutter asks GitHub\'s avatar server for each author\'s '
+              'picture by commit email (no API calls), as they come into '
+              'view. Authors whose email isn\'t on a GitHub account keep '
+              'their initials.',
+        ),
         _row('Git executable', _GitPathField(app: app), expand: true),
       ],
     );
