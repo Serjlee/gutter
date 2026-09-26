@@ -7,4 +7,4 @@ Icon=dev.gutter.gutter
 Terminal=false
 Categories=Development;RevisionControl;
 Keywords=git;
-StartupWMClass=gutter
+StartupWMClass=dev.gutter.gutter

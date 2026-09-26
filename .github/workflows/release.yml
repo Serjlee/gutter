@@ -150,6 +150,12 @@ jobs:
         run: |
           sudo apt-get install -y xvfb
           flatpak install --user -y --noninteractive gutter-linux-x64-*.flatpak
+          # The launcher and its icons are exported to the desktop.
+          exports=~/.local/share/flatpak/exports/share
+          test -f "$exports/applications/dev.gutter.gutter.desktop"
+          for s in 48 64 128 256 512; do
+            test -f "$exports/icons/hicolor/${s}x$s/apps/dev.gutter.gutter.png"
+          done
           # Every library the app loads resolves in the runtime.
           if flatpak run --command=ldd dev.gutter.gutter /app/lib/gutter/gutter \
             | grep 'not found'; then

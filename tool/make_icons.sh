@@ -42,4 +42,9 @@ done
 
 # Linux window icon.
 convert "$work/icon.png" -filter Lanczos -resize 256x256 -strip assets/icon/icon_256.png
+# Linux app icons (Flatpak), in the usual hicolor sizes.
+mkdir -p linux/flatpak/icons
+for s in 48 64 128 256 512; do
+  convert "$work/icon.png" -filter Lanczos -resize "${s}x$s" -strip "linux/flatpak/icons/$s.png"
+done
 echo "Icons updated."
