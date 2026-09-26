@@ -364,7 +364,8 @@ class RepoActions {
   }
 
   Future<void> createTag(String sha) async {
-    final r = await promptFields(
+    final remote = _defaultRemote(quiet: true);
+    final r = await promptFieldsWithAlt(
       context,
       title: 'Create tag at ${_short(sha)}',
       fields: const [
@@ -376,11 +377,19 @@ class RepoActions {
           hint: 'Annotated tag message',
         ),
       ],
-      confirmLabel: 'Create tag',
+      confirmLabel: 'Create',
+      altLabel: remote == null ? null : 'Create and Push',
       validate: (v) => validateRefName(v.first),
     );
     if (r == null) return;
-    await tab.run('Tag', () => repo.createTag(r[0].trim(), sha, message: r[1]));
+    final name = r.values[0].trim();
+    final ok = await tab.run(
+      'Tag',
+      () => repo.createTag(name, sha, message: r.values[1]),
+    );
+    if (ok && r.alt) {
+      await pushTag(GitRef(fullName: 'refs/tags/$name', sha: sha));
+    }
   }
 
   Future<void> deleteTag(GitRef tag) async {

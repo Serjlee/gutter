@@ -97,13 +97,33 @@ Future<List<String>?> promptFields(
   String confirmLabel = 'OK',
   Widget? extra,
   String? Function(List<String>)? validate,
+}) async => (await promptFieldsWithAlt(
+  context,
+  title: title,
+  fields: fields,
+  confirmLabel: confirmLabel,
+  extra: extra,
+  validate: validate,
+))?.values;
+
+/// [promptFields] with a second confirm button, [altLabel] (shown when
+/// given): the result says which one was used.
+Future<({List<String> values, bool alt})?> promptFieldsWithAlt(
+  BuildContext context, {
+  required String title,
+  required List<FieldSpec> fields,
+  String confirmLabel = 'OK',
+  String? altLabel,
+  Widget? extra,
+  String? Function(List<String>)? validate,
 }) {
-  return showAppDialog<List<String>>(
+  return showAppDialog<({List<String> values, bool alt})>(
     context: context,
     builder: (ctx) => _PromptDialog(
       title: title,
       fields: fields,
       confirmLabel: confirmLabel,
+      altLabel: altLabel,
       extra: extra,
       validate: validate,
     ),
@@ -135,6 +155,7 @@ class _PromptDialog extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.confirmLabel,
+    this.altLabel,
     this.extra,
     this.validate,
   });
@@ -142,6 +163,7 @@ class _PromptDialog extends StatefulWidget {
   final String title;
   final List<FieldSpec> fields;
   final String confirmLabel;
+  final String? altLabel;
   final Widget? extra;
   final String? Function(List<String>)? validate;
 
@@ -163,7 +185,7 @@ class _PromptDialogState extends State<_PromptDialog> {
     super.dispose();
   }
 
-  void _submit() {
+  void _submit({bool alt = false}) {
     final values = controllers.map((c) => c.text).toList();
     for (var i = 0; i < values.length; i++) {
       if (!widget.fields[i].optional && values[i].trim().isEmpty) {
@@ -176,7 +198,7 @@ class _PromptDialogState extends State<_PromptDialog> {
       setState(() => error = e);
       return;
     }
-    Navigator.pop(context, values);
+    Navigator.pop(context, (values: values, alt: alt));
   }
 
   @override
@@ -233,6 +255,11 @@ class _PromptDialogState extends State<_PromptDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
+        if (widget.altLabel != null)
+          OutlinedButton(
+            onPressed: () => _submit(alt: true),
+            child: Text(widget.altLabel!),
+          ),
         FilledButton(onPressed: _submit, child: Text(widget.confirmLabel)),
       ],
     );
