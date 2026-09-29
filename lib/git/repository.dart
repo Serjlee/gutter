@@ -652,6 +652,102 @@ class Repository {
         );
       });
 
+  /// Whether [sha] is in HEAD's history, so [reword] can change it.
+  Future<bool> inHeadHistory(String sha) => _isAncestor(sha, 'HEAD');
+
+  /// Whether [sha] is in the history of HEAD's upstream (false without
+  /// one).
+  Future<bool> inUpstream(String sha) async =>
+      (await _run([
+        'merge-base',
+        '--is-ancestor',
+        sha,
+        '@{upstream}',
+      ], allowFailure: true)).exitCode ==
+      0;
+
+  /// Gives [sha] (in HEAD's history) the message [message], and recreates
+  /// the commits after it up to HEAD on top. Only messages change: trees,
+  /// authors and merges stay, so nothing can conflict, and the index and
+  /// working tree aren't touched. Returns the reworded commit's new sha.
+  Future<String> reword(String sha, String message) => _mutate(() async {
+    final head = (await _out(['rev-parse', 'HEAD'])).trim();
+    final target = (await _out(['rev-parse', '$sha^{commit}'])).trim();
+    if (!await _isAncestor(target, head)) {
+      throw GitException(
+        ['reword', sha],
+        1,
+        'error: $sha isn\'t in the history of HEAD',
+      );
+    }
+    // Oldest first, parents before children.
+    final after = (await _out([
+      'rev-list',
+      '--topo-order',
+      '--reverse',
+      '--ancestry-path',
+      '$target..$head',
+    ])).split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty);
+    final rewritten = <String, String>{};
+    rewritten[target] = await _recommit(target, rewritten, message: message);
+    for (final c in after) {
+      rewritten[c] = await _recommit(c, rewritten);
+    }
+    // Moves the checked-out branch (or a detached HEAD), unless something
+    // else moved it meanwhile.
+    await _run([
+      'update-ref',
+      '-m',
+      'reword: ${message.split('\n').first}',
+      'HEAD',
+      rewritten[head]!,
+      head,
+    ]);
+    return rewritten[target]!;
+  });
+
+  /// Recreates commit [sha] with its parents mapped through [rewritten]
+  /// and, when given, a new [message].
+  Future<String> _recommit(
+    String sha,
+    Map<String, String> rewritten, {
+    String? message,
+  }) async {
+    final raw = await _out(['cat-file', 'commit', sha]);
+    final split = raw.indexOf('\n\n');
+    final headers = (split < 0 ? raw : raw.substring(0, split)).split('\n');
+    String? tree;
+    final parents = <String>[];
+    var env = <String, String>{};
+    for (final h in headers) {
+      if (h.startsWith('tree ')) tree = h.substring(5);
+      if (h.startsWith('parent ')) parents.add(h.substring(7));
+      if (h.startsWith('author ')) {
+        final m = RegExp(r'^author (.*) <(.*)> (\d+ [+-]\d{4})$').firstMatch(h);
+        if (m != null) {
+          env = {
+            'GIT_AUTHOR_NAME': m.group(1)!,
+            'GIT_AUTHOR_EMAIL': m.group(2)!,
+            'GIT_AUTHOR_DATE': m.group(3)!,
+          };
+        }
+      }
+    }
+    final text = message == null
+        ? (split < 0 ? '' : raw.substring(split + 2))
+        : '${message.trim()}\n';
+    final res = await _run(
+      [
+        'commit-tree',
+        tree!,
+        for (final p in parents) ...['-p', rewritten[p] ?? p],
+      ],
+      env: env,
+      stdin: utf8.encode(text),
+    );
+    return res.stdout.trim();
+  }
+
   /// Removes temp files from a finished interactive rebase.
   Future<void> cleanupRebaseFiles() async {
     final dir = Directory(p.join(await gitDir(), 'gutter-rebase'));

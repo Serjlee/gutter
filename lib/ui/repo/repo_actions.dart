@@ -231,6 +231,54 @@ class RepoActions {
     await tab.pull(mode);
   }
 
+  /// Edits [c]'s message; the commits after it are recreated on top.
+  Future<void> reword(Commit c) async {
+    final String message;
+    final bool pushed;
+    try {
+      if (!await repo.inHeadHistory(c.sha)) {
+        tab.app.notify(
+          'Only commits in the history of ${tab.currentBranch ?? 'HEAD'} '
+          'can be reworded. Check out a branch that has it first.',
+          warning: true,
+        );
+        return;
+      }
+      message = (await repo.commitDetails(c.sha)).message.trimRight();
+      pushed = await repo.inUpstream(c.sha);
+    } catch (e) {
+      tab.app.notifyError(e);
+      return;
+    }
+    if (!context.mounted) return;
+    final isHead = c.sha == tab.headSha;
+    final r = await promptFields(
+      context,
+      title: 'Reword ${_short(c.sha)}',
+      fields: [FieldSpec('Message', initial: message, multiline: true)],
+      confirmLabel: 'Reword',
+      extra: !pushed && isHead
+          ? null
+          : Text(
+              [
+                if (!isHead)
+                  'The commits after it are recreated with new SHAs.',
+                if (pushed)
+                  'It\'s already pushed: the branch will need a force push.',
+              ].join(' '),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            ),
+    );
+    if (r == null || r.first.trim() == message.trim()) return;
+    String? reworded;
+    await tab.run(
+      'Reword',
+      () async => reworded = await repo.reword(c.sha, r.first),
+    );
+    // Stay on the commit, now under its new sha.
+    if (reworded != null && tab.selectedSha == c.sha) tab.jumpToSha(reworded!);
+  }
+
   Future<void> cherryPick(Commit c) async {
     final ok = await confirm(
       context,
@@ -625,6 +673,12 @@ class RepoActions {
         'Interactive rebase from here…',
         () => interactiveRebaseIncluding(c),
         icon: Icons.format_list_numbered,
+        enabled: tab.operation == RepoOperation.none,
+      ),
+      menuItem(
+        'Reword message…',
+        () => reword(c),
+        icon: Icons.edit_note,
         enabled: tab.operation == RepoOperation.none,
       ),
       menuItem('Revert commit', () => revert(c), icon: Icons.undo),
