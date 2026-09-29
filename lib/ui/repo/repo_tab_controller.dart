@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -796,6 +797,46 @@ class RepoTabController extends ChangeNotifier {
             : repo.fileContent(null, entry.path);
       case null:
         return null;
+    }
+  }
+
+  /// The whole file before and after the change shown in [target] (null
+  /// for a side that doesn't exist or can't be read as text): the diff is
+  /// highlighted from them, so every line gets the colors it has in its
+  /// file.
+  Future<(String?, String?)> diffFileTexts(DiffTarget target) async {
+    Future<String?> text(String? rev, String? path) async {
+      if (path == null) return null;
+      try {
+        final bytes = await repo.fileContent(rev, path);
+        if (bytes == null || bytes.contains(0)) return null;
+        return utf8.decode(bytes, allowMalformed: true);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    switch (target) {
+      case CommitFileTarget(:final commit, :final file):
+        final parent = commit.parents.isEmpty ? null : commit.parents.first;
+        return (
+          file.kind == ChangeKind.added || parent == null
+              ? null
+              : await text(parent, file.oldPath ?? file.path),
+          file.kind == ChangeKind.deleted
+              ? null
+              : await text(commit.sha, file.path),
+        );
+      case WorkingFileTarget(:final entry, :final staged):
+        final oldPath = entry.oldPath ?? entry.path;
+        return staged
+            // HEAD against the index (":path").
+            ? (await text('HEAD', oldPath), await text('', entry.path))
+            // The index against the working tree.
+            : (
+                entry.isUntracked ? null : await text('', entry.path),
+                await text(null, entry.path),
+              );
     }
   }
 

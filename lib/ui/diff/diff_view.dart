@@ -49,14 +49,61 @@ class _DiffViewState extends State<DiffView> {
 
   bool get _highlightOn => tab.app.settings.syntaxHighlight;
 
-  /// Highlight spans per diff line, computed once per diff. Each side of a
-  /// hunk is highlighted as a whole so multi-line constructs are right.
+  // The whole file before and after, highlighted, for the current diff.
+  FileDiff? _fullFor;
+  List<List<TextSpan>>? _fullOld;
+  List<List<TextSpan>>? _fullNew;
+  bool _fullReady = false;
+
+  /// Loads and highlights both versions of the file of [diff]: a hunk on its
+  /// own can start inside a multi-line string or block (a Markdown code
+  /// fence, a YAML block), and then highlights wrongly from there on.
+  Future<void> _loadFull(FileDiff diff, String lang) async {
+    final target = tab.diffTarget;
+    if (target == null) return;
+    final (oldText, newText) = await tab.diffFileTexts(target);
+    if (!mounted || !identical(diff, _fullFor)) return;
+    List<List<TextSpan>>? spans(String? text) => text == null
+        ? null
+        : highlightLines(_expandTabs(text.replaceAll('\r\n', '\n')), lang);
+    setState(() {
+      _fullOld = spans(oldText);
+      _fullNew = spans(newText);
+      _fullReady = true;
+      _spansFor = null; // recompute with the whole-file colors
+    });
+  }
+
+  /// Highlight spans per diff line, computed once per diff. Lines take their
+  /// colors from their whole file once it's loaded; until then (or for a
+  /// file too big to highlight) each side of a hunk is highlighted on its
+  /// own.
   List<List<List<TextSpan>?>>? _highlightFor(FileDiff diff, String path) {
     final lang = languageForPath(path);
     if (!_highlightOn || lang == null) return null;
+    if (!identical(diff, _fullFor)) {
+      _fullFor = diff;
+      _fullOld = _fullNew = null;
+      _fullReady = false;
+      unawaited(_loadFull(diff, lang));
+    }
     if (identical(diff, _spansFor) && lang == _spansLang) return _spans;
     _spansFor = diff;
     _spansLang = lang;
+    // A line's spans from its whole file, if they're for the same text.
+    List<TextSpan>? fromFile(
+      List<List<TextSpan>>? file,
+      int? no,
+      String text,
+      List<TextSpan>? fallback,
+    ) {
+      if (!_fullReady || file == null || no == null || no > file.length) {
+        return fallback;
+      }
+      final spans = file[no - 1];
+      return spans.map((s) => s.text).join() == text ? spans : fallback;
+    }
+
     final out = <List<List<TextSpan>?>>[];
     for (final hunk in diff.hunks) {
       final oldText = <String>[], newText = <String>[];
@@ -78,8 +125,18 @@ class _DiffViewState extends State<DiffView> {
       out.add([
         for (var i = 0; i < hunk.lines.length; i++)
           switch (hunk.lines[i].type) {
-            DiffLineType.remove => oldSpans?[oldIdx[i]!],
-            DiffLineType.add || DiffLineType.context => newSpans?[newIdx[i]!],
+            DiffLineType.remove => fromFile(
+              _fullOld,
+              hunk.lines[i].oldNo,
+              _expandTabs(hunk.lines[i].text),
+              oldSpans?[oldIdx[i]!],
+            ),
+            DiffLineType.add || DiffLineType.context => fromFile(
+              _fullNew,
+              hunk.lines[i].newNo,
+              _expandTabs(hunk.lines[i].text),
+              newSpans?[newIdx[i]!],
+            ),
             DiffLineType.noNewline => null,
           },
       ]);
