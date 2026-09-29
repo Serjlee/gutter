@@ -150,4 +150,86 @@ void main() {
     );
     expect(highlighted('print(2);'), isFalse);
   });
+
+  testWidgets('notices when the file is changed elsewhere', (tester) async {
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('init', {'a.txt': 'one\n', 'b.txt': 'x\n'});
+      t.git(['checkout', '-q', '-b', 'feature']);
+      t.commit('theirs', {'a.txt': 'theirs\n', 'b.txt': 'y\n'});
+      t.git(['checkout', '-q', 'main']);
+      t.commit('mine', {'a.txt': 'mine\n', 'b.txt': 'z\n'});
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+      await tab.run('Merge', () => tab.repo.merge('feature'));
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: tab,
+            builder: (_, _) {
+              final target = tab.diffTarget as WorkingFileTarget?;
+              return target == null
+                  ? const SizedBox()
+                  : ConflictView(
+                      key: ValueKey(target.path),
+                      tab: tab,
+                      entry: target.entry,
+                    );
+            },
+          ),
+        ),
+      ),
+    );
+    // The watcher runs on a timer: let time pass, and real file I/O.
+    Future<void> pumpUntil(bool Function() done) async {
+      for (var i = 0; i < 60 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    bool shows(String text) => find.textContaining(text).evaluate().isNotEmpty;
+    await pumpUntil(() => shows('Conflict 1 of 1'));
+    expect((tab.diffTarget as WorkingFileTarget).path, 'a.txt');
+
+    // Resolved in another editor: the view reloads on its own.
+    await tester.runAsync(() async => t.write('a.txt', 'both\n'));
+    await pumpUntil(() => shows('No conflicts left in this file'));
+    expect(shows('both'), isTrue);
+
+    // Changed elsewhere while editing here: the edit stays, with a warning.
+    await tester.tap(find.byTooltip('Edit the file'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'mine, edited\n');
+    await tester.runAsync(() async {
+      // A different size, so the change shows even with coarse timestamps.
+      t.write('a.txt', 'changed elsewhere, again\n');
+    });
+    await pumpUntil(
+      () => find
+          .byKey(const ValueKey('conflict-changed-on-disk'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(find.text('mine, edited\n'), findsOneWidget);
+
+    // Resolved and staged from a terminal: on to the next conflict.
+    await tester.runAsync(() async {
+      t.git(['add', 'a.txt']);
+      await tab.refresh();
+    });
+    await tester.pump();
+    expect((tab.diffTarget as WorkingFileTarget).path, 'b.txt');
+  });
 }

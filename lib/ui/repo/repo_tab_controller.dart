@@ -424,7 +424,14 @@ class RepoTabController extends ChangeNotifier {
     if (t is WorkingFileTarget) {
       final e = status.entries.where((e) => e.path == t.entry.path).firstOrNull;
       final stillThere = e != null && (t.staged ? e.hasStaged : e.hasUnstaged);
-      if (!stillThere) {
+      if (t.entry.conflicted &&
+          e?.conflicted != true &&
+          status.conflicted.isNotEmpty) {
+        // Resolved elsewhere (e.g. `git add` in a terminal): on to the
+        // next conflict.
+        diffTarget = WorkingFileTarget(status.conflicted.first, staged: false);
+        unawaited(_loadDiff(quiet: true));
+      } else if (!stillThere) {
         closeDiff(notify: false);
       } else {
         diffTarget = WorkingFileTarget(e, staged: t.staged);

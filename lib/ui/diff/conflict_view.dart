@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/theme.dart';
 import '../../git/conflict.dart';
@@ -96,6 +100,7 @@ class _ConflictViewState extends State<ConflictView> {
   void initState() {
     super.initState();
     _load();
+    _watch = Timer.periodic(watchInterval, (_) => _checkDisk());
   }
 
   @override
@@ -110,19 +115,65 @@ class _ConflictViewState extends State<ConflictView> {
 
   @override
   void dispose() {
+    _watch?.cancel();
     _editor.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    String? text;
+  /// How often the file is checked for changes made elsewhere (an editor,
+  /// a script): a stat, and a read only when it changed.
+  static const watchInterval = Duration(seconds: 1);
+  Timer? _watch;
+
+  /// The file as last read or written here: (modified, size), null if it
+  /// doesn't exist.
+  (DateTime, int)? _stamp;
+  bool _checking = false;
+
+  /// Changed on disk while being edited here: the edit is kept, and a bar
+  /// offers to reload.
+  bool _changedWhileEditing = false;
+
+  Future<(DateTime, int)?> _stat() async {
+    final st = await File(p.join(tab.repo.path, path)).stat();
+    return st.type == FileSystemEntityType.notFound
+        ? null
+        : (st.modified, st.size);
+  }
+
+  Future<void> _checkDisk() async {
+    if (_checking || _loading || !mounted) return;
+    _checking = true;
     try {
+      final now = await _stat();
+      if (!mounted || now == _stamp) return;
+      if (_editing) {
+        if (!_changedWhileEditing) setState(() => _changedWhileEditing = true);
+        _stamp = now;
+      } else {
+        await _load(quiet: true);
+      }
+    } catch (_) {
+      // Checked again next time.
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<void> _load({bool quiet = false}) async {
+    if (!quiet) setState(() => _loading = true);
+    String? text;
+    (DateTime, int)? stamp;
+    try {
+      stamp = await _stat();
       text = await tab.repo.readWorkingText(path);
     } catch (_) {}
     if (!mounted) return;
     setState(() {
       _loading = false;
+      _stamp = stamp;
+      _changedWhileEditing = false;
+      if (quiet && text == _text) return;
       _text = text;
       _parsed = text == null || text.contains('\u0000')
           ? null
@@ -134,12 +185,14 @@ class _ConflictViewState extends State<ConflictView> {
   Future<void> _write(String text) async {
     try {
       await tab.repo.writeWorkingText(path, text);
+      _stamp = await _stat(); // our own change: not one to reload
     } catch (e) {
       tab.app.notify('Could not write $path: $e', error: true);
       return;
     }
     if (!mounted) return;
     setState(() {
+      _changedWhileEditing = false;
       _text = text;
       _parsed = ConflictedText.parse(text);
       _computeSpans();
@@ -342,11 +395,6 @@ class _ConflictViewState extends State<ConflictView> {
               tooltip: 'Open in external editor',
               onPressed: () => openExternally(tab, path),
             ),
-            SmallIconButton(
-              icon: Icons.refresh,
-              tooltip: 'Reload the file (after editing it elsewhere)',
-              onPressed: _load,
-            ),
           ],
           SmallIconButton(
             icon: Icons.close,
@@ -383,7 +431,7 @@ class _ConflictViewState extends State<ConflictView> {
     }
     if (_parsed == null) return _binary();
     if (_editing) {
-      return Padding(
+      final editor = Padding(
         padding: const EdgeInsets.all(10),
         child: TextField(
           controller: _editor,
@@ -397,6 +445,42 @@ class _ConflictViewState extends State<ConflictView> {
             contentPadding: EdgeInsets.all(10),
           ),
         ),
+      );
+      if (!_changedWhileEditing) return editor;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            key: const ValueKey('conflict-changed-on-disk'),
+            color: AppColors.warning.withValues(alpha: 0.16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.warning_amber,
+                  size: 16,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'The file changed on disk. Saving replaces that version '
+                    'with yours.',
+                    style: TextStyle(fontSize: 12.5),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _editing = false);
+                    _load();
+                  },
+                  child: const Text('Reload (drop my edits)'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: editor),
+        ],
       );
     }
     if (_spansOn != tab.app.settings.syntaxHighlight) _computeSpans();
