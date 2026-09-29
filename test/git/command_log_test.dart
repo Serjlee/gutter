@@ -76,6 +76,17 @@ void main() {
     expect(await runner.sshEnvironment(t.path), isEmpty);
   }, skip: Platform.environment.containsKey('GIT_SSH_COMMAND'));
 
+  test('a failed background fetch says which remote failed', () async {
+    t.commit('one', {'a.txt': 'a\n'});
+    t.git(['remote', 'add', 'origin', t.path]);
+    t.git(['remote', 'add', 'broken', '/nonexistent/repo.git']);
+    final error = await CommandLog.background(() => t.repo.fetch())
+        .then<Object?>((_) => null, onError: (Object e) => e);
+    expect(error, isA<GitException>());
+    expect((error! as GitException).args, isNot(contains('--quiet')));
+    expect(summarizeGitError(error), startsWith('Couldn\'t fetch broken. '));
+  });
+
   group('error summaries', () {
     String summary(String stderr, {String stdout = ''}) =>
         summarizeGitError(GitException(['fetch'], 128, stderr, stdout: stdout));
@@ -124,6 +135,25 @@ void main() {
     test('otherwise show git\'s own message, without the prefix', () {
       expect(summary('warning: x\nfatal: bad object abc\n'), 'Bad object abc');
       expect(summary('something odd\n'), 'Something odd');
+    });
+
+    test('a failed fetch --all names the remote', () {
+      const stderr =
+          'Fetching origin\nFetching broken\n'
+          "fatal: '/nope.git' does not appear to be a git repository\n"
+          'fatal: Could not read from remote repository.\n'
+          'error: could not fetch broken\n';
+      expect(
+        summary(stderr),
+        allOf(
+          startsWith('Couldn\'t fetch broken. '),
+          contains('wasn\'t found'),
+        ),
+      );
+      expect(
+        summary('Fetching a\nFetching b\nerror: could not fetch b\n'),
+        'Couldn\'t fetch b.',
+      );
     });
 
     test('details show the command, its output and exit code', () {

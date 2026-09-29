@@ -890,7 +890,7 @@ class Repository {
     if (remote == null) '--all' else remote,
     if (prune) '--prune',
     '--tags',
-    '--quiet',
+    // Not --quiet: its "Fetching <remote>" lines say which remote failed.
   ]);
 
   Future<void> pull(PullMode mode) => _net([

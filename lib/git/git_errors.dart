@@ -11,6 +11,18 @@ String summarizeGitError(Object e) {
         'You can set its path in the settings on the home tab.';
   }
   if (e is! GitException) return e.toString();
+  final summary = _summarize(e);
+  // `fetch --all` names the remote that failed only at the end.
+  final failed = RegExp(r'could not fetch (\S+)')
+      .allMatches(e.stderr)
+      .map((m) => m.group(1)!)
+      .toSet();
+  if (failed.isEmpty) return summary;
+  final which = 'Couldn\'t fetch ${failed.join(', ')}';
+  return summary == e.message ? '$which.' : '$which. $summary';
+}
+
+String _summarize(GitException e) {
   final text = '${e.stderr}\n${e.stdout}';
   final s = text.toLowerCase();
   bool has(String x) => s.contains(x);
@@ -70,13 +82,19 @@ String summarizeGitError(Object e) {
   return _firstMessage(text) ?? e.message;
 }
 
+/// Progress lines, not the problem itself.
+final _noise = RegExp(
+  r'^(Fetching \S+$|From |(error: )?could not fetch )',
+  caseSensitive: false,
+);
+
 /// The first line git flagged as the problem (`fatal:`/`error:`), without
 /// the prefix, else the first line.
 String? _firstMessage(String text) {
   final lines = text
       .split('\n')
       .map((l) => l.trim())
-      .where((l) => l.isNotEmpty)
+      .where((l) => l.isNotEmpty && !_noise.hasMatch(l))
       .toList();
   if (lines.isEmpty) return null;
   final prefixed = RegExp(r'^(fatal|error):\s*', caseSensitive: false);
