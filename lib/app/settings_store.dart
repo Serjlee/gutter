@@ -26,7 +26,7 @@ class Settings {
   bool fileTree = false;
 
   /// Syntax highlighting in diffs and file previews (costs CPU on big files).
-  bool syntaxHighlight = false;
+  bool syntaxHighlight = true;
 
   /// Show GitHub profile pictures for commit authors of GitHub repositories.
   bool githubAvatars = true;
@@ -46,7 +46,9 @@ class Settings {
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
     'fileTree': fileTree,
-    'syntaxHighlight': syntaxHighlight,
+    // A new key: the old one ("syntaxHighlight") saved the former default,
+    // off, for everyone.
+    'syntaxHighlighting': syntaxHighlight,
     'githubAvatars': githubAvatars,
   };
 
@@ -68,7 +70,7 @@ class Settings {
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
       ..fileTree = j['fileTree'] == true
-      ..syntaxHighlight = j['syntaxHighlight'] == true
+      ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false;
     final cw = j['columnWidths'];
     if (cw is Map) {

@@ -488,6 +488,19 @@ class _SettingsForm extends StatelessWidget {
               'Applies to repositories opened from now on.',
         ),
         _row(
+          'Syntax highlighting',
+          AppDropdown<bool>(
+            key: const ValueKey('syntax-highlighting'),
+            value: s.syntaxHighlight,
+            items: const [(true, 'On', null), (false, 'Off', null)],
+            onChanged: app.setSyntaxHighlight,
+          ),
+          info:
+              'Colors code in diffs, file previews and conflicts, for about '
+              '40 languages (by file extension). Very large files stay '
+              'plain.',
+        ),
+        _row(
           'GitHub avatars',
           AppDropdown<bool>(
             key: const ValueKey('github-avatars'),

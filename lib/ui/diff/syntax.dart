@@ -1,5 +1,5 @@
-/// Syntax highlighting for diffs and file previews (optional, off by
-/// default: highlighting large files costs time).
+/// Syntax highlighting for diffs, file previews and conflicts (a setting,
+/// on by default; very large files are left plain).
 library;
 
 import 'package:flutter/painting.dart';

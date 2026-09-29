@@ -224,7 +224,6 @@ class _DiffViewState extends State<DiffView> {
       final CommitFileTarget t => t.file.oldPath,
       final WorkingFileTarget t => t.entry.oldPath,
     };
-    final lang = languageForPath(target.path);
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -316,20 +315,6 @@ class _DiffViewState extends State<DiffView> {
                   ),
                 ],
               ],
-              const SizedBox(width: 4),
-              SmallIconButton(
-                key: const ValueKey('syntax-toggle'),
-                icon: Icons.palette_outlined,
-                tooltip: lang == null
-                    ? 'No syntax highlighting for this file type'
-                    : (_highlightOn
-                          ? 'Syntax highlighting: on'
-                          : 'Syntax highlighting: off'),
-                color: _highlightOn ? AppColors.accent : AppColors.textFaint,
-                onPressed: lang == null
-                    ? null
-                    : () => tab.app.setSyntaxHighlight(!_highlightOn),
-              ),
               const SizedBox(width: 4),
               if (c.maxWidth < 480)
                 AppDropdown<_Mode>(

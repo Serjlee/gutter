@@ -179,9 +179,7 @@ void main() {
     await tester.tap(find.text('Split'));
     await tester.pump();
     expectNoErrors(tester, 'split view');
-    await tester.tap(find.byKey(const ValueKey('syntax-toggle')));
-    await tester.pump();
-    expect(app.settings.syntaxHighlight, isTrue);
+    expect(app.settings.syntaxHighlight, isTrue); // the default
     expect(find.textContaining('print(s);', findRichText: true), findsWidgets);
     expectNoErrors(tester, 'split view, highlighted');
     for (final zoom in [1.5, 2.0, 1.0]) {

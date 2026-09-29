@@ -8,6 +8,7 @@ import '../details/details_panel.dart' show openExternally;
 import '../dialogs/dialogs.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'syntax.dart';
 
 /// Whole file: one side's version (deleting the file if that side deleted
 /// it), staged; then on to the next conflicted file.
@@ -71,6 +72,10 @@ class _ConflictViewState extends State<ConflictView> {
   final _editor = TextEditingController();
   final _expanded = <int>{};
 
+  /// Syntax highlighting per segment (parallel to the parsed segments).
+  List<_SegmentSpans>? _spans;
+  bool? _spansOn;
+
   RepoTabController get tab => widget.tab;
   StatusEntry get entry => widget.entry;
   String get path => entry.path;
@@ -122,6 +127,7 @@ class _ConflictViewState extends State<ConflictView> {
       _parsed = text == null || text.contains('\u0000')
           ? null
           : ConflictedText.parse(text);
+      _computeSpans();
     });
   }
 
@@ -136,8 +142,78 @@ class _ConflictViewState extends State<ConflictView> {
     setState(() {
       _text = text;
       _parsed = ConflictedText.parse(text);
+      _computeSpans();
     });
   }
+
+  /// Highlights the file three ways (with the current sides, with the
+  /// incoming sides, with the original), so each side reads as the code it
+  /// would become, multi-line constructs included.
+  void _computeSpans() {
+    final parsed = _parsed;
+    final lang = languageForPath(path);
+    _spansOn = tab.app.settings.syntaxHighlight;
+    if (parsed == null || lang == null || !_spansOn!) {
+      _spans = null;
+      return;
+    }
+    final segments = parsed.segments;
+    (List<List<TextSpan>>?, List<(int, int)>) version(
+      List<String> Function(ConflictBlock) pick,
+    ) {
+      final lines = <String>[];
+      final ranges = <(int, int)>[];
+      for (final seg in segments) {
+        final ls = seg is ConflictBlock ? pick(seg) : seg as List<String>;
+        ranges.add((lines.length, ls.length));
+        lines.addAll(ls.map(_strip));
+      }
+      return (highlightLines(lines.join('\n'), lang), ranges);
+    }
+
+    List<List<TextSpan>>? slice(
+      (List<List<TextSpan>>?, List<(int, int)>) v,
+      int i,
+    ) {
+      final (all, ranges) = v;
+      final (start, len) = ranges[i];
+      if (all == null || all.length < start + len) return null;
+      return all.sublist(start, start + len);
+    }
+
+    final current = version((b) => b.current);
+    final incoming = version((b) => b.incoming);
+    final base = parsed.conflicts.any((b) => b.base != null)
+        ? version((b) => b.base ?? b.current)
+        : null;
+    _spans = [
+      for (var i = 0; i < segments.length; i++)
+        _SegmentSpans(
+          current: slice(current, i),
+          incoming: slice(incoming, i),
+          base: base == null ? null : slice(base, i),
+        ),
+    ];
+  }
+
+  /// A line of code: highlighted when [spans] are given.
+  Widget _code(String line, List<TextSpan>? spans, Color color) => spans == null
+      ? Text(
+          _strip(line),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.clip,
+          style: monoStyle(size: 12.5, color: color),
+        )
+      : Text.rich(
+          TextSpan(
+            style: monoStyle(size: 12.5, color: color),
+            children: spans,
+          ),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.clip,
+        );
 
   Future<void> _resolveBlock(int index, ConflictChoice choice) =>
       _write(_parsed!.resolve(index, choice));
@@ -323,6 +399,7 @@ class _ConflictViewState extends State<ConflictView> {
         ),
       );
     }
+    if (_spansOn != tab.app.settings.syntaxHighlight) _computeSpans();
     final segments = _parsed!.segments;
     final total = _parsed!.conflicts.length;
     var n = 0;
@@ -332,11 +409,12 @@ class _ConflictViewState extends State<ConflictView> {
         children: [
           for (var i = 0; i < segments.length; i++)
             if (segments[i] is ConflictBlock)
-              _block(segments[i] as ConflictBlock, n++, total)
+              _block(segments[i] as ConflictBlock, n++, total, _spans?[i])
             else
               _plain(
                 segments[i] as List<String>,
                 i,
+                _spans?[i].current,
                 first: i == 0,
                 last: i == segments.length - 1,
               ),
@@ -348,37 +426,36 @@ class _ConflictViewState extends State<ConflictView> {
   /// Unchanged lines between conflicts; long runs fold to their ends.
   Widget _plain(
     List<String> lines,
-    int key, {
+    int key,
+    List<List<TextSpan>>? spans, {
     required bool first,
     required bool last,
   }) {
     const keep = 3;
     final fold = lines.length > keep * 2 + 2 && !_expanded.contains(key);
-    Widget line(String l) => SelectableLine(
+    // Unchanged code is a little dimmer than the conflicts.
+    Widget line(int i) => SelectableLine(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(
-          _strip(l),
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.clip,
-          style: monoStyle(size: 12.5, color: AppColors.textDim),
+        child: Opacity(
+          opacity: 0.75,
+          child: _code(lines[i], spans?[i], AppColors.textDim),
         ),
       ),
     );
     if (!fold) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [for (final l in lines) line(l)],
+        children: [for (var i = 0; i < lines.length; i++) line(i)],
       );
     }
-    final head = first ? const <String>[] : lines.sublist(0, keep);
-    final tail = last ? const <String>[] : lines.sublist(lines.length - keep);
-    final hidden = lines.length - head.length - tail.length;
+    final head = first ? 0 : keep;
+    final tailStart = last ? lines.length : lines.length - keep;
+    final hidden = tailStart - head;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final l in head) line(l),
+        for (var i = 0; i < head; i++) line(i),
         SelectionContainer.disabled(
           child: InkWell(
             onTap: () => setState(() => _expanded.add(key)),
@@ -404,17 +481,18 @@ class _ConflictViewState extends State<ConflictView> {
             ),
           ),
         ),
-        for (final l in tail) line(l),
+        for (var i = tailStart; i < lines.length; i++) line(i),
       ],
     );
   }
 
-  Widget _block(ConflictBlock b, int index, int total) {
+  Widget _block(ConflictBlock b, int index, int total, _SegmentSpans? spans) {
     final sides = _sides;
     Widget side(
       String title,
       String subtitle,
       List<String> lines,
+      List<List<TextSpan>>? lineSpans,
       Color color, {
       bool dim = false,
     }) {
@@ -465,18 +543,16 @@ class _ConflictViewState extends State<ConflictView> {
                   ),
                 ),
               ),
-            for (final l in lines)
+            for (var i = 0; i < lines.length; i++)
               SelectableLine(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 13),
-                  child: Text(
-                    _strip(l),
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.clip,
-                    style: monoStyle(
-                      size: 12.5,
-                      color: dim ? AppColors.textDim : AppColors.text,
+                  child: Opacity(
+                    opacity: dim ? 0.7 : 1,
+                    child: _code(
+                      lines[i],
+                      lineSpans?[i],
+                      dim ? AppColors.textDim : AppColors.text,
                     ),
                   ),
                 ),
@@ -544,12 +620,19 @@ class _ConflictViewState extends State<ConflictView> {
               ),
             ),
           ),
-          side(sides.current, 'current', b.current, ConflictView.currentColor),
+          side(
+            sides.current,
+            'current',
+            b.current,
+            spans?.current,
+            ConflictView.currentColor,
+          ),
           if (b.base != null)
             side(
               'Original',
               'common ancestor',
               b.base!,
+              spans?.base,
               AppColors.textFaint,
               dim: true,
             ),
@@ -559,6 +642,7 @@ class _ConflictViewState extends State<ConflictView> {
                 ? 'incoming'
                 : 'incoming · ${sides.incomingDetail}',
             b.incoming,
+            spans?.incoming,
             ConflictView.incomingColor,
           ),
         ],
@@ -690,4 +774,13 @@ class _ConflictViewState extends State<ConflictView> {
     final first = name.length > 24 ? '${name.substring(0, 22)}…' : name;
     return first;
   }
+}
+
+/// Highlight spans of one segment's lines, per side (a plain segment uses
+/// [current]).
+class _SegmentSpans {
+  const _SegmentSpans({this.current, this.incoming, this.base});
+  final List<List<TextSpan>>? current;
+  final List<List<TextSpan>>? incoming;
+  final List<List<TextSpan>>? base;
 }

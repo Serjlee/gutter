@@ -79,4 +79,75 @@ void main() {
     expect(tab.status.conflicted, isEmpty);
     expect(tab.status.staged.single.path, 'a.txt');
   });
+
+  testWidgets('conflicts are syntax-highlighted, unless turned off', (
+    tester,
+  ) async {
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('init', {'a.dart': 'void main() {\n  print(1);\n}\n'});
+      t.git(['checkout', '-q', '-b', 'feature']);
+      t.commit('theirs', {'a.dart': 'void main() {\n  print(2);\n}\n'});
+      t.git(['checkout', '-q', 'main']);
+      t.commit('mine', {'a.dart': 'void main() {\n  print(3);\n}\n'});
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+      await tab.run('Merge', () => tab.repo.merge('feature'));
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+    });
+    expect(tab.app.settings.syntaxHighlight, isTrue); // the default
+    final entry = tab.status.conflicted.single;
+    Widget view() => MaterialApp(
+      theme: buildTheme(),
+      home: Scaffold(
+        body: ConflictView(key: UniqueKey(), tab: tab, entry: entry),
+      ),
+    );
+    // Highlighted text is split into several styled spans (counting the
+    // ones with text).
+    int spanCount(InlineSpan span) {
+      var n = 0;
+      span.visitChildren((_) {
+        n++;
+        return true;
+      });
+      return n;
+    }
+
+    bool highlighted(String text) => find
+        .byWidgetPredicate(
+          (w) =>
+              w is RichText &&
+              w.text.toPlainText().contains(text) &&
+              spanCount(w.text) > 1,
+        )
+        .evaluate()
+        .isNotEmpty;
+    Future<void> pumpUntil(bool Function() done) async {
+      for (var i = 0; i < 200 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 15)),
+        );
+        await tester.pump();
+      }
+    }
+
+    await tester.pumpWidget(view());
+    await pumpUntil(() => highlighted('print(2);'));
+    expect(highlighted('print(3);'), isTrue); // current side
+    expect(highlighted('print(2);'), isTrue); // incoming side
+    expect(highlighted('void main()'), isTrue); // unchanged lines
+
+    tab.app.setSyntaxHighlight(false);
+    await tester.pumpWidget(view());
+    await pumpUntil(
+      () => find.textContaining('print(2);').evaluate().isNotEmpty,
+    );
+    expect(highlighted('print(2);'), isFalse);
+  });
 }
