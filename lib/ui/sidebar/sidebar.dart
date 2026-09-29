@@ -141,8 +141,7 @@ class _SidebarState extends State<Sidebar> {
             iconColor: AppColors.textDim,
             tooltip:
                 '${s.ref} · ${formatDate(DateTime.fromMillisecondsSinceEpoch(s.time * 1000))}',
-            onDoubleTap: () =>
-                tab.run('Apply stash', () => tab.repo.stashApply(s.index)),
+            onDoubleTap: () => tab.applyStash(s, pop: false),
             menu: () => actions.stashMenu(s),
           ),
     ];

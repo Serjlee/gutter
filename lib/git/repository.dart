@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
@@ -697,15 +698,155 @@ class Repository {
   Future<void> skipOperation(RepoOperation op) =>
       _mutate(() => _run([op.command, '--skip']));
 
-  /// Resolves a conflicted file with one side and stages it.
+  /// Resolves a conflicted file with one side and stages it. When that side
+  /// deleted the file, resolving means deleting it.
   Future<void> resolveWith(String filePath, {required bool ours}) =>
       _mutate(() async {
+        final stages = await _conflictStages(filePath);
+        if (!stages.contains(ours ? 2 : 3)) {
+          await _run(['rm', '--quiet', '--', filePath]);
+          return;
+        }
         await _run(['checkout', ours ? '--ours' : '--theirs', '--', filePath]);
         await _run(['add', '--', filePath]);
       });
 
+  /// Which versions of a conflicted file git has: 1 common ancestor,
+  /// 2 current ("ours"), 3 incoming ("theirs").
+  Future<Set<int>> _conflictStages(String filePath) async {
+    final out = await _out(['ls-files', '-u', '-z', '--', filePath]);
+    return {
+      for (final e in out.split('\x00'))
+        if (e.isNotEmpty) int.tryParse(e.split('\t').first.split(' ')[2]) ?? 0,
+    };
+  }
+
   Future<void> markResolved(List<String> paths) =>
-      _mutate(() => _run(['add', '--', ...paths]));
+      _mutate(() => _run(['add', '--all', '--', ...paths]));
+
+  /// The working tree copy of [relPath] (null if it doesn't exist).
+  Future<String?> readWorkingText(String relPath) async {
+    final f = File(p.join(path, relPath));
+    if (!f.existsSync()) return null;
+    return utf8.decode(await f.readAsBytes(), allowMalformed: true);
+  }
+
+  Future<void> writeWorkingText(String relPath, String text) =>
+      File(p.join(path, relPath)).writeAsString(text, flush: true);
+
+  /// The commit message git prepared for the merge (or cherry-pick, revert)
+  /// in progress, without its comment lines; null if there's none.
+  Future<String?> preparedMessage() async {
+    final f = File(p.join(await gitDir(), 'MERGE_MSG'));
+    if (!f.existsSync()) return null;
+    final text = const LineSplitter()
+        .convert(f.readAsStringSync())
+        .where((l) => !l.startsWith('#'))
+        .join('\n')
+        .trim();
+    return text.isEmpty ? null : text;
+  }
+
+  /// What the operation in progress combines, by name: for the banner and
+  /// to label the two sides of conflicts.
+  Future<ConflictSides> conflictSides(RepoOperation op) async {
+    final dir = await gitDir();
+    String? read(String f) {
+      final file = File(p.join(dir, f));
+      return file.existsSync() ? file.readAsStringSync().trim() : null;
+    }
+
+    Future<String> commitLabel(String? sha) async {
+      if (sha == null || sha.isEmpty) return 'the incoming commit';
+      final r = await _run([
+        'log',
+        '-1',
+        '--format=%h %s',
+        sha,
+      ], allowFailure: true);
+      final t = r.stdout.trim();
+      return t.isEmpty ? sha.substring(0, min(7, sha.length)) : t;
+    }
+
+    Future<String> refName(String? sha) async {
+      if (sha == null || sha.isEmpty) return 'the base';
+      final r = await _run([
+        'for-each-ref',
+        '--points-at=$sha',
+        '--format=%(refname:short)',
+        'refs/heads',
+        'refs/remotes',
+        'refs/tags',
+      ], allowFailure: true);
+      final names = const LineSplitter()
+          .convert(r.stdout)
+          .where((l) => l.isNotEmpty && !l.endsWith('/HEAD'))
+          .toList();
+      return names.isEmpty ? sha.substring(0, min(7, sha.length)) : names.first;
+    }
+
+    final head = (await _run([
+      'symbolic-ref',
+      '--short',
+      '-q',
+      'HEAD',
+    ], allowFailure: true)).stdout.trim();
+    final branch = head.isEmpty ? 'HEAD' : head;
+    switch (op) {
+      case RepoOperation.merge:
+        final msg = read('MERGE_MSG') ?? '';
+        final m = RegExp(
+          r"^Merge (?:remote-tracking )?(?:branch|tag|commit) '([^']+)'",
+        ).firstMatch(msg);
+        final incoming =
+            m?.group(1) ??
+            (await commitLabel(read('MERGE_HEAD'))).split(' ').first;
+        return ConflictSides(
+          current: branch,
+          incoming: incoming,
+          description: 'Merging $incoming into $branch',
+        );
+      case RepoOperation.rebase:
+        final d = FileSystemEntity.isDirectorySync(p.join(dir, 'rebase-merge'))
+            ? 'rebase-merge'
+            : 'rebase-apply';
+        final rebased = (read('$d/head-name') ?? branch).replaceFirst(
+          'refs/heads/',
+          '',
+        );
+        final onto = await refName(read('$d/onto'));
+        final stopped = read('REBASE_HEAD') ?? read('$d/stopped-sha');
+        return ConflictSides(
+          current: onto,
+          incoming: rebased,
+          incomingDetail: stopped == null ? null : await commitLabel(stopped),
+          description: 'Rebasing $rebased onto $onto',
+        );
+      case RepoOperation.cherryPick:
+        final c = await commitLabel(read('CHERRY_PICK_HEAD'));
+        return ConflictSides(
+          current: branch,
+          incoming: c.split(' ').first,
+          incomingDetail: c,
+          description: 'Cherry-picking $c onto $branch',
+        );
+      case RepoOperation.revert:
+        final c = await commitLabel(read('REVERT_HEAD'));
+        return ConflictSides(
+          current: branch,
+          incoming: 'revert',
+          incomingDetail: 'reverting $c',
+          description: 'Reverting $c on $branch',
+        );
+      case RepoOperation.bisect:
+      case RepoOperation.none:
+        return ConflictSides(
+          current: branch,
+          incoming: 'stash',
+          description: 'Applying a stash on $branch',
+        );
+    }
+  }
 
   // ----------------------------------------------------------------- stash
 
@@ -719,11 +860,22 @@ class Repository {
         ]),
       );
 
-  Future<void> stashApply(int index) =>
-      _mutate(() => _run(['stash', 'apply', '--index', 'stash@{$index}']));
+  /// Applies (or pops) a stash, restoring what was staged as staged. When
+  /// that can't be done (the staged part conflicts), applies it all as
+  /// unstaged changes instead, so conflicts can be resolved as usual.
+  Future<void> stashApply(int index, {bool pop = false}) => _mutate(() async {
+    final ref = 'stash@{$index}';
+    final cmd = pop ? 'pop' : 'apply';
+    final r = await _run(['stash', cmd, '--index', ref], allowFailure: true);
+    if (r.ok) return;
+    if (r.stderr.contains('Try without --index')) {
+      await _run(['stash', cmd, ref]);
+      return;
+    }
+    throw GitException.fromResult(r);
+  });
 
-  Future<void> stashPop(int index) =>
-      _mutate(() => _run(['stash', 'pop', '--index', 'stash@{$index}']));
+  Future<void> stashPop(int index) => stashApply(index, pop: true);
 
   Future<void> stashDrop(int index) =>
       _mutate(() => _run(['stash', 'drop', 'stash@{$index}']));

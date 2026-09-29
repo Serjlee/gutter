@@ -64,6 +64,9 @@ Apple's command line tools). You can pick another on the home tab.
   syntax highlighting.
 - **Interactive rebase** without a text editor, with keyboard shortcuts
   and actions on several commits at once.
+- **Conflicts** resolved in the app: current, incoming or both for each
+  conflict, or a whole side per file, for merges, rebases, cherry-picks
+  and stashes.
 - **Errors explained**, with the full output one click away in each tab's
   **Output** panel, which logs every git command it ran.
 - **UI zoom** for high-DPI screens.
@@ -75,6 +78,7 @@ Apple's command line tools). You can pick another on the home tab.
 ![Line staging](docs/line-staging.png)
 ![Diff with syntax highlighting](docs/diff-highlight.png)
 ![Interactive rebase](docs/interactive-rebase.png)
+![Resolving conflicts](docs/conflicts.png)
 
 </details>
 

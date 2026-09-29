@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import '../../app/app_controller.dart';
 import '../../app/avatars.dart';
 import '../../git/git_errors.dart';
+import '../../git/conflict.dart';
 import '../../git/git_runner.dart';
 import '../../git/models.dart';
 import '../../git/parsers/diff_parser.dart';
@@ -40,6 +41,13 @@ class PushTarget {
 
   @override
   String toString() => '$remote/$branch';
+}
+
+/// A stash applied (or popped) with conflicts.
+class StashConflict {
+  const StashConflict(this.sha, {required this.pop});
+  final String sha;
+  final bool pop;
 }
 
 /// Sha used for the pseudo "work in progress" row.
@@ -139,6 +147,20 @@ class RepoTabController extends ChangeNotifier {
   List<RemoteInfo> remotes = const [];
   RepoOperation operation = RepoOperation.none;
   String? rebaseProgress;
+
+  /// While there are conflicts (or an operation is in progress): what is
+  /// being combined, by name.
+  ConflictSides? conflictSides;
+
+  /// The most conflicted files seen since the conflicts started, to show
+  /// progress ("1 of 3 resolved").
+  int conflictTotal = 0;
+
+  /// A stash applied with conflicts, until the user is done with them.
+  StashConflict? stashConflict;
+
+  /// The prepared message put in the commit box, and for which operation.
+  String? _preparedMessage;
   String? headSha;
 
   bool loading = true;
@@ -255,6 +277,50 @@ class RepoTabController extends ChangeNotifier {
     _scheduleTimers();
   }
 
+  /// Keeps [conflictSides], [conflictTotal], [stashConflict] and the
+  /// prepared commit message in step with the repository.
+  Future<void> _updateConflictState(WorkingTreeStatus newStatus) async {
+    final conflicted = newStatus.conflicted.length;
+    final active =
+        (operation != RepoOperation.none &&
+            operation != RepoOperation.bisect) ||
+        conflicted > 0 ||
+        stashConflict != null;
+    if (!active) {
+      conflictSides = null;
+      conflictTotal = 0;
+    } else {
+      try {
+        conflictSides = await repo.conflictSides(operation);
+      } catch (_) {}
+      conflictTotal = max(conflictTotal, conflicted);
+    }
+    // A merge, cherry-pick or revert that stopped comes with the message
+    // git prepared: show it in the commit box, and take it away with the
+    // operation if it wasn't edited.
+    final prepares =
+        operation == RepoOperation.merge ||
+        operation == RepoOperation.cherryPick ||
+        operation == RepoOperation.revert;
+    if (prepares && _preparedMessage == null) {
+      final msg = await repo.preparedMessage();
+      if (msg != null && commitMessage.text.trim().isEmpty) {
+        commitMessage.text = msg;
+        _preparedMessage = msg;
+      }
+    } else if (!prepares && _preparedMessage != null) {
+      if (commitMessage.text.trim() == _preparedMessage) commitMessage.clear();
+      _preparedMessage = null;
+    }
+  }
+
+  /// Whether a stopped operation is waiting for a commit (merge,
+  /// cherry-pick, revert): committing finishes it.
+  bool get commitFinishesOperation =>
+      operation == RepoOperation.merge ||
+      operation == RepoOperation.cherryPick ||
+      operation == RepoOperation.revert;
+
   Future<void> _ensureCommitGraph() async {
     try {
       if (graph.commits.length < 2000) return;
@@ -317,6 +383,7 @@ class RepoTabController extends ChangeNotifier {
     if (operation == RepoOperation.none) {
       unawaited(repo.cleanupRebaseFiles().catchError((_) {}));
     }
+    await _updateConflictState(newStatus);
 
     final sig = StringBuffer(headSha ?? '')..write('|');
     for (final r in newRefs) {
@@ -825,20 +892,113 @@ class RepoTabController extends ChangeNotifier {
     busy = label;
     _notify();
     var ok = true;
+    Object? error;
+    final conflictsBefore = status.conflicted.length;
     try {
       await action();
       if (success != null) app.notify(success);
     } catch (e) {
       ok = false;
-      if (onError == null || !onError(e)) _reportError(e, label);
+      if (onError == null || !onError(e)) error = e;
     } finally {
       busy = null;
       try {
         await refresh();
       } catch (_) {}
+      if (error != null) {
+        // Stopping on conflicts isn't a failure: it's the next step.
+        if (_stoppedOnConflicts(error, conflictsBefore)) {
+          _reportConflicts(label);
+        } else {
+          _reportError(error, label);
+        }
+      }
       _notify();
     }
     return ok;
+  }
+
+  bool _stoppedOnConflicts(Object e, int conflictsBefore) {
+    final now = status.conflicted.length;
+    if (now == 0) return false;
+    if (now > conflictsBefore) return true;
+    final text = e is GitException ? '${e.stderr}\n${e.stdout}' : '';
+    return text.contains('CONFLICT') || text.contains('could not apply');
+  }
+
+  /// Says the operation stopped on conflicts and opens the first one.
+  void _reportConflicts(String label) {
+    final files = status.conflicted;
+    final n = files.length;
+    app.notify(
+      '$label stopped: $n file${n == 1 ? ' has' : 's have'} conflicts. '
+      'Resolve them, then continue.',
+      warning: true,
+    );
+    openWorkingFile(files.first, staged: false);
+  }
+
+  /// Applies (or pops) [stash]. Conflicts leave a [stashConflict] until
+  /// the user is done with them.
+  Future<void> applyStash(StashEntry stash, {required bool pop}) async {
+    final ok = await run(
+      pop ? 'Pop stash' : 'Apply stash',
+      () => repo.stashApply(stash.index, pop: pop),
+    );
+    if (!ok && status.conflicted.isNotEmpty) {
+      stashConflict = StashConflict(stash.sha, pop: pop);
+      conflictTotal = status.conflicted.length;
+      try {
+        conflictSides = await repo.conflictSides(RepoOperation.none);
+      } catch (_) {}
+      _notify();
+    }
+  }
+
+  /// After the conflicts of an applied stash are resolved: the changes
+  /// become ordinary (unstaged) changes again, and a popped stash is
+  /// dropped, as a clean pop would have.
+  Future<void> finishStashConflict() async {
+    final sc = stashConflict;
+    if (sc == null) return;
+    await run('Finish stash', () async {
+      await repo.unstageAll();
+      if (sc.pop) {
+        final i = stashes.indexWhere((s) => s.sha == sc.sha);
+        if (i >= 0) await repo.stashDrop(stashes[i].index);
+      }
+    });
+    stashConflict = null;
+    _notify();
+  }
+
+  /// Continues the operation in progress. A merge (cherry-pick, revert)
+  /// is committed with the message in the commit box, when there is one.
+  Future<void> continueOperation() async {
+    final op = operation;
+    if (commitFinishesOperation && commitMessage.text.trim().isNotEmpty) {
+      await commit();
+      return;
+    }
+    await run('Continue', () => repo.continueOperation(op));
+  }
+
+  /// Whether the working copy of [path] still has conflict markers.
+  Future<bool> hasConflictMarkers(String path) async {
+    final text = await repo.readWorkingText(path);
+    return text != null && ConflictedText.hasMarkers(text);
+  }
+
+  /// Opens the next conflicted file after [path] (or the first), or
+  /// closes the diff when none are left.
+  void openNextConflict([String? path]) {
+    final files = status.conflicted;
+    if (files.isEmpty) {
+      closeDiff();
+      return;
+    }
+    final i = files.indexWhere((e) => e.path == path);
+    openWorkingFile(files[(i + 1) % files.length], staged: false);
   }
 
   Future<void> fetch({bool auto = false}) async {
@@ -1037,7 +1197,7 @@ class RepoTabController extends ChangeNotifier {
       app.notify('Enter a commit message', error: true);
       return false;
     }
-    if (!amend && status.staged.isEmpty) {
+    if (!amend && status.staged.isEmpty && !commitFinishesOperation) {
       app.notify('Nothing staged to commit', error: true);
       return false;
     }
@@ -1047,6 +1207,7 @@ class RepoTabController extends ChangeNotifier {
     );
     if (ok) {
       commitMessage.clear();
+      _preparedMessage = null;
       amend = false;
       _notify();
     }

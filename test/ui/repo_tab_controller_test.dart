@@ -248,6 +248,62 @@ void main() {
       expect(target.setUpstream, isFalse);
     });
 
+    test('a merge that stops on conflicts is a state, not an error', () async {
+      t.git(['checkout', '-q', 'side']);
+      t.commit('side edit', {'a.txt': 'side\n'});
+      t.git(['checkout', '-q', 'main']);
+      await tab.load();
+      final messages = <AppMessage>[];
+      final sub = app.messages.listen(messages.add);
+      addTearDown(sub.cancel);
+
+      await tab.run('Merge', () => tab.repo.merge('side'));
+      await Future<void>.delayed(Duration.zero);
+      expect(messages.single.error, isFalse);
+      expect(messages.single.warning, isTrue);
+      expect(messages.single.text, contains('1 file has conflicts'));
+      // The conflicted file is opened, the sides are named, and the commit
+      // box holds git's message.
+      final target = tab.diffTarget as WorkingFileTarget;
+      expect(target.entry.path, 'a.txt');
+      expect(tab.conflictSides!.description, 'Merging side into main');
+      expect(tab.conflictTotal, 1);
+      expect(tab.commitMessage.text, startsWith("Merge branch 'side'"));
+      expect(await tab.hasConflictMarkers('a.txt'), isTrue);
+
+      await tab.repo.resolveWith('a.txt', ours: false);
+      await tab.refresh();
+      expect(await tab.hasConflictMarkers('a.txt'), isFalse);
+      // Committing finishes the merge, even with nothing new staged.
+      expect(await tab.commit(), isTrue);
+      expect(tab.operation, RepoOperation.none);
+      expect(tab.conflictSides, isNull);
+      expect(
+        t.git(['log', '-1', '--format=%P']).trim().split(' '),
+        hasLength(2),
+      );
+    });
+
+    test('a stash popped with conflicts, then finished', () async {
+      await tab.load();
+      t.write('a.txt', 'stashed\n');
+      await tab.repo.stashPush(message: 'wip');
+      t.commit('meanwhile', {'a.txt': 'meanwhile\n'});
+      await tab.refresh();
+      await tab.applyStash(tab.stashes.single, pop: true);
+      expect(tab.stashConflict?.pop, isTrue);
+      expect(tab.conflictSides?.incoming, 'stash');
+      expect(tab.stashes, hasLength(1)); // kept by git until we're done
+
+      t.write('a.txt', 'both\n');
+      await tab.repo.markResolved(['a.txt']);
+      await tab.finishStashConflict();
+      expect(tab.stashConflict, isNull);
+      expect(tab.stashes, isEmpty);
+      expect(tab.status.staged, isEmpty);
+      expect(tab.status.unstaged.single.path, 'a.txt');
+    });
+
     test('multi-selects commits with toggle and range', () async {
       await tab.load();
       String sha(String subject) =>

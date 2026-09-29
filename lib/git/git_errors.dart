@@ -53,6 +53,12 @@ String summarizeGitError(Object e) {
   if (has('[rejected]') && (has('fetch first') || has('non-fast-forward'))) {
     return 'The remote has commits you don\'t have. Pull first, then push.';
   }
+  if (has('conflict') &&
+      (has('fix conflicts') ||
+          has('could not apply') ||
+          has('automatic merge failed'))) {
+    return 'Stopped on conflicts: resolve them, then continue.';
+  }
   if (has('would be overwritten by')) {
     return 'Your local changes would be overwritten. Commit or stash them '
         'first.';

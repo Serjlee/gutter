@@ -76,7 +76,9 @@ class _RepoViewState extends State<RepoView> {
             child: Column(
               children: [
                 RepoToolbar(tab: tab, searchFocus: searchFocus),
-                if (tab.operation != RepoOperation.none)
+                if (tab.operation != RepoOperation.none ||
+                    tab.stashConflict != null ||
+                    tab.status.conflicted.isNotEmpty)
                   OperationBanner(tab: tab),
                 Expanded(
                   child: LayoutBuilder(
@@ -492,7 +494,9 @@ class _SearchBoxState extends State<_SearchBox> {
   }
 }
 
-/// Shown while a merge / rebase / cherry-pick / revert is in progress.
+/// Shown while a merge / rebase / cherry-pick / revert is in progress, or
+/// while a stash applied with conflicts: what's being combined, how many
+/// files still have conflicts, and the ways forward.
 class OperationBanner extends StatelessWidget {
   const OperationBanner({super.key, required this.tab});
   final RepoTabController tab;
@@ -501,23 +505,76 @@ class OperationBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final op = tab.operation;
     final conflicts = tab.status.conflicted.length;
+    final total = max(tab.conflictTotal, conflicts);
     final progress = tab.rebaseProgress;
     final idle = tab.busy == null;
+    final sides = tab.conflictSides;
+    final what = op == RepoOperation.none
+        ? (tab.stashConflict != null
+              ? sides?.description ?? 'Applying a stash'
+              : 'Conflicts in the working tree')
+        : sides?.description ?? '${op.label} in progress';
+    final String state;
+    if (conflicts > 0) {
+      state = total > 1
+          ? '$conflicts of $total files still have conflicts.'
+          : '1 file has conflicts.';
+    } else if (op == RepoOperation.none) {
+      state = 'All conflicts resolved: click Done to finish.';
+    } else if (tab.commitFinishesOperation) {
+      state =
+          'All conflicts resolved: continue to commit the '
+          '${op.label.toLowerCase()} (message below).';
+    } else {
+      state = 'Continue when ready.';
+    }
+    final color = conflicts > 0 ? AppColors.warning : AppColors.success;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: AppColors.warning.withValues(alpha: 0.16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      color: color.withValues(alpha: 0.16),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber, size: 18, color: AppColors.warning),
+          Icon(
+            conflicts > 0 ? Icons.warning_amber : Icons.check_circle_outline,
+            size: 18,
+            color: color,
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              '${op.label} in progress${progress != null ? ' ($progress)' : ''}. '
-              '${conflicts > 0 ? '$conflicts conflicted file${conflicts == 1 ? '' : 's'}: resolve them in the WIP panel, then continue.' : 'Continue when ready.'}',
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$what${progress != null ? ' ($progress)' : ''}. ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: state),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 13),
             ),
           ),
-          if (op != RepoOperation.bisect) ...[
+          if (conflicts > 0)
+            TextButton(
+              key: const ValueKey('banner-resolve'),
+              onPressed: () {
+                final t = tab.diffTarget;
+                tab.openNextConflict(
+                  t is WorkingFileTarget && t.entry.conflicted ? t.path : null,
+                );
+              },
+              child: const Text('Resolve…'),
+            ),
+          if (op == RepoOperation.none && tab.stashConflict != null)
+            FilledButton(
+              onPressed: idle && conflicts == 0
+                  ? tab.finishStashConflict
+                  : null,
+              child: const Text('Done'),
+            ),
+          if (op != RepoOperation.none && op != RepoOperation.bisect) ...[
             TextButton(
               onPressed: idle
                   ? () => tab.run('Abort', () => tab.repo.abortOperation(op))
@@ -538,12 +595,8 @@ class OperationBanner extends StatelessWidget {
               ),
             const SizedBox(width: 6),
             FilledButton(
-              onPressed: idle && conflicts == 0
-                  ? () => tab.run(
-                      'Continue',
-                      () => tab.repo.continueOperation(op),
-                    )
-                  : null,
+              key: const ValueKey('banner-continue'),
+              onPressed: idle && conflicts == 0 ? tab.continueOperation : null,
               child: const Text('Continue'),
             ),
           ],

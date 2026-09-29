@@ -63,8 +63,8 @@ class AppController extends ChangeNotifier {
 
   void save() => store?.save(settings);
 
-  void notify(String text, {bool error = false}) =>
-      _messages.add(AppMessage(text, error: error));
+  void notify(String text, {bool error = false, bool warning = false}) =>
+      _messages.add(AppMessage(text, error: error, warning: warning));
 
   /// Reports a failure readably ("Pull failed: …"). The toast offers the
   /// full output: [onDetails] shows it (e.g. in a tab's output panel),
@@ -333,9 +333,18 @@ class AppController extends ChangeNotifier {
 }
 
 class AppMessage {
-  AppMessage(this.text, {this.error = false, this.details, this.onDetails});
+  AppMessage(
+    this.text, {
+    this.error = false,
+    this.warning = false,
+    this.details,
+    this.onDetails,
+  });
   final String text;
   final bool error;
+
+  /// Needs attention, but isn't a failure (e.g. stopped on conflicts).
+  final bool warning;
 
   /// The full error output, shown by a "Details" button.
   final String? details;

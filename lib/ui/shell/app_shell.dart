@@ -72,7 +72,7 @@ class _AppShellState extends State<AppShell> {
     if (messenger == null) return;
     // A compact toast in the bottom-right corner, sized to the message.
     final screen = MediaQuery.sizeOf(context).width;
-    final maxWidth = m.error ? 520.0 : 380.0;
+    final maxWidth = m.error || m.warning ? 520.0 : 380.0;
     final textWidth = (TextPainter(
       text: TextSpan(text: m.text, style: const TextStyle(fontSize: 12.5)),
       textDirection: TextDirection.ltr,
@@ -86,7 +86,7 @@ class _AppShellState extends State<AppShell> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          duration: Duration(seconds: m.error ? 8 : 3),
+          duration: Duration(seconds: m.error || m.warning ? 8 : 3),
           margin: EdgeInsets.only(
             left: (screen - width - 16).clamp(16.0, double.infinity),
             right: 16,
@@ -110,9 +110,17 @@ class _AppShellState extends State<AppShell> {
               Padding(
                 padding: const EdgeInsets.only(top: 1),
                 child: Icon(
-                  m.error ? Icons.error_outline : Icons.check_circle_outline,
+                  m.error
+                      ? Icons.error_outline
+                      : m.warning
+                      ? Icons.warning_amber
+                      : Icons.check_circle_outline,
                   size: 16,
-                  color: m.error ? AppColors.danger : AppColors.success,
+                  color: m.error
+                      ? AppColors.danger
+                      : m.warning
+                      ? AppColors.warning
+                      : AppColors.success,
                 ),
               ),
               const SizedBox(width: 8),

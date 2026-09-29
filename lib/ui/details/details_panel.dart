@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
 import '../../git/models.dart';
+import '../diff/conflict_view.dart';
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
@@ -708,6 +709,12 @@ class WipPanel extends StatelessWidget {
   }) {
     switch (section) {
       case _WipSection.conflicts:
+        final sides = tab.conflictSides;
+        final current = sides?.current ?? 'current';
+        final incoming = sides?.incoming ?? 'incoming';
+        void takeCurrent() => takeConflictSide(tab, e.path, current: true);
+        void takeIncoming() => takeConflictSide(tab, e.path, current: false);
+        void markResolved() => markConflictResolved(context, tab, e.path);
         return _FileRow(
           depth: depth,
           nameOnly: nameOnly,
@@ -715,29 +722,53 @@ class WipPanel extends StatelessWidget {
           path: e.path,
           selected: _isSelected(e, false),
           onTap: () => tab.openWorkingFile(e, staged: false),
+          onSecondaryTap: (pos) => showContextMenu(context, pos, [
+            menuItem(
+              'Resolve…',
+              () => tab.openWorkingFile(e, staged: false),
+              icon: Icons.merge,
+            ),
+            menuItem(
+              "Take $current's version",
+              takeCurrent,
+              icon: Icons.person,
+            ),
+            menuItem(
+              "Take $incoming's version",
+              takeIncoming,
+              icon: Icons.person_outline,
+            ),
+            menuItem('Mark resolved', markResolved, icon: Icons.check),
+            const PopupMenuDivider(),
+            menuItem(
+              'Open in external editor',
+              () => openExternally(tab, e.path),
+              icon: Icons.open_in_new,
+            ),
+            menuItem(
+              'Copy path',
+              () => copyToClipboard(context, e.path),
+              icon: Icons.copy,
+            ),
+          ]),
           actions: [
             SmallIconButton(
-              icon: Icons.person_outline,
-              tooltip: 'Use ours (${e.conflictCode})',
-              onPressed: () => tab.run(
-                'Resolve',
-                () => tab.repo.resolveWith(e.path, ours: true),
-              ),
+              icon: Icons.person,
+              tooltip: "Take $current's version",
+              color: ConflictView.currentColor,
+              onPressed: takeCurrent,
             ),
             SmallIconButton(
-              icon: Icons.people_outline,
-              tooltip: 'Use theirs',
-              onPressed: () => tab.run(
-                'Resolve',
-                () => tab.repo.resolveWith(e.path, ours: false),
-              ),
+              icon: Icons.person_outline,
+              tooltip: "Take $incoming's version",
+              color: ConflictView.incomingColor,
+              onPressed: takeIncoming,
             ),
             SmallIconButton(
               icon: Icons.check,
-              tooltip: 'Mark resolved (stage file as is)',
+              tooltip: 'Mark resolved (stage the file as it is)',
               color: AppColors.success,
-              onPressed: () =>
-                  tab.run('Resolve', () => tab.repo.markResolved([e.path])),
+              onPressed: markResolved,
             ),
             SmallIconButton(
               icon: Icons.open_in_new,
@@ -915,7 +946,27 @@ class _CommitComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stagedCount = tab.status.staged.length;
-    final canCommit = (stagedCount > 0 || tab.amend) && tab.busy == null;
+    final conflicts = tab.status.conflicted.length;
+    // A stopped merge (cherry-pick, revert) is finished by committing, once
+    // its conflicts are resolved, even when nothing new is staged.
+    final finishes = tab.commitFinishesOperation && !tab.amend;
+    // A stopped rebase goes on with its own commits' messages.
+    final rebasing = tab.operation == RepoOperation.rebase && !tab.amend;
+    final canCommit =
+        conflicts == 0 &&
+        (stagedCount > 0 || tab.amend || finishes || rebasing) &&
+        tab.busy == null;
+    final label = conflicts > 0
+        ? 'Resolve conflicts to commit'
+        : rebasing
+        ? 'Continue rebase'
+        : finishes
+        ? 'Commit ${tab.operation.label.toLowerCase()}'
+        : tab.amend
+        ? 'Amend commit'
+        : (stagedCount == 0
+              ? 'Stage files to commit'
+              : 'Commit $stagedCount file${stagedCount == 1 ? '' : 's'}');
     return Padding(
       padding: const EdgeInsets.all(10),
       child: Column(
@@ -962,18 +1013,16 @@ class _CommitComposer extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           FilledButton(
-            onPressed: canCommit ? () => tab.commit() : null,
+            onPressed: !canCommit
+                ? null
+                : rebasing
+                ? tab.continueOperation
+                : () => tab.commit(),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.success,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: Text(
-              tab.amend
-                  ? 'Amend commit'
-                  : (stagedCount == 0
-                        ? 'Stage files to commit'
-                        : 'Commit $stagedCount file${stagedCount == 1 ? '' : 's'}'),
-            ),
+            child: Text(label),
           ),
         ],
       ),

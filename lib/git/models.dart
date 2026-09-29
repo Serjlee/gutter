@@ -293,6 +293,27 @@ class WorkingTreeStatus {
 }
 
 /// A multi-step operation that git is in the middle of.
+/// The two sides of the conflicts of an operation, by name: [current] is
+/// what's checked out ("ours"), [incoming] what's being applied
+/// ("theirs"; during a rebase, your commit being replayed).
+class ConflictSides {
+  const ConflictSides({
+    required this.current,
+    required this.incoming,
+    required this.description,
+    this.incomingDetail,
+  });
+  final String current;
+  final String incoming;
+
+  /// The commit being applied, when that's what the incoming side is
+  /// ("abc1234 Subject").
+  final String? incomingDetail;
+
+  /// e.g. "Merging feature into main".
+  final String description;
+}
+
 enum RepoOperation { none, merge, rebase, cherryPick, revert, bisect }
 
 extension RepoOperationLabel on RepoOperation {

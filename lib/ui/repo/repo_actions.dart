@@ -493,7 +493,11 @@ class RepoActions {
       tab.app.notify('No stashes');
       return;
     }
-    await tab.run('Pop stash', () => repo.stashPop(index));
+    final s = tab.stashes.firstWhere(
+      (s) => s.index == index,
+      orElse: () => tab.stashes.first,
+    );
+    await tab.applyStash(s, pop: true);
   }
 
   Future<void> dropStash(StashEntry s) async {
@@ -797,7 +801,7 @@ class RepoActions {
   List<PopupMenuEntry<VoidCallback>> stashMenu(StashEntry s) => [
     menuItem(
       'Apply stash',
-      () => tab.run('Apply stash', () => repo.stashApply(s.index)),
+      () => tab.applyStash(s, pop: false),
       icon: Icons.unarchive_outlined,
     ),
     menuItem('Pop stash', () => popStash(s.index), icon: Icons.outbox),

@@ -11,6 +11,7 @@ import '../dialogs/dialogs.dart';
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'conflict_view.dart';
 import 'file_preview.dart';
 import 'syntax.dart';
 
@@ -174,6 +175,13 @@ class _DiffViewState extends State<DiffView> {
   @override
   Widget build(BuildContext context) {
     final target = tab.diffTarget!;
+    if (target is WorkingFileTarget && target.entry.conflicted) {
+      return ConflictView(
+        key: ValueKey('conflict-${target.path}'),
+        tab: tab,
+        entry: target.entry,
+      );
+    }
     final diff = tab.diff;
     if (!identical(diff, _selectionFor)) {
       _selection.clear();
