@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../repo/repo_tab_controller.dart';
+import '../widgets/common.dart';
 import 'syntax.dart';
 
 const _imageExtensions = {
@@ -137,29 +138,37 @@ class _FilePreviewState extends State<FilePreview> {
               itemCount: lines.length,
               itemBuilder: (context, i) => Row(
                 children: [
-                  SizedBox(
-                    width: numWidth,
-                    child: Text(
-                      '${i + 1}',
-                      textAlign: TextAlign.right,
-                      style: monoStyle(size: 11.5, color: AppColors.textFaint),
+                  // Copies take the code, not the line numbers.
+                  SelectionContainer.disabled(
+                    child: SizedBox(
+                      width: numWidth,
+                      child: Text(
+                        '${i + 1}',
+                        textAlign: TextAlign.right,
+                        style: monoStyle(
+                          size: 11.5,
+                          color: AppColors.textFaint,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        style: monoStyle(size: 12.5),
-                        text: spans == null || i >= spans.length
-                            ? lines[i]
-                            : null,
-                        children: spans == null || i >= spans.length
-                            ? null
-                            : spans[i],
+                    child: SelectableLine(
+                      child: Text.rich(
+                        TextSpan(
+                          style: monoStyle(size: 12.5),
+                          text: spans == null || i >= spans.length
+                              ? lines[i]
+                              : null,
+                          children: spans == null || i >= spans.length
+                              ? null
+                              : spans[i],
+                        ),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
                       ),
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.fade,
                     ),
                   ),
                 ],

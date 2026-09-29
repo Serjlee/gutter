@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
@@ -513,4 +514,44 @@ Future<void> openWithSystem(String target) async {
       ? 'explorer'
       : 'xdg-open';
   await Process.start(cmd, [target], mode: ProcessStartMode.detached);
+}
+
+/// One line of a selectable list of lines (diffs, file previews), inside a
+/// [SelectionArea]. A selection that runs past its end copies a line break:
+/// otherwise the lines of a list are copied run together.
+class SelectableLine extends StatefulWidget {
+  const SelectableLine({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<SelectableLine> createState() => _SelectableLineState();
+}
+
+class _SelectableLineState extends State<SelectableLine> {
+  final _delegate = _LineDelegate();
+
+  @override
+  void dispose() {
+    _delegate.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      SelectionContainer(delegate: _delegate, child: widget.child);
+}
+
+class _LineDelegate extends StaticSelectionContainerDelegate {
+  @override
+  SelectedContent? getSelectedContent() {
+    final content = super.getSelectedContent();
+    final range = getSelection();
+    if (content == null || range == null) return content;
+    final end = range.startOffset > range.endOffset
+        ? range.startOffset
+        : range.endOffset;
+    return end >= contentLength
+        ? SelectedContent(plainText: '${content.plainText}\n')
+        : content;
+  }
 }

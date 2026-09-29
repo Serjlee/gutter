@@ -491,25 +491,31 @@ class _DiffViewState extends State<DiffView> {
     final spans = _highlightFor(diff, tab.diffTarget!.path);
     final noWidth = max(3, '$maxNo'.length) * _charWidth + 12;
     final contentWidth = noWidth * 2 + 20 + maxLen * _charWidth + 40;
+    // The code can be selected and copied; line numbers, markers and hunk
+    // headers stay out of the selection.
     return _scrollable(
       contentWidth,
-      ListView.builder(
-        controller: _vScroll,
-        itemExtent: _lineHeight,
-        itemCount: rows.length,
-        itemBuilder: (context, i) {
-          final (h, l) = rows[i];
-          if (l < 0) return _hunkHeader(diff, h);
-          final line = diff.hunks[h].lines[l];
-          return _UnifiedLine(
-            line: line,
-            spans: spans?[h][l],
-            numberWidth: noWidth,
-            selected: _selection[h]?.contains(l) ?? false,
-            selectable: _canSelect && line.isChange,
-            onToggle: (shift) => _toggleLine(h, l, shift: shift),
-          );
-        },
+      SelectionArea(
+        child: ListView.builder(
+          controller: _vScroll,
+          itemExtent: _lineHeight,
+          itemCount: rows.length,
+          itemBuilder: (context, i) {
+            final (h, l) = rows[i];
+            if (l < 0) {
+              return SelectionContainer.disabled(child: _hunkHeader(diff, h));
+            }
+            final line = diff.hunks[h].lines[l];
+            return _UnifiedLine(
+              line: line,
+              spans: spans?[h][l],
+              numberWidth: noWidth,
+              selected: _selection[h]?.contains(l) ?? false,
+              selectable: _canSelect && line.isChange,
+              onToggle: (shift) => _toggleLine(h, l, shift: shift),
+            );
+          },
+        ),
       ),
     );
   }
@@ -615,39 +621,43 @@ class _DiffViewState extends State<DiffView> {
     final spans = _highlightFor(diff, tab.diffTarget!.path);
     // Two half-width panes that always fit the view; long lines wrap and
     // both sides of a row keep the same height.
-    return ListView.builder(
-      controller: _vScroll,
-      itemCount: rows.length,
-      itemBuilder: (context, i) {
-        final (h, left, right) = rows[i];
-        if (left == -1 && right == -1) {
-          return SizedBox(height: _lineHeight, child: _hunkHeader(diff, h));
-        }
-        final lines = diff.hunks[h].lines;
-        Widget side(int? idx, bool isLeft) {
-          if (idx == null) return Container(color: AppColors.panel);
-          final line = lines[idx];
-          return _SplitLine(
-            line: line,
-            spans: spans?[h][idx],
-            number: isLeft ? line.oldNo : line.newNo,
-            selected: _selection[h]?.contains(idx) ?? false,
-            selectable: _canSelect && line.isChange,
-            onToggle: (shift) => _toggleLine(h, idx, shift: shift),
-          );
-        }
+    return SelectionArea(
+      child: ListView.builder(
+        controller: _vScroll,
+        itemCount: rows.length,
+        itemBuilder: (context, i) {
+          final (h, left, right) = rows[i];
+          if (left == -1 && right == -1) {
+            return SelectionContainer.disabled(
+              child: SizedBox(height: _lineHeight, child: _hunkHeader(diff, h)),
+            );
+          }
+          final lines = diff.hunks[h].lines;
+          Widget side(int? idx, bool isLeft) {
+            if (idx == null) return Container(color: AppColors.panel);
+            final line = lines[idx];
+            return _SplitLine(
+              line: line,
+              spans: spans?[h][idx],
+              number: isLeft ? line.oldNo : line.newNo,
+              selected: _selection[h]?.contains(idx) ?? false,
+              selectable: _canSelect && line.isChange,
+              onToggle: (shift) => _toggleLine(h, idx, shift: shift),
+            );
+          }
 
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: side(left, true)),
-              Container(width: 1, color: AppColors.border),
-              Expanded(child: side(right, false)),
-            ],
-          ),
-        );
-      },
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: side(left, true)),
+                Container(width: 1, color: AppColors.border),
+                Expanded(child: side(right, false)),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -723,20 +733,24 @@ class _UnifiedLine extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(
-            width: 20,
-            child: Text(
-              line.marker == ' ' ? '' : line.marker,
-              textAlign: TextAlign.center,
-              style: monoStyle(size: 12.5, color: fg),
+          SelectionContainer.disabled(
+            child: SizedBox(
+              width: 20,
+              child: Text(
+                line.marker == ' ' ? '' : line.marker,
+                textAlign: TextAlign.center,
+                style: monoStyle(size: 12.5, color: fg),
+              ),
             ),
           ),
           Expanded(
-            child: Text.rich(
-              _lineSpan(line, spans, fg),
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.clip,
+            child: SelectableLine(
+              child: Text.rich(
+                _lineSpan(line, spans, fg),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+              ),
             ),
           ),
         ],
@@ -789,7 +803,9 @@ class _SplitLine extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Text.rich(_lineSpan(line, spans, fg), softWrap: true),
+              child: SelectableLine(
+                child: Text.rich(_lineSpan(line, spans, fg), softWrap: true),
+              ),
             ),
           ),
         ],
@@ -847,7 +863,10 @@ class _Gutter extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      SelectionContainer.disabled(child: _build(context));
+
+  Widget _build(BuildContext context) {
     if (!selectable) return child;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
