@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import 'git_errors.dart';
 import 'git_runner.dart';
 import 'models.dart';
 import 'parsers/diff_parser.dart';
@@ -882,16 +883,34 @@ class Repository {
 
   // --------------------------------------------------------------- network
 
-  Future<void> fetch({String? remote, bool prune = true}) => _net([
-    // Keep the commit-graph cache current so history loads stay fast.
-    '-c',
-    'fetch.writeCommitGraph=true',
-    'fetch',
-    if (remote == null) '--all' else remote,
-    if (prune) '--prune',
-    '--tags',
-    // Not --quiet: its "Fetching <remote>" lines say which remote failed.
-  ]);
+  /// Waits before retrying a fetch that ran into another git's lock.
+  static const fetchRetryDelays = [Duration(seconds: 1), Duration(seconds: 3)];
+
+  Future<void> fetch({String? remote, bool prune = true}) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await _net([
+          // Keep the commit-graph cache current so history loads stay fast.
+          '-c',
+          'fetch.writeCommitGraph=true',
+          'fetch',
+          if (remote == null) '--all' else remote,
+          if (prune) '--prune',
+          '--tags',
+          // Not --quiet: its "Fetching <remote>" lines say which remote
+          // failed.
+        ]);
+        return;
+      } on GitException catch (e) {
+        // Another git (an editor's auto-fetch, say) was updating the same
+        // refs: fetching again is harmless, and usually works.
+        if (attempt >= fetchRetryDelays.length || !isLockContention(e)) {
+          rethrow;
+        }
+        await Future<void>.delayed(fetchRetryDelays[attempt]);
+      }
+    }
+  }
 
   Future<void> pull(PullMode mode) => _net([
     'pull',

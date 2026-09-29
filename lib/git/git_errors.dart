@@ -82,6 +82,14 @@ String _summarize(GitException e) {
   return _firstMessage(text) ?? e.message;
 }
 
+/// Whether [e] failed on a lock another git process held (or on a ref it
+/// moved meanwhile): worth trying again in a moment.
+bool isLockContention(GitException e) {
+  final s = e.stderr.toLowerCase();
+  return s.contains('cannot lock ref') ||
+      (s.contains('.lock') && s.contains('file exists'));
+}
+
 /// Progress lines, not the problem itself.
 final _noise = RegExp(
   r'^(Fetching \S+$|From |(error: )?could not fetch )',

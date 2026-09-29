@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -75,6 +76,28 @@ void main() {
     t.git(['config', 'core.sshCommand', 'ssh -i /tmp/key']);
     expect(await runner.sshEnvironment(t.path), isEmpty);
   }, skip: Platform.environment.containsKey('GIT_SSH_COMMAND'));
+
+  test('a fetch that runs into another git\'s lock tries again', () async {
+    final upstream = await TempRepo.create();
+    addTearDown(upstream.dispose);
+    upstream.commit('one', {'a.txt': 'a\n'});
+    t.git(['remote', 'add', 'origin', upstream.path]);
+    t.git(['fetch', '-q', 'origin']);
+    upstream.commit('two', {'a.txt': 'b\n'});
+    // Held by "another git" until shortly after the first attempt.
+    final lock = File('${t.path}/.git/refs/remotes/origin/main.lock')
+      ..writeAsStringSync('');
+    Timer(const Duration(milliseconds: 300), lock.deleteSync);
+    await t.repo.fetch();
+    final fetches = t.repo.commands.entries.where(
+      (e) => e.args.contains('fetch'),
+    );
+    expect(fetches.map((e) => e.failed), [true, false]);
+    expect(
+      t.git(['rev-parse', 'origin/main']).trim(),
+      upstream.git(['rev-parse', 'HEAD']).trim(),
+    );
+  });
 
   test('a failed background fetch says which remote failed', () async {
     t.commit('one', {'a.txt': 'a\n'});
@@ -154,6 +177,23 @@ void main() {
         summary('Fetching a\nFetching b\nerror: could not fetch b\n'),
         'Couldn\'t fetch b.',
       );
+    });
+
+    test('lock contention is told apart', () {
+      bool lock(String stderr) =>
+          isLockContention(GitException(['fetch'], 1, stderr));
+      expect(
+        lock(
+          "error: cannot lock ref 'refs/remotes/origin/main': is at 1a2b "
+          'but expected 3c4d',
+        ),
+        isTrue,
+      );
+      expect(
+        lock("fatal: Unable to create '/r/.git/shallow.lock': File exists."),
+        isTrue,
+      );
+      expect(lock('fatal: Could not read from remote repository.'), isFalse);
     });
 
     test('details show the command, its output and exit code', () {
