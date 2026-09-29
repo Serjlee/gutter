@@ -71,6 +71,10 @@ String _summarize(GitException e) {
           has('automatic merge failed'))) {
     return 'Stopped on conflicts: resolve them, then continue.';
   }
+  if (has('would clobber existing tag')) {
+    return 'Tags moved on the remote. Force Tag Fetch replaces the local '
+        'ones.';
+  }
   if (has('would be overwritten by')) {
     return 'Your local changes would be overwritten. Commit or stash them '
         'first.';
@@ -89,6 +93,22 @@ bool isLockContention(GitException e) {
   return s.contains('cannot lock ref') ||
       (s.contains('.lock') && s.contains('file exists'));
 }
+
+/// The tags a fetch refused to move ("would clobber existing tag"): they
+/// point elsewhere on the remote.
+List<String> movedTagsIn(GitException e) => {
+  for (final m in RegExp(
+    r'\[rejected\]\s+(\S+)\s+->\s+\S+\s+\(would clobber existing tag\)',
+  ).allMatches(e.stderr))
+    m.group(1)!,
+}.toList();
+
+/// Whether [e] failed only because tags moved on the remote: everything
+/// else was fetched.
+bool onlyTagsMoved(GitException e) =>
+    movedTagsIn(e).isNotEmpty &&
+    !RegExp(r'^fatal:', multiLine: true).hasMatch(e.stderr) &&
+    !RegExp(r'\[rejected\].*\((?!would clobber)').hasMatch(e.stderr);
 
 /// Progress lines, not the problem itself.
 final _noise = RegExp(

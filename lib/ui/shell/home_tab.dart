@@ -438,6 +438,21 @@ class _SettingsForm extends StatelessWidget {
           ),
         ),
         _row(
+          'Force tag fetch',
+          AppDropdown<bool>(
+            key: const ValueKey('force-tag-fetch'),
+            value: s.forceTagFetch,
+            items: const [(false, 'Ask', null), (true, 'Always', null)],
+            onChanged: app.setForceTagFetch,
+          ),
+          info:
+              'When a tag moved on the remote (deploy tags like "dev" or '
+              '"staging" often do), git won\'t move your local one.\n\n'
+              'Ask: Gutter lists the moved tags and offers Force Tag Fetch, '
+              'which replaces your local tags with the remote\'s.\n\n'
+              'Always: every fetch does that, without asking.',
+        ),
+        _row(
           'Zoom',
           Row(
             mainAxisSize: MainAxisSize.min,

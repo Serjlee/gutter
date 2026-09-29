@@ -227,6 +227,20 @@ class RepoTabController extends ChangeNotifier {
   GitLogEntry? fetchErrorEntry;
   bool fetching = false;
 
+  /// Tags the last fetch didn't move: they point elsewhere on the remote.
+  List<String> movedTags = const [];
+  String? _movedTagsAsked;
+
+  /// Whether to offer Force Tag Fetch for [movedTags] now: once for each
+  /// set of tags, and again after a fetch the user asked for.
+  bool takeMovedTagsPrompt() {
+    if (movedTags.isEmpty || !_active) return false;
+    final key = movedTags.join('\n');
+    if (key == _movedTagsAsked) return false;
+    _movedTagsAsked = key;
+    return true;
+  }
+
   bool _active = false;
   bool _disposed = false;
   Timer? _pollTimer;
@@ -1049,15 +1063,28 @@ class RepoTabController extends ChangeNotifier {
     openWorkingFile(files[(i + 1) % files.length], staged: false);
   }
 
-  Future<void> fetch({bool auto = false}) async {
+  /// Fetches all remotes. With [forceTags] (or the setting), tags that
+  /// moved on the remote replace the local ones; otherwise they're listed
+  /// in [movedTags].
+  Future<void> fetch({bool auto = false, bool forceTags = false}) async {
     if (fetching) return;
     fetching = true;
     _notify();
     try {
-      await repo.fetch();
+      await repo.fetch(forceTags: forceTags || app.settings.forceTagFetch);
       fetchError = null;
       fetchErrorEntry = null;
+      movedTags = const [];
     } catch (e) {
+      if (e is GitException && onlyTagsMoved(e)) {
+        // Everything else was fetched: not a failure.
+        fetchError = null;
+        fetchErrorEntry = null;
+        movedTags = movedTagsIn(e);
+        // A fetch the user asked for offers Force Tag Fetch again.
+        if (!auto) _movedTagsAsked = null;
+        return;
+      }
       fetchError = summarizeGitError(e);
       fetchErrorEntry = e is GitException ? e.entry : null;
       if (!auto) _reportError(e, 'Fetch');

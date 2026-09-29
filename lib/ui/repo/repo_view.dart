@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/repository.dart';
 import '../details/details_panel.dart';
+import '../dialogs/dialogs.dart';
 import '../diff/diff_view.dart';
 import '../graph_view/commit_graph_view.dart';
 import '../sidebar/sidebar.dart';
@@ -29,9 +30,38 @@ class _RepoViewState extends State<RepoView> {
   final searchFocus = FocusNode(debugLabel: 'search');
 
   @override
+  void initState() {
+    super.initState();
+    widget.tab.addListener(_offerForceTagFetch);
+    _offerForceTagFetch();
+  }
+
+  @override
+  void didUpdateWidget(RepoView old) {
+    super.didUpdateWidget(old);
+    if (old.tab != widget.tab) {
+      old.tab.removeListener(_offerForceTagFetch);
+      widget.tab.addListener(_offerForceTagFetch);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.tab.removeListener(_offerForceTagFetch);
     searchFocus.dispose();
     super.dispose();
+  }
+
+  /// Pops up Force Tag Fetch when a fetch found tags moved on the remote.
+  void _offerForceTagFetch() {
+    if (widget.tab.movedTags.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Not over another dialog.
+      if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+      if (widget.tab.takeMovedTagsPrompt()) {
+        showMovedTags(context, widget.tab);
+      }
+    });
   }
 
   @override
@@ -327,6 +357,7 @@ class RepoToolbar extends StatelessWidget {
                 ),
               ),
             if (tab.fetchError != null) _FetchFailed(tab: tab),
+            if (tab.movedTags.isNotEmpty) _TagsMoved(tab: tab),
             _SearchBox(
               tab: tab,
               focus: searchFocus,
@@ -389,6 +420,132 @@ class _FetchFailed extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Shown while tags that moved on the remote weren't moved here; offers
+/// Force Tag Fetch.
+class _TagsMoved extends StatelessWidget {
+  const _TagsMoved({required this.tab});
+  final RepoTabController tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = tab.movedTags.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: '$n ${n == 1 ? 'tag' : 'tags'} moved on the remote',
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            key: const ValueKey('tags-moved'),
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => showMovedTags(context, tab),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sell_outlined, size: 16, color: AppColors.warning),
+                  SizedBox(width: 5),
+                  Text(
+                    'Tags moved',
+                    style: TextStyle(fontSize: 12, color: AppColors.warning),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lists the tags that moved on the remote, and offers to move the local
+/// ones too (once, or on every fetch from now on).
+Future<void> showMovedTags(BuildContext context, RepoTabController tab) async {
+  final tags = tab.movedTags;
+  if (tags.isEmpty) return;
+  var always = false;
+  final one = tags.length == 1;
+  final go = await showAppDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        title: Text(
+          one ? 'A tag moved on the remote' : 'Tags moved on the remote',
+          style: const TextStyle(fontSize: 17),
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460, maxHeight: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                one
+                    ? 'This tag points to a different commit on the remote. '
+                          'Force Tag Fetch replaces your local tag with the '
+                          'remote\'s.'
+                    : 'These tags point to different commits on the remote. '
+                          'Force Tag Fetch replaces your local tags with the '
+                          'remote\'s.',
+                style: const TextStyle(color: AppColors.textDim),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    tags.join('\n'),
+                    style: monoStyle(size: 12.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                key: const ValueKey('force-tag-fetch-always'),
+                onTap: () => setState(() => always = !always),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: Checkbox(
+                        value: always,
+                        onChanged: (v) => setState(() => always = v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Always force tag fetch',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            key: const ValueKey('force-tag-fetch'),
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Force Tag Fetch'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (go != true) return;
+  if (always) tab.app.setForceTagFetch(true);
+  await tab.fetch(forceTags: true);
 }
 
 class _ToolbarDivider extends StatelessWidget {

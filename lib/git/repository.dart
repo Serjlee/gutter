@@ -886,7 +886,13 @@ class Repository {
   /// Waits before retrying a fetch that ran into another git's lock.
   static const fetchRetryDelays = [Duration(seconds: 1), Duration(seconds: 3)];
 
-  Future<void> fetch({String? remote, bool prune = true}) async {
+  /// With [forceTags], tags moved on the remote (deploy tags, say) replace
+  /// the local ones; without, git rejects them (see [movedTagsIn]).
+  Future<void> fetch({
+    String? remote,
+    bool prune = true,
+    bool forceTags = false,
+  }) async {
     for (var attempt = 0; ; attempt++) {
       try {
         await _net([
@@ -897,6 +903,9 @@ class Repository {
           if (remote == null) '--all' else remote,
           if (prune) '--prune',
           '--tags',
+          // Remote-tracking branches are force-updated anyway: this only
+          // changes what happens to tags.
+          if (forceTags) '--force',
           // Not --quiet: its "Fetching <remote>" lines say which remote
           // failed.
         ]);

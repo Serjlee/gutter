@@ -238,6 +238,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setForceTagFetch(bool value) {
+    settings.forceTagFetch = value;
+    save();
+    notifyListeners();
+  }
+
   void setFileTree(bool value) {
     settings.fileTree = value;
     save();

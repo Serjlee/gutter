@@ -31,6 +31,9 @@ class Settings {
   /// Show GitHub profile pictures for commit authors of GitHub repositories.
   bool githubAvatars = true;
 
+  /// Fetch replaces local tags that moved on the remote, without asking.
+  bool forceTagFetch = false;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -50,6 +53,7 @@ class Settings {
     // off, for everyone.
     'syntaxHighlighting': syntaxHighlight,
     'githubAvatars': githubAvatars,
+    'forceTagFetch': forceTagFetch,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -71,7 +75,8 @@ class Settings {
       ..diffSplit = j['diffSplit'] == true
       ..fileTree = j['fileTree'] == true
       ..syntaxHighlight = j['syntaxHighlighting'] != false
-      ..githubAvatars = j['githubAvatars'] != false;
+      ..githubAvatars = j['githubAvatars'] != false
+      ..forceTagFetch = j['forceTagFetch'] == true;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {
