@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
 import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/update_checker.dart';
+import 'package:gutter/app/updater.dart';
 import 'package:gutter/app/version.dart';
+import 'package:gutter/ui/dialogs/update_dialog.dart';
 import 'package:gutter/ui/shell/home_tab.dart';
 
 const release = ReleaseInfo(
@@ -37,8 +39,21 @@ void main() {
       'html_url': 'https://github.com/serjlee/gutter/releases/tag/v1.2.3',
       'published_at': '2026-09-24T10:00:00Z',
       'name': 'Gutter v1.2.3',
+      'body': 'What\'s new',
+      'assets': [
+        {
+          'name': 'SHA256SUMS',
+          'size': 200,
+          'browser_download_url': 'https://github.com/serjlee/gutter/releases/download/v1.2.3/SHA256SUMS',
+        },
+        {'name': 'broken'},
+      ],
     });
     expect(r!.tag, 'v1.2.3');
+    expect(r.version, '1.2.3');
+    expect(r.notes, 'What\'s new');
+    expect(r.assets.single.name, 'SHA256SUMS');
+    expect(r.assets.single.size, 200);
     expect(r.publishedAt, DateTime.utc(2026, 9, 24, 10));
     expect(ReleaseInfo.fromGitHubJson({'message': 'Not Found'}), isNull);
     expect(ReleaseInfo.fromGitHubJson('nope'), isNull);
@@ -105,7 +120,12 @@ void main() {
       current: const AppVersion(version: '0.1.0', commit: 'abc1234'),
       fetcher: () async => release,
     );
-    final app = AppController(null, Settings(), updates: checker);
+    final app = AppController(
+      null,
+      Settings(),
+      updates: checker,
+      updater: Updater(installation: const Installation(InstallKind.flatpak)),
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: HomeTab(app: app)),
@@ -118,6 +138,36 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('update-available')), findsOneWidget);
     expect(find.text('v0.2.0 is available'), findsOneWidget);
-    expect(find.text('Open release page'), findsOneWidget);
+    // The dialog: Flatpak installs get a plain download.
+    await tester.tap(find.byKey(const ValueKey('update-open')));
+    await tester.pump();
+    expect(find.text('Gutter 0.2.0 is available'), findsOneWidget);
+    expect(find.text('You have 0.1.0.'), findsOneWidget);
+    expect(find.text('Download'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('update-skip')));
+    await tester.pump();
+    expect(app.settings.skippedUpdate, 'v0.2.0');
+    expect(app.takeUpdateOffer(), isFalse);
+  });
+
+  test('offers each release once, and never a skipped one', () async {
+    final checker = UpdateChecker(
+      current: const AppVersion(version: '0.1.0'),
+      fetcher: () async => release,
+    );
+    final app = AppController(null, Settings(), updates: checker);
+    expect(app.takeUpdateOffer(), isFalse); // nothing known yet
+    await checker.check();
+    expect(app.takeUpdateOffer(), isTrue);
+    expect(app.takeUpdateOffer(), isFalse);
+  });
+
+  test('release notes without the install notes', () {
+    expect(
+      releaseNotesText(
+        '## What\'s new\n\n- **Faster** `fetch`\n\n---\n\n**macOS**: unzip',
+      ),
+      'What\'s new\n\n- Faster fetch',
+    );
   });
 }

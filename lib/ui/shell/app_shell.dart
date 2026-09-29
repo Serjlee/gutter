@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../dialogs/dialogs.dart';
+import '../dialogs/update_dialog.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
 import 'tab_strip.dart';
@@ -36,16 +37,27 @@ class _AppShellState extends State<AppShell> {
     // whatever has focus (focus falls back to the root scope, above any
     // Shortcuts widget, when the focused widget goes away).
     HardwareKeyboard.instance.addHandler(_onKey);
+    app.updates.addListener(_offerUpdate);
   }
 
   @override
   void dispose() {
+    app.updates.removeListener(_offerUpdate);
     HardwareKeyboard.instance.removeHandler(_onKey);
     _messages?.cancel();
     super.dispose();
   }
 
   ModalRoute<Object?>? _route;
+
+  /// Pops up the update dialog when a newer release shows up.
+  void _offerUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Not over another dialog: next check, then.
+      if (!mounted || _route?.isCurrent == false) return;
+      if (app.takeUpdateOffer()) showUpdateDialog(context, app);
+    });
+  }
 
   @override
   void didChangeDependencies() {

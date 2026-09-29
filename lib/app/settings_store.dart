@@ -34,6 +34,9 @@ class Settings {
   /// Fetch replaces local tags that moved on the remote, without asking.
   bool forceTagFetch = false;
 
+  /// A release the user chose to skip (its tag): not offered again.
+  String? skippedUpdate;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -54,6 +57,7 @@ class Settings {
     'syntaxHighlighting': syntaxHighlight,
     'githubAvatars': githubAvatars,
     'forceTagFetch': forceTagFetch,
+    'skippedUpdate': skippedUpdate,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -76,7 +80,8 @@ class Settings {
       ..fileTree = j['fileTree'] == true
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
-      ..forceTagFetch = j['forceTagFetch'] == true;
+      ..forceTagFetch = j['forceTagFetch'] == true
+      ..skippedUpdate = j['skippedUpdate'] as String?;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

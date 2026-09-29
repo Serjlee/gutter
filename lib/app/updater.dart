@@ -1,0 +1,372 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+
+import 'update_checker.dart';
+
+enum InstallKind {
+  /// Gutter.app on macOS.
+  macApp,
+
+  /// The folder of the Linux tarball.
+  linuxBundle,
+
+  /// Installed from the Flatpak bundle: updates are downloaded, not
+  /// installed.
+  flatpak,
+
+  /// Can't update itself; see [Installation.reason].
+  unsupported,
+}
+
+/// Where and how this copy of Gutter is installed, and so how it updates.
+class Installation {
+  const Installation(this.kind, {this.path = '', this.reason});
+
+  final InstallKind kind;
+
+  /// The .app bundle (macOS) or the folder holding the `gutter` executable
+  /// (Linux).
+  final String path;
+
+  /// Why it can't update itself, when it can't.
+  final String? reason;
+
+  bool get canSelfUpdate =>
+      kind == InstallKind.macApp || kind == InstallKind.linuxBundle;
+
+  static final _macZip = RegExp(r'^Gutter-macos-.*\.zip$');
+  static final _linuxTarball = RegExp(r'^gutter-linux-x64-.*\.tar\.gz$');
+  static final _flatpak = RegExp(r'^gutter-linux-x64-.*\.flatpak$');
+
+  /// The file of [release] for this installation.
+  ReleaseAsset? assetIn(ReleaseInfo release) => switch (kind) {
+    InstallKind.macApp => release.asset(_macZip.hasMatch),
+    InstallKind.linuxBundle => release.asset(_linuxTarball.hasMatch),
+    InstallKind.flatpak => release.asset(_flatpak.hasMatch),
+    InstallKind.unsupported => null,
+  };
+
+  /// Looks at the running executable (overridable for tests).
+  static Installation detect({
+    String? executable,
+    bool? macOS,
+    bool? linux,
+    bool? flatpak,
+  }) {
+    final exe = executable ?? Platform.resolvedExecutable;
+    if (flatpak ?? (Platform.isLinux && File('/.flatpak-info').existsSync())) {
+      return const Installation(InstallKind.flatpak);
+    }
+    if (macOS ?? Platform.isMacOS) {
+      // …/Gutter.app/Contents/MacOS/gutter
+      final app = p.dirname(p.dirname(p.dirname(exe)));
+      if (!app.endsWith('.app')) {
+        return const Installation(
+          InstallKind.unsupported,
+          reason: 'Gutter isn\'t running from an app bundle.',
+        );
+      }
+      if (app.contains('/AppTranslocation/')) {
+        return Installation(
+          InstallKind.unsupported,
+          path: app,
+          reason:
+              'macOS runs Gutter from a temporary read-only copy, because it '
+              'still has the download quarantine flag. Move Gutter.app to '
+              'Applications and clear the flag (see the release notes); then '
+              'it can update itself.',
+        );
+      }
+      return _writable(app, InstallKind.macApp);
+    }
+    if (linux ?? Platform.isLinux) {
+      final dir = p.dirname(exe);
+      if (!Directory(p.join(dir, 'data', 'flutter_assets')).existsSync()) {
+        return const Installation(
+          InstallKind.unsupported,
+          reason: 'Gutter isn\'t running from its release folder.',
+        );
+      }
+      return _writable(dir, InstallKind.linuxBundle);
+    }
+    return const Installation(
+      InstallKind.unsupported,
+      reason: 'Updating isn\'t supported on this system.',
+    );
+  }
+
+  /// [kind] at [path], if its folder lets us put the new version there.
+  static Installation _writable(String path, InstallKind kind) {
+    try {
+      Directory(p.dirname(path)).createTempSync('.gutter-').deleteSync();
+      return Installation(kind, path: path);
+    } on FileSystemException {
+      return Installation(
+        InstallKind.unsupported,
+        path: path,
+        reason:
+            'Gutter can\'t write to ${p.dirname(path)}, so it can\'t replace '
+            'itself there.',
+      );
+    }
+  }
+}
+
+class UpdateException implements Exception {
+  UpdateException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+enum UpdateStage { idle, downloading, unpacking, ready, scheduled, failed }
+
+/// Downloads a release, checks it against the release's SHA256SUMS, unpacks
+/// it next to the installed copy, and swaps it in once Gutter quits.
+class Updater extends ChangeNotifier {
+  Updater({this._installation, HttpClient Function()? httpClient})
+    : _httpClient = httpClient ?? _defaultClient;
+
+  final Installation? _installation;
+  final HttpClient Function() _httpClient;
+
+  late final Installation installation = _installation ?? Installation.detect();
+
+  UpdateStage stage = UpdateStage.idle;
+
+  /// The release being downloaded, or ready.
+  ReleaseInfo? release;
+
+  /// Download progress (0–1), when the size is known.
+  double? progress;
+  String? error;
+
+  String? _work;
+  String? _staged;
+
+  bool get busy =>
+      stage == UpdateStage.downloading || stage == UpdateStage.unpacking;
+
+  static HttpClient _defaultClient() => HttpClient()
+    ..connectionTimeout = const Duration(seconds: 15)
+    ..findProxy = HttpClient.findProxyFromEnvironment
+    ..userAgent = 'gutter-updater';
+
+  /// Gets [r] ready to install.
+  Future<void> prepare(ReleaseInfo r) async {
+    if (busy) return;
+    if (release?.tag == r.tag &&
+        (stage == UpdateStage.ready || stage == UpdateStage.scheduled)) {
+      return;
+    }
+    release = r;
+    error = null;
+    progress = null;
+    _set(UpdateStage.downloading);
+    final work = p.join(p.dirname(installation.path), '.gutter-update');
+    try {
+      if (!installation.canSelfUpdate) {
+        throw UpdateException(installation.reason ?? 'Can\'t update.');
+      }
+      final asset =
+          installation.assetIn(r) ??
+          (throw UpdateException('${r.tag} has no download for this system.'));
+      final sums =
+          r.asset((n) => n == 'SHA256SUMS') ??
+          (throw UpdateException(
+            '${r.tag} has no checksums (SHA256SUMS) to check the download '
+            'against.',
+          ));
+      final dir = Directory(work);
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      dir.createSync(recursive: true);
+      _work = work;
+
+      final file = File(p.join(work, asset.name));
+      await _download(asset.url, file, size: asset.size);
+      final expected = parseSha256Sums(
+        utf8.decode(await _get(sums.url)),
+      )[asset.name];
+      if (expected == null) {
+        throw UpdateException('SHA256SUMS doesn\'t list ${asset.name}.');
+      }
+      final actual = (await sha256.bind(file.openRead()).first).toString();
+      if (actual != expected.toLowerCase()) {
+        throw UpdateException(
+          'The download doesn\'t match its checksum. Try again.',
+        );
+      }
+
+      _set(UpdateStage.unpacking);
+      final out = Directory(p.join(work, 'new'))..createSync();
+      _staged = await _unpack(file, out);
+      file.deleteSync();
+      _set(UpdateStage.ready);
+    } catch (e) {
+      error = e is UpdateException
+          ? e.message
+          : e is SocketException || e is HttpException
+          ? 'Download failed: ${e is HttpException ? e.message : e}'
+          : e.toString();
+      _cleanUp(work);
+      _set(UpdateStage.failed);
+    }
+  }
+
+  /// Unpacks [archive] into [out]; returns the new app bundle or folder.
+  Future<String> _unpack(File archive, Directory out) async {
+    Future<void> run(String exe, List<String> args) async {
+      final r = await Process.run(exe, args);
+      if (r.exitCode != 0) {
+        throw UpdateException(
+          'Couldn\'t unpack the update: ${'${r.stderr}'.trim()}',
+        );
+      }
+    }
+
+    if (installation.kind == InstallKind.macApp) {
+      await run('ditto', ['-x', '-k', archive.path, out.path]);
+      final app = out
+          .listSync()
+          .whereType<Directory>()
+          .where((d) => d.path.endsWith('.app'))
+          .firstOrNull;
+      if (app == null) throw UpdateException('The download has no app.');
+      await run('codesign', ['--verify', '--deep', '--strict', app.path]);
+      return app.path;
+    }
+    await run('tar', ['xzf', archive.path, '-C', out.path]);
+    final dir = out
+        .listSync()
+        .whereType<Directory>()
+        .where((d) => File(p.join(d.path, 'gutter')).existsSync())
+        .firstOrNull;
+    if (dir == null) throw UpdateException('The download has no Gutter.');
+    return dir.path;
+  }
+
+  /// Starts the helper that swaps the update in once Gutter (or [waitFor])
+  /// exits; with [relaunch], it then starts the new version. For "restart
+  /// now", quit right after.
+  Future<void> install({required bool relaunch, int? waitFor}) async {
+    if (stage != UpdateStage.ready) return;
+    final script = File(p.join(_work!, 'install.sh'))
+      ..writeAsStringSync(installScript);
+    await Process.start('/bin/sh', [
+      script.path,
+      '${waitFor ?? pid}',
+      installation.path,
+      _staged!,
+      relaunch ? '1' : '0',
+      _work!,
+    ], mode: ProcessStartMode.detached);
+    _set(UpdateStage.scheduled);
+  }
+
+  Future<void> _download(String url, File to, {int size = 0}) async {
+    final client = _httpClient();
+    try {
+      final res = await _open(client, url);
+      final total = res.contentLength > 0 ? res.contentLength : size;
+      final sink = to.openWrite();
+      var got = 0;
+      var last = DateTime.now();
+      try {
+        await for (final chunk in res) {
+          sink.add(chunk);
+          got += chunk.length;
+          final now = DateTime.now();
+          if (total > 0 && now.difference(last).inMilliseconds > 100) {
+            last = now;
+            progress = got / total;
+            notifyListeners();
+          }
+        }
+      } finally {
+        await sink.close();
+      }
+      progress = 1;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<List<int>> _get(String url) async {
+    final client = _httpClient();
+    try {
+      final res = await _open(client, url);
+      final out = BytesBuilder(copy: false);
+      await res.forEach(out.add);
+      return out.takeBytes();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<HttpClientResponse> _open(HttpClient client, String url) async {
+    final res = await (await client.getUrl(Uri.parse(url))).close();
+    if (res.statusCode != 200) {
+      await res.drain<void>();
+      throw HttpException('the server returned ${res.statusCode}');
+    }
+    return res;
+  }
+
+  void _cleanUp(String work) {
+    try {
+      final d = Directory(work);
+      if (d.existsSync()) d.deleteSync(recursive: true);
+    } catch (_) {}
+    _work = null;
+    _staged = null;
+  }
+
+  void _set(UpdateStage s) {
+    stage = s;
+    notifyListeners();
+  }
+}
+
+/// `sha256sum` output: file name → hex digest.
+Map<String, String> parseSha256Sums(String text) => {
+  for (final m in RegExp(
+    r'^([0-9a-fA-F]{64}) [ *](.+)$',
+    multiLine: true,
+  ).allMatches(text))
+    m.group(2)!.trim(): m.group(1)!,
+};
+
+/// Waits for Gutter (pid $1) to quit, puts the new version ($3) in place of
+/// the current one ($2), and with $4 = 1 starts it. $5 is the work folder,
+/// next to $2 (so the moves are renames), removed at the end.
+@visibleForTesting
+const installScript = r'''#!/bin/sh
+pid=$1 current=$2 new=$3 relaunch=$4 work=$5
+while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+previous="$work/previous"
+rm -rf "$previous"
+if mv "$current" "$previous"; then
+  if mv "$new" "$current"; then
+    rm -rf "$previous"
+  else
+    mv "$previous" "$current"
+  fi
+fi
+if [ "$(uname)" = Darwin ]; then
+  xattr -dr com.apple.quarantine "$current" 2>/dev/null
+fi
+if [ "$relaunch" = 1 ]; then
+  if [ "$(uname)" = Darwin ]; then
+    open "$current"
+  else
+    "$current/gutter" >/dev/null 2>&1 &
+  fi
+fi
+rm -rf "$work"
+''';

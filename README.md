@@ -21,12 +21,17 @@ Download the latest build from the
 - **Linux, tarball**: extract `gutter-linux-x64-<version>.tar.gz` and run
   `./gutter` (needs GTK 3).
 
+From then on the macOS app and the tarball update themselves: Gutter offers
+each new release, downloads it, checks it against the release's checksums
+and swaps it in when you restart or quit. The Flatpak offers the download.
+
 <details>
 <summary>More on installing</summary>
 
 **macOS.** Gutter is ad-hoc signed, not notarized (there's no paid Apple
 Developer account behind it), so macOS blocks it until the quarantine flag
-is cleared, after every update. Besides the `xattr` command:
+is cleared. Only the first install needs it: updates Gutter downloads
+itself aren't quarantined. Besides the `xattr` command:
 
 - `tool/install_macos.sh` downloads the latest release (needs `gh`),
   installs it and clears the flag. It also takes a downloaded zip:
@@ -119,7 +124,8 @@ loading history several times faster.
 Besides your own fetch, pull and push, Gutter makes two kinds of requests:
 
 - **Update check**: every 6 hours it asks GitHub for the latest release of
-  Gutter, and shows a link on the home tab when there's a newer one.
+  Gutter, and offers it when there's a newer one. It downloads the release
+  (from GitHub) only when you choose to update.
 - **GitHub avatars** (repositories on GitHub only): each author's picture
   is requested from GitHub's avatar server by commit email, as rows come
   into view.

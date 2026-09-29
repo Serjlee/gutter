@@ -203,7 +203,7 @@ jobs:
           cat >> notes.md <<'NOTES'
           **macOS** (`Gutter-macos-*.zip`): universal build for Apple Silicon and Intel, ad-hoc signed and not notarized.
           1. Unzip and move `Gutter.app` to `/Applications`.
-          2. Clear the download quarantine flag (needed after every update):
+          2. Clear the download quarantine flag (first install only: Gutter then updates itself):
              ```sh
              xattr -dr com.apple.quarantine /Applications/Gutter.app
              ```
@@ -218,6 +218,9 @@ jobs:
           Requires `git` on the `PATH`.
           NOTES
           assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz gutter-linux-x64-*.flatpak)
+          # The in-app updater checks its download against this.
+          sha256sum "${assets[@]}" > SHA256SUMS
+          assets+=(SHA256SUMS)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             # Re-running a release: overwrite its assets, title and notes.
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

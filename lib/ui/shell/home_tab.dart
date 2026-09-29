@@ -8,6 +8,7 @@ import '../../app/zoom.dart';
 import '../../git/git_runner.dart';
 import '../../git/repository.dart';
 import '../dialogs/dialogs.dart';
+import '../dialogs/update_dialog.dart';
 import '../widgets/common.dart';
 
 /// Repository browser: scanned folders, discovered repos, recents, settings.
@@ -723,9 +724,10 @@ class _VersionInfo extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => openWithSystem(latest.url),
-                    icon: const Icon(Icons.open_in_new, size: 15),
-                    label: const Text('Open release page'),
+                    key: const ValueKey('update-open'),
+                    onPressed: () => showUpdateDialog(context, app),
+                    icon: const Icon(Icons.system_update_alt, size: 15),
+                    label: const Text('Update…'),
                   ),
                 ),
               ],

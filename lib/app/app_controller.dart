@@ -12,6 +12,7 @@ import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
 import 'settings_store.dart';
 import 'update_checker.dart';
+import 'updater.dart';
 import 'zoom.dart';
 
 /// Top-level app state: settings, open tabs, window focus, repo discovery.
@@ -20,8 +21,10 @@ class AppController extends ChangeNotifier {
     this.store,
     this.settings, {
     UpdateChecker? updates,
+    Updater? updater,
     AvatarService? avatars,
   }) : updates = updates ?? UpdateChecker(),
+       updater = updater ?? Updater(),
        avatars =
            avatars ??
            AvatarService(
@@ -35,6 +38,9 @@ class AppController extends ChangeNotifier {
 
   /// Latest-release lookup shown on the home tab.
   final UpdateChecker updates;
+
+  /// Downloads and installs a new release.
+  final Updater updater;
 
   /// GitHub profile pictures of commit authors.
   final AvatarService avatars;
@@ -253,6 +259,28 @@ class AppController extends ChangeNotifier {
   /// Starts periodic update checks.
   void startUpdateChecks() => updates.start();
 
+  final _updatesOffered = <String>{};
+
+  /// Whether to offer the newer release now: once per release per run,
+  /// and never a skipped one.
+  bool takeUpdateOffer() {
+    final latest = updates.latest;
+    if (latest == null || !updates.updateAvailable) return false;
+    if (latest.tag == settings.skippedUpdate) return false;
+    return _updatesOffered.add(latest.tag);
+  }
+
+  void skipUpdate(String tag) {
+    settings.skippedUpdate = tag;
+    save();
+  }
+
+  /// Quits, for the updater to swap in the new version and restart.
+  Never quitForUpdate() {
+    store?.saveNow(settings);
+    exit(0);
+  }
+
   void setMaxCommits(int n) {
     settings.maxCommits = n;
     save();
@@ -332,6 +360,7 @@ class AppController extends ChangeNotifier {
     }
     store?.saveNow(settings);
     updates.dispose();
+    updater.dispose();
     avatars.dispose();
     _messages.close();
     super.dispose();
