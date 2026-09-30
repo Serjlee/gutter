@@ -4,6 +4,7 @@ import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
 import '../../git/repository.dart';
+import '../dialogs/cleanup_branches_dialog.dart';
 import '../dialogs/dialogs.dart';
 import '../dialogs/interactive_rebase_dialog.dart';
 import '../dialogs/work_in_progress.dart';
@@ -140,6 +141,53 @@ class RepoActions {
         );
       }
     }
+  }
+
+  /// Offers the local branches that can go (merged, or gone from the
+  /// remote), then deletes the chosen ones after a second confirmation.
+  Future<void> cleanupBranches() async {
+    final BranchCleanup cleanup;
+    try {
+      cleanup = await repo.cleanupCandidates();
+    } catch (e) {
+      tab.app.notifyError(e, action: 'Clean up branches');
+      return;
+    }
+    if (!context.mounted) return;
+    if (cleanup.isEmpty) {
+      tab.app.notify('No merged branches to clean up');
+      return;
+    }
+    final names = await showCleanupBranches(context, cleanup);
+    if (names == null || names.isEmpty || !context.mounted) return;
+    final unmerged = cleanup.gone.where((b) => names.contains(b.name)).length;
+    const shown = 12;
+    final list = [
+      ...names.take(shown),
+      if (names.length > shown) '…and ${names.length - shown} more',
+    ].join('\n');
+    final what = names.length == 1 ? '1 branch' : '${names.length} branches';
+    final ok = await confirm(
+      context,
+      title: 'Delete $what?',
+      message: [
+        list,
+        if (unmerged > 0)
+          '${unmerged == 1 ? '1 of them isn\'t' : '$unmerged of them aren\'t'} '
+              'merged into ${cleanup.base}: commits found only there will be '
+              'lost.',
+        'Only local branches are deleted. Their last commits are listed in '
+            'the Output panel.',
+      ].join('\n\n'),
+      confirmLabel: 'Delete $what',
+      danger: true,
+    );
+    if (!ok) return;
+    await tab.run(
+      'Delete branches',
+      () => repo.deleteBranches(names),
+      success: 'Deleted $what',
+    );
   }
 
   Future<void> setUpstream(GitRef local) async {

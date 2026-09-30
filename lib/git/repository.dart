@@ -573,6 +573,95 @@ class Repository {
   Future<void> deleteBranch(String name, {bool force = false}) =>
       _mutate(() => _run(['branch', force ? '-D' : '-d', name]));
 
+  /// Deletes local [names] in one go (`-D`: callers checked they're safe
+  /// to lose, see [cleanupCandidates]).
+  Future<void> deleteBranches(List<String> names) =>
+      _mutate(() => _run(['branch', '-D', '--', ...names]));
+
+  /// The repository's main line: the default remote's HEAD, else a
+  /// main/master (remote first), else HEAD.
+  Future<String> mainBranch() async {
+    final remoteHead = await _run([
+      'symbolic-ref',
+      '-q',
+      '--short',
+      'refs/remotes/origin/HEAD',
+    ], allowFailure: true);
+    if (remoteHead.ok && remoteHead.stdout.trim().isNotEmpty) {
+      return remoteHead.stdout.trim();
+    }
+    for (final ref in [
+      'refs/remotes/origin/main',
+      'refs/remotes/origin/master',
+      'refs/heads/main',
+      'refs/heads/master',
+    ]) {
+      final r = await _run([
+        'rev-parse',
+        '--verify',
+        '-q',
+        ref,
+      ], allowFailure: true);
+      if (r.ok) return ref.replaceFirst(RegExp(r'^refs/(remotes|heads)/'), '');
+    }
+    return 'HEAD';
+  }
+
+  /// Local branches that can go: those merged into [mainBranch], and those
+  /// whose remote branch is gone (often squash-merged, but they may hold
+  /// commits found nowhere else). Never the checked-out branch, local
+  /// main/master or the main line's own branch, or one checked out in
+  /// another worktree.
+  Future<BranchCleanup> cleanupCandidates() async {
+    final base = await mainBranch();
+    List<String> fields(String line) => line.split('\x00');
+    const format =
+        '%(refname:short)%00%(upstream:track)%00%(committerdate:unix)%00%(HEAD)';
+    final merged = {
+      for (final l in (await _out([
+        'for-each-ref',
+        '--merged=$base',
+        '--format=%(refname:short)',
+        'refs/heads/',
+      ])).split('\n'))
+        if (l.trim().isNotEmpty) l.trim(),
+    };
+    final worktrees = {
+      for (final m in RegExp(
+        r'^branch refs/heads/(.+)$',
+        multiLine: true,
+      ).allMatches(await _out(['worktree', 'list', '--porcelain'])))
+        m.group(1)!,
+    };
+    final keep = {'main', 'master', base.split('/').last};
+    final mergedOut = <CleanupBranch>[];
+    final goneOut = <CleanupBranch>[];
+    for (final line in (await _out([
+      'for-each-ref',
+      '--format=$format',
+      'refs/heads/',
+    ])).split('\n')) {
+      if (line.trim().isEmpty) continue;
+      final f = fields(line);
+      final name = f[0];
+      if (f[3] == '*' || keep.contains(name) || worktrees.contains(name)) {
+        continue;
+      }
+      final b = CleanupBranch(
+        name: name,
+        date: DateTime.fromMillisecondsSinceEpoch(
+          (int.tryParse(f[2]) ?? 0) * 1000,
+        ),
+      );
+      if (merged.contains(name)) {
+        mergedOut.add(b);
+      } else if (f[1] == '[gone]') {
+        goneOut.add(b);
+      }
+    }
+    return BranchCleanup(base: base, merged: mergedOut, gone: goneOut);
+  }
+
   Future<void> renameBranch(String from, String to) =>
       _mutate(() => _run(['branch', '-m', from, to]));
 

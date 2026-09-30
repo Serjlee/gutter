@@ -72,6 +72,12 @@ class _SidebarState extends State<Sidebar> {
         onToggle: () => _toggle('local'),
         actions: [
           SmallIconButton(
+            key: const ValueKey('cleanup-branches'),
+            icon: Icons.cleaning_services_outlined,
+            tooltip: 'Clean up merged branches',
+            onPressed: () => actions.cleanupBranches(),
+          ),
+          SmallIconButton(
             icon: Icons.add,
             tooltip: 'Create branch',
             onPressed: () => actions.createBranch(),

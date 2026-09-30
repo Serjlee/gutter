@@ -359,3 +359,23 @@ class RemoteInfo {
   final String fetchUrl;
   final String? pushUrl;
 }
+
+/// A local branch offered for cleanup.
+class CleanupBranch {
+  CleanupBranch({required this.name, required this.date});
+  final String name;
+
+  /// Its last commit's date.
+  final DateTime date;
+}
+
+/// Local branches that can be deleted: [merged] into [base] (nothing is
+/// lost), or [gone] from their remote (likely squash-merged).
+class BranchCleanup {
+  BranchCleanup({required this.base, required this.merged, required this.gone});
+  final String base;
+  final List<CleanupBranch> merged;
+  final List<CleanupBranch> gone;
+
+  bool get isEmpty => merged.isEmpty && gone.isEmpty;
+}
