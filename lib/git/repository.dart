@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'git_errors.dart';
 import 'git_runner.dart';
 import 'models.dart';
+import 'natural_sort.dart';
 import 'parsers/diff_parser.dart';
 import 'parsers/log_parser.dart';
 import 'parsers/refs_parser.dart';
@@ -659,7 +660,13 @@ class Repository {
         goneOut.add(b);
       }
     }
-    return BranchCleanup(base: base, merged: mergedOut, gone: goneOut);
+    int byName(CleanupBranch a, CleanupBranch b) =>
+        compareNatural(a.name, b.name);
+    return BranchCleanup(
+      base: base,
+      merged: mergedOut..sort(byName),
+      gone: goneOut..sort(byName),
+    );
   }
 
   Future<void> renameBranch(String from, String to) =>

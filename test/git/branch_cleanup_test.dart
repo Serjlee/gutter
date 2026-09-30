@@ -72,6 +72,20 @@ void main() {
     expect(left, containsAll(['done-merge', 'wip', 'current', 'main']));
   });
 
+  test('lists them in natural order', () async {
+    for (final n in [10, 2, 1]) {
+      t.git(['branch', 'ticket-$n', 'origin/main']);
+    }
+    final c = await t.repo.cleanupCandidates();
+    expect(c.merged.map((b) => b.name), [
+      'done-ff',
+      'done-merge',
+      'ticket-1',
+      'ticket-2',
+      'ticket-10',
+    ]);
+  });
+
   test('without a remote, the local main is the base', () async {
     final local = await TempRepo.create();
     addTearDown(local.dispose);
