@@ -599,6 +599,11 @@ class _PillData {
   GitRef? tag;
   bool get isHead => local?.isHead ?? false;
   GitRef get primary => local ?? tag ?? remotes.first;
+
+  /// Has a remote's main or master: always shown, and stands out.
+  bool get isTrunk =>
+      remotes.any((r) => _trunkNames.contains(r.remoteBranchName));
+  static const _trunkNames = {'main', 'master'};
 }
 
 class _RefPills extends StatelessWidget {
@@ -651,10 +656,12 @@ class _RefPills extends StatelessWidget {
     final list = pills.values.toList();
     int rank(_PillData p) => p.isHead
         ? 0
+        : p.isTrunk
+        ? 1
         : switch (p.type) {
-            RefType.localBranch => 1,
-            RefType.remoteBranch => 2,
-            _ => 3,
+            RefType.localBranch => 2,
+            RefType.remoteBranch => 3,
+            _ => 4,
           };
     list.sort((a, b) => rank(a).compareTo(rank(b)));
     return list;
@@ -665,61 +672,87 @@ class _RefPills extends StatelessWidget {
     final pills = _group();
     final detachedHead = isHeadCommit && !refs.any((r) => r.isHead);
     if (pills.isEmpty && !detachedHead) return const SizedBox();
-    final first = pills.isEmpty ? null : pills.first;
-    final more = pills.length - 1;
+    // The first pill, and main/master remotes, show; the rest fold into
+    // "+N".
+    final shown = [
+      for (var i = 0; i < pills.length; i++)
+        if (i == 0 || pills[i].isTrunk) pills[i],
+    ];
+    final folded = pills.where((p) => !shown.contains(p)).toList();
+    final more = folded.length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Row(
-        children: [
-          if (detachedHead)
-            _pill(
-              context,
-              label: 'HEAD',
-              icon: Icons.adjust,
-              color: laneColor,
-              bold: true,
-            ),
-          if (first != null) Flexible(child: _pillFor(context, first)),
-          if (more > 0)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: PopupMenuButton<VoidCallback>(
-                popUpAnimationStyle: AnimationStyle.noAnimation,
-                tooltip: pills.skip(1).map((p) => p.label).join('\n'),
-                padding: EdgeInsets.zero,
-                itemBuilder: (_) => [
-                  for (final p in pills.skip(1))
-                    PopupMenuItem<VoidCallback>(
-                      enabled: false,
-                      height: 30,
-                      child: _pillFor(context, p),
+      child: LayoutBuilder(
+        builder: (context, c) => Row(
+          children: [
+            if (detachedHead)
+              _pill(
+                context,
+                label: 'HEAD',
+                icon: Icons.adjust,
+                color: laneColor,
+                bold: true,
+              ),
+            for (final (i, p) in shown.indexed)
+              if (i > 0 && p.isTrunk)
+                // Never shortened (within reason): the first pill gives way.
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: c.maxWidth * 0.6),
+                    child: _pillFor(context, p, short: true),
+                  ),
+                )
+              else
+                Flexible(child: _pillFor(context, p)),
+            if (more > 0)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: PopupMenuButton<VoidCallback>(
+                  popUpAnimationStyle: AnimationStyle.noAnimation,
+                  tooltip: folded.map((p) => p.label).join('\n'),
+                  padding: EdgeInsets.zero,
+                  itemBuilder: (_) => [
+                    for (final p in folded)
+                      PopupMenuItem<VoidCallback>(
+                        enabled: false,
+                        height: 30,
+                        child: _pillFor(context, p),
+                      ),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
                     ),
-                ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.panelAlt,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    '+$more',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textDim,
+                    decoration: BoxDecoration(
+                      color: AppColors.panelAlt,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      '+$more',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textDim,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _pillFor(BuildContext context, _PillData p) {
+  /// [p]'s label; [short] drops "origin/" from a remote branch next to
+  /// another pill (the cloud icon says it's remote).
+  static String _label(_PillData p, {bool short = false}) =>
+      short && p.local == null && p.remotes.first.remote == 'origin'
+      ? p.remotes.first.remoteBranchName
+      : p.label;
+
+  Widget _pillFor(BuildContext context, _PillData p, {bool short = false}) {
     final icons = <IconData>[
       if (p.local != null) Icons.laptop_mac,
       if (p.remotes.isNotEmpty) Icons.cloud_outlined,
@@ -746,10 +779,10 @@ class _RefPills extends StatelessWidget {
         ].join('\n'),
         child: _pill(
           context,
-          label: p.label,
+          label: _label(p, short: short),
           icons: icons,
           color: color,
-          bold: p.isHead,
+          bold: p.isHead || p.isTrunk,
           check: p.isHead,
         ),
       ),
