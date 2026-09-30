@@ -10,6 +10,7 @@ import '../../graph/graph_painter.dart';
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'scroll_marks.dart';
 
 const _metrics = GraphMetrics();
 
@@ -217,37 +218,68 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                                 style: TextStyle(color: AppColors.textDim),
                               ),
                       )
-                    : ListView.builder(
-                        key: PageStorageKey('graph-${tab.repo.path}'),
-                        controller: _scroll,
-                        itemExtent: _metrics.rowHeight,
-                        itemCount: graph.rowCount + (graph.truncated ? 1 : 0),
-                        itemBuilder: (context, row) {
-                          if (row >= graph.rowCount) {
-                            return Center(
-                              child: tab.loadingLog
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : TextButton(
-                                      onPressed: tab.loadMore,
-                                      child: const Text('Load more commits'),
-                                    ),
-                            );
-                          }
-                          return _GraphRow(
-                            key: ValueKey(graph.commitAt(row)?.sha ?? wipSha),
-                            tab: tab,
-                            row: row,
-                            cols: fitted,
-                            actions: actions,
-                            onFocus: () => _focus.requestFocus(),
-                          );
-                        },
+                    : Stack(
+                        children: [
+                          Positioned.fill(
+                            child: ListView.builder(
+                              key: PageStorageKey('graph-${tab.repo.path}'),
+                              controller: _scroll,
+                              itemExtent: _metrics.rowHeight,
+                              itemCount:
+                                  graph.rowCount + (graph.truncated ? 1 : 0),
+                              itemBuilder: (context, row) {
+                                if (row >= graph.rowCount) {
+                                  return Center(
+                                    child: tab.loadingLog
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : TextButton(
+                                            onPressed: tab.loadMore,
+                                            child: const Text(
+                                              'Load more commits',
+                                            ),
+                                          ),
+                                  );
+                                }
+                                return _GraphRow(
+                                  key: ValueKey(
+                                    graph.commitAt(row)?.sha ?? wipSha,
+                                  ),
+                                  tab: tab,
+                                  row: row,
+                                  cols: fitted,
+                                  actions: actions,
+                                  onFocus: () => _focus.requestFocus(),
+                                );
+                              },
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 8,
+                            child: ScrollMarks(
+                              rowCount:
+                                  graph.rowCount + (graph.truncated ? 1 : 0),
+                              rowHeight: _metrics.rowHeight,
+                              head: tab.headSha == null
+                                  ? null
+                                  : graph.rowOf(tab.headSha!),
+                              headColor: AppColors.accent,
+                              trunk: [
+                                for (final e in tab.refsBySha.entries)
+                                  if (e.value.any(isTrunkRef))
+                                    ?graph.rowOf(e.key),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ],
@@ -368,6 +400,11 @@ class _GraphRowState extends State<_GraphRow> {
     final isHit = tab.searchHitSet.contains(row);
     final dimmed = tab.search.trim().isNotEmpty && !isHit;
 
+    final isCommit = commit != null && stash == null;
+    final headRow = isCommit && sha == tab.headSha;
+    final trunkRow =
+        isCommit && (tab.refsBySha[sha] ?? const <GitRef>[]).any(isTrunkRef);
+
     Color? bg;
     if (selected) {
       bg = laneColor.withValues(alpha: 0.22);
@@ -426,6 +463,12 @@ class _GraphRowState extends State<_GraphRow> {
               },
         child: Container(
           color: bg,
+          // The checked-out commit: painted over, so the row doesn't shift.
+          foregroundDecoration: headRow
+              ? BoxDecoration(
+                  border: Border(left: BorderSide(color: laneColor, width: 3)),
+                )
+              : null,
           child: Row(
             children: [
               SizedBox(
@@ -461,6 +504,7 @@ class _GraphRowState extends State<_GraphRow> {
                           ? null
                           : tab.avatarFor(commit.authorEmail),
                       isHead: commit != null && sha == tab.headSha,
+                      trunk: trunkRow,
                       dimmed: dimmed,
                     ),
                   ),
@@ -479,6 +523,7 @@ class _GraphRowState extends State<_GraphRow> {
                             fontSize: 13,
                             color: stash != null ? dimColor : msgColor,
                             fontStyle: stash != null ? FontStyle.italic : null,
+                            fontWeight: headRow ? FontWeight.w700 : null,
                           ),
                         ),
                 ),
@@ -588,6 +633,11 @@ class _WipSummary extends StatelessWidget {
   }
 }
 
+/// A remote's main or master: always shown, and marked in the graph.
+bool isTrunkRef(GitRef r) =>
+    r.type == RefType.remoteBranch &&
+    const {'main', 'master'}.contains(r.remoteBranchName);
+
 /// A ref label group: local branch and its same-named remotes are merged
 /// into one pill with icons, like GitKraken.
 class _PillData {
@@ -601,9 +651,7 @@ class _PillData {
   GitRef get primary => local ?? tag ?? remotes.first;
 
   /// Has a remote's main or master: always shown, and stands out.
-  bool get isTrunk =>
-      remotes.any((r) => _trunkNames.contains(r.remoteBranchName));
-  static const _trunkNames = {'main', 'master'};
+  bool get isTrunk => remotes.any(isTrunkRef);
 }
 
 class _RefPills extends StatelessWidget {
@@ -782,8 +830,8 @@ class _RefPills extends StatelessWidget {
           label: _label(p, short: short),
           icons: icons,
           color: color,
-          bold: p.isHead || p.isTrunk,
-          check: p.isHead,
+          bold: p.isHead,
+          outlined: p.isTrunk,
         ),
       ),
     );
@@ -796,24 +844,21 @@ class _RefPills extends StatelessWidget {
     List<IconData> icons = const [],
     required Color color,
     bool bold = false,
-    bool check = false,
+    bool outlined = false,
   }) {
     return Container(
       height: 21,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: bold ? 0.35 : 0.2),
-        border: Border.all(color: color.withValues(alpha: 0.8)),
+        border: outlined
+            ? Border.all(color: ScrollMarks.trunkColor, width: 1.5)
+            : Border.all(color: color.withValues(alpha: 0.8)),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (check)
-            const Padding(
-              padding: EdgeInsets.only(right: 3),
-              child: Icon(Icons.check, size: 12, color: Colors.white),
-            ),
           Flexible(
             child: Text(
               label,

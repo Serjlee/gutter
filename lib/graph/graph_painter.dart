@@ -31,6 +31,7 @@ class GraphRowPainter extends CustomPainter {
     this.avatar,
     this.isHead = false,
     this.dimmed = false,
+    this.trunk = false,
   });
 
   final GraphLayout layout;
@@ -43,6 +44,9 @@ class GraphRowPainter extends CustomPainter {
   final ui.Image? avatar;
   final bool isHead;
   final bool dimmed;
+
+  /// A remote's main or master points here: ringed in gray.
+  final bool trunk;
 
   static final _textCache = <String, TextPainter>{};
 
@@ -246,6 +250,17 @@ class GraphRowPainter extends CustomPainter {
         final tp = _initialsPainter(initials);
         tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
     }
+    if (trunk) {
+      canvas.drawCircle(
+        center,
+        // Around HEAD's ring when both are here.
+        metrics.nodeRadius + (isHead ? 5 : 2.5),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..color = const Color(0xFFB8BDC7),
+      );
+    }
     if (isHead) {
       canvas.drawCircle(
         center,
@@ -318,6 +333,7 @@ class GraphRowPainter extends CustomPainter {
       old.row != row ||
       old.style != style ||
       old.isHead != isHead ||
+      old.trunk != trunk ||
       old.dimmed != dimmed ||
       old.initials != initials ||
       old.avatar != avatar ||
