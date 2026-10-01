@@ -349,10 +349,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     RebaseAction.pick => AppColors.text,
     RebaseAction.reword => AppColors.accent,
     RebaseAction.edit => AppColors.warning,
-    RebaseAction.squash || RebaseAction.fixup =>
-      AppColors.current.isDark
-          ? const Color(0xFFB180F0)
-          : const Color(0xFF8250DF),
+    RebaseAction.squash || RebaseAction.fixup => AppColors.squash,
     RebaseAction.drop => AppColors.danger,
   };
 

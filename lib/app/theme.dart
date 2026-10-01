@@ -27,6 +27,7 @@ class AppPalette {
     required this.localBranch,
     required this.remoteBranch,
     required this.tag,
+    required this.squash,
     required this.pillText,
     required this.headRing,
     required this.trunk,
@@ -59,6 +60,9 @@ class AppPalette {
   final Color localBranch;
   final Color remoteBranch;
   final Color tag;
+
+  /// Squash and fixup in the interactive rebase.
+  final Color squash;
 
   /// Text on ref labels.
   final Color pillText;
@@ -104,6 +108,7 @@ class AppPalette {
     localBranch: Color(0xFF15A0BF),
     remoteBranch: Color(0xFF7C62D6),
     tag: Color(0xFFD4A13A),
+    squash: Color(0xFFB180F0),
     pillText: Color(0xFFFFFFFF),
     headRing: Color(0xD9FFFFFF),
     trunk: Color(0xFFD5D9E0),
@@ -149,6 +154,7 @@ class AppPalette {
     localBranch: Color(0xFF0A7E9E),
     remoteBranch: Color(0xFF6639BA),
     tag: Color(0xFF9A6700),
+    squash: Color(0xFF8250DF),
     pillText: Color(0xFF1F2328),
     headRing: Color(0xD91F2328),
     trunk: Color(0xFF6E7781),
@@ -196,6 +202,7 @@ abstract final class AppColors {
   static Color get diffSelected => current.diffSelected;
   static Color get localBranch => current.localBranch;
   static Color get remoteBranch => current.remoteBranch;
+  static Color get squash => current.squash;
   static Color get tag => current.tag;
   static Color get pillText => current.pillText;
   static Color get headRing => current.headRing;
