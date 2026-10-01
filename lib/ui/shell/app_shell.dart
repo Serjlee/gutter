@@ -82,7 +82,8 @@ class _AppShellState extends State<AppShell> {
   void _showMessage(AppMessage m) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-    // A compact toast in the bottom-right corner, sized to the message.
+    // A compact toast at the bottom, sized to the message: centered, over
+    // the graph rather than the commit box, and above the output bar.
     final screen = MediaQuery.sizeOf(context).width;
     final maxWidth = m.error || m.warning ? 520.0 : 380.0;
     final textWidth = (TextPainter(
@@ -99,11 +100,9 @@ class _AppShellState extends State<AppShell> {
       ..showSnackBar(
         SnackBar(
           duration: Duration(seconds: m.error || m.warning ? 8 : 3),
-          margin: EdgeInsets.only(
-            left: (screen - width - 16).clamp(16.0, double.infinity),
-            right: 16,
-            bottom: 16,
-          ),
+          margin: EdgeInsets.symmetric(
+            horizontal: ((screen - width) / 2).clamp(16.0, double.infinity),
+          ).copyWith(bottom: 40),
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           showCloseIcon: true,
           closeIconColor: AppColors.textDim,
