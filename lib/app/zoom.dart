@@ -138,7 +138,7 @@ class _ZoomScopeState extends State<ZoomScope> {
                     child: Text(
                       '${(zoom * 100).round()}%',
                       textDirection: TextDirection.ltr,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.text,
                         fontSize: 15,
                         decoration: TextDecoration.none,

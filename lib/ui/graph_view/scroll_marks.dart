@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme.dart';
+
 /// Where HEAD and the main/master remotes are in the whole list, drawn at
 /// the right edge of the graph like scrollbar markers.
 class ScrollMarks extends StatelessWidget {
@@ -20,7 +22,7 @@ class ScrollMarks extends StatelessWidget {
   final Color headColor;
   final List<int> trunk;
 
-  static const trunkColor = Color(0xFFD5D9E0);
+  static Color get trunkColor => AppColors.trunk;
 
   @override
   Widget build(BuildContext context) =>

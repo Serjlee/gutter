@@ -11,6 +11,7 @@ import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
 import 'settings_store.dart';
+import 'theme.dart';
 import 'update_checker.dart';
 import 'updater.dart';
 import 'zoom.dart';
@@ -249,6 +250,21 @@ class AppController extends ChangeNotifier {
     save();
     notifyListeners();
   }
+
+  /// 'system', 'light' or 'dark'.
+  void setThemeMode(String mode) {
+    settings.themeMode = mode;
+    save();
+    notifyListeners();
+  }
+
+  /// The palette for [settings.themeMode], given the OS's [platform]
+  /// brightness.
+  AppPalette paletteFor(Brightness platform) => switch (settings.themeMode) {
+    'light' => AppPalette.light,
+    'dark' => AppPalette.dark,
+    _ => platform == Brightness.light ? AppPalette.light : AppPalette.dark,
+  };
 
   void setFileTree(bool value) {
     settings.fileTree = value;

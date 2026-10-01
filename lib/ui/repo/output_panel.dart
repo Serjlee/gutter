@@ -118,7 +118,7 @@ class _OutputPanelState extends State<OutputPanel> {
             }),
           )
         else
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
         _header(open),
         if (open)
           SizedBox(
@@ -157,7 +157,7 @@ class _OutputPanelState extends State<OutputPanel> {
                       color: AppColors.textDim,
                     ),
                     const SizedBox(width: 4),
-                    const Text(
+                    Text(
                       'Output',
                       style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
@@ -205,7 +205,7 @@ class _OutputPanelState extends State<OutputPanel> {
                         color: AppColors.textDim,
                       ),
                       const SizedBox(width: 4),
-                      const Text(
+                      Text(
                         'Background refreshes',
                         style: TextStyle(
                           fontSize: 11.5,
@@ -236,7 +236,7 @@ class _OutputPanelState extends State<OutputPanel> {
   Widget _list() {
     final entries = _visible;
     if (entries.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No git commands yet',
           style: TextStyle(fontSize: 12, color: AppColors.textFaint),
@@ -332,7 +332,7 @@ class _EntryRow extends StatelessWidget {
                             padding: const EdgeInsets.only(left: 8),
                             child: Text(
                               _duration(e.duration!),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textFaint,
                               ),
@@ -397,10 +397,7 @@ class _EntryRow extends StatelessWidget {
                     facts,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textDim,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AppColors.textDim),
                   ),
                 ),
                 SmallIconButton(

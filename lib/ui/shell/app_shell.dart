@@ -141,7 +141,7 @@ class _AppShellState extends State<AppShell> {
                   m.text,
                   minLines: 1,
                   maxLines: 8,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.text),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.text),
                 ),
               ),
             ],

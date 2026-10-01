@@ -74,6 +74,7 @@ Apple's command line tools). You can pick another on the home tab.
   and stashes.
 - **Errors explained**, with the full output one click away in each tab's
   **Output** panel, which logs every git command it ran.
+- **Light and dark themes**, following the system's by default.
 - **UI zoom** for high-DPI screens.
 
 <details>

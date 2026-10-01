@@ -314,7 +314,7 @@ class RepoActions {
                 if (pushed)
                   'It\'s already pushed: the branch will need a force push.',
               ].join(' '),
-              style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
+              style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
             ),
     );
     if (r == null || r.first.trim() == message.trim()) return;

@@ -82,7 +82,7 @@ class _FilePreviewState extends State<FilePreview> {
         }
         final bytes = snap.data;
         if (bytes == null) {
-          return const Center(
+          return Center(
             child: Text(
               'File does not exist in this version',
               style: TextStyle(color: AppColors.textDim),
@@ -113,7 +113,7 @@ class _FilePreviewState extends State<FilePreview> {
                   binary
                       ? 'Binary file (${_size(bytes.length)})'
                       : 'Large file (${_size(bytes.length)})',
-                  style: const TextStyle(color: AppColors.textDim),
+                  style: TextStyle(color: AppColors.textDim),
                 ),
                 if (!binary) ...[
                   const SizedBox(height: 8),

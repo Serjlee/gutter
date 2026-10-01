@@ -349,7 +349,10 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     RebaseAction.pick => AppColors.text,
     RebaseAction.reword => AppColors.accent,
     RebaseAction.edit => AppColors.warning,
-    RebaseAction.squash || RebaseAction.fixup => const Color(0xFFB180F0),
+    RebaseAction.squash || RebaseAction.fixup =>
+      AppColors.current.isDark
+          ? const Color(0xFFB180F0)
+          : const Color(0xFF8250DF),
     RebaseAction.drop => AppColors.danger,
   };
 
@@ -363,7 +366,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     return Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.panel,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -382,7 +385,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
           const SizedBox(width: 8),
           Text(
             n == 0 ? 'Select commits' : '$n selected',
-            style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
           ),
           const SizedBox(width: 8),
           // Shrinks rather than overflows in a narrow dialog.
@@ -470,7 +473,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(
+                Icon(
                   Icons.drag_indicator,
                   size: 16,
                   color: AppColors.textFaint,
@@ -541,7 +544,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Newest on top. Drag or Alt+↑↓ to reorder; Shift/Ctrl-click '
                   'to select several. Keys: P pick, R reword, E edit, '
                   'S squash, F fixup, D drop. Squash/Fixup fold commits into '
@@ -549,7 +552,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                   style: TextStyle(color: AppColors.textDim, fontSize: 12),
                 ),
                 if (widget.hasMerges)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(top: 6),
                     child: Text(
                       'This range contains merge commits; they will be flattened.',
@@ -600,7 +603,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                       Expanded(
                         flex: 2,
                         child: selStep == null
-                            ? const Center(
+                            ? Center(
                                 child: Text(
                                   'Select a commit to see or edit its message',
                                   style: TextStyle(color: AppColors.textDim),
@@ -613,7 +616,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                                     _editsMessage(selStep)
                                         ? 'New message'
                                         : 'Message (choose Reword to edit)',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textDim,
                                     ),
@@ -642,7 +645,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                     padding: const EdgeInsets.only(top: 10),
                     child: Text(
                       _error!,
-                      style: const TextStyle(color: AppColors.danger),
+                      style: TextStyle(color: AppColors.danger),
                     ),
                   ),
                 const SizedBox(height: 14),

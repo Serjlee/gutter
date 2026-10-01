@@ -284,7 +284,7 @@ class _DiffViewState extends State<DiffView> {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.panelAlt,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -307,11 +307,11 @@ class _DiffViewState extends State<DiffView> {
                       children: [
                         TextSpan(
                           text: '+${diff.additions} ',
-                          style: const TextStyle(color: AppColors.diffAddText),
+                          style: TextStyle(color: AppColors.diffAddText),
                         ),
                         TextSpan(
                           text: '-${diff.deletions}',
-                          style: const TextStyle(color: AppColors.diffDelText),
+                          style: TextStyle(color: AppColors.diffDelText),
                         ),
                       ],
                     ),
@@ -355,12 +355,12 @@ class _DiffViewState extends State<DiffView> {
                 else ...[
                   TextButton.icon(
                     onPressed: () => actions.discard([target.entry]),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.delete_outline,
                       size: 16,
                       color: AppColors.danger,
                     ),
-                    label: const Text(
+                    label: Text(
                       'Discard file',
                       style: TextStyle(color: AppColors.danger),
                     ),
@@ -431,7 +431,7 @@ class _DiffViewState extends State<DiffView> {
           if (!staged)
             TextButton(
               onPressed: () => _applyLines(discard: true),
-              child: const Text(
+              child: Text(
                 'Discard lines',
                 style: TextStyle(color: AppColors.danger),
               ),
@@ -457,15 +457,12 @@ class _DiffViewState extends State<DiffView> {
     }
     if (tab.diffError != null) {
       return Center(
-        child: Text(
-          tab.diffError!,
-          style: const TextStyle(color: AppColors.danger),
-        ),
+        child: Text(tab.diffError!, style: TextStyle(color: AppColors.danger)),
       );
     }
     if (diff == null) {
       if (tab.diffLoading) return const SizedBox();
-      return const Center(
+      return Center(
         child: Text(
           'No changes to show (mode or permission change only)',
           style: TextStyle(color: AppColors.textDim),
@@ -475,7 +472,7 @@ class _DiffViewState extends State<DiffView> {
     if (diff.isBinary) {
       return Column(
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(12),
             child: Text(
               'Binary file changed',
@@ -500,7 +497,7 @@ class _DiffViewState extends State<DiffView> {
           children: [
             Text(
               'Large diff ($totalLines lines)',
-              style: const TextStyle(color: AppColors.textDim),
+              style: TextStyle(color: AppColors.textDim),
             ),
             const SizedBox(height: 8),
             FilledButton(

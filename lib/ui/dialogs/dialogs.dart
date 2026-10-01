@@ -53,7 +53,7 @@ Future<bool> confirm(
       title: Text(title, style: const TextStyle(fontSize: 17)),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
-        child: Text(message, style: const TextStyle(color: AppColors.textDim)),
+        child: Text(message, style: TextStyle(color: AppColors.textDim)),
       ),
       actions: [
         TextButton(
@@ -245,7 +245,7 @@ class _PromptDialogState extends State<_PromptDialog> {
             ],
             if (error != null) ...[
               const SizedBox(height: 10),
-              Text(error!, style: const TextStyle(color: AppColors.danger)),
+              Text(error!, style: TextStyle(color: AppColors.danger)),
             ],
           ],
         ),
@@ -281,10 +281,7 @@ Future<T?> chooseOption<T>(
         if (message != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-            child: Text(
-              message,
-              style: const TextStyle(color: AppColors.textDim),
-            ),
+            child: Text(message, style: TextStyle(color: AppColors.textDim)),
           ),
         for (final (value, label, description) in options)
           SimpleDialogOption(
@@ -301,10 +298,7 @@ Future<T?> chooseOption<T>(
                   const SizedBox(height: 2),
                   Text(
                     description,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textDim,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textDim),
                   ),
                 ],
               ),

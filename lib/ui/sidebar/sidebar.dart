@@ -187,7 +187,7 @@ class _AheadBehind extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (ref.upstreamGone) {
-      return const Tooltip(
+      return Tooltip(
         message: 'Upstream branch is gone',
         child: Icon(Icons.cloud_off, size: 13, color: AppColors.textFaint),
       );
@@ -197,18 +197,18 @@ class _AheadBehind extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (ref.ahead > 0) ...[
-          const Icon(Icons.arrow_upward, size: 11, color: AppColors.textDim),
+          Icon(Icons.arrow_upward, size: 11, color: AppColors.textDim),
           Text(
             '${ref.ahead}',
-            style: const TextStyle(fontSize: 11, color: AppColors.textDim),
+            style: TextStyle(fontSize: 11, color: AppColors.textDim),
           ),
         ],
         if (ref.behind > 0) ...[
           const SizedBox(width: 3),
-          const Icon(Icons.arrow_downward, size: 11, color: AppColors.textDim),
+          Icon(Icons.arrow_downward, size: 11, color: AppColors.textDim),
           Text(
             '${ref.behind}',
-            style: const TextStyle(fontSize: 11, color: AppColors.textDim),
+            style: TextStyle(fontSize: 11, color: AppColors.textDim),
           ),
         ],
       ],

@@ -48,6 +48,9 @@ import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
+import 'package:re_highlight/styles/atom-one-light.dart';
+
+import '../../app/theme.dart';
 
 /// Texts longer than this are shown without highlighting.
 const maxHighlightChars = 400 * 1024;
@@ -166,11 +169,16 @@ Highlight? _engine;
 Highlight get _highlight =>
     _engine ??= Highlight()..registerLanguages(_languages);
 
-/// Theme without the root background (the diff colors its own rows).
-final Map<String, TextStyle> _theme = {
-  for (final e in atomOneDarkTheme.entries)
-    e.key: e.value.copyWith(backgroundColor: null),
+/// Themes without the root background (the diff colors its own rows).
+Map<String, TextStyle> _withoutBackground(Map<String, TextStyle> theme) => {
+  for (final e in theme.entries) e.key: e.value.copyWith(backgroundColor: null),
 };
+final _darkTheme = _withoutBackground(atomOneDarkTheme);
+final _lightTheme = _withoutBackground(atomOneLightTheme);
+
+/// The highlight colors for the active palette.
+Map<String, TextStyle> get _theme =>
+    AppColors.current.isDark ? _darkTheme : _lightTheme;
 
 /// Highlights [text] as [language] and returns one list of spans per line
 /// (`text.split('\n')` order). Spans carry only the highlight style; the

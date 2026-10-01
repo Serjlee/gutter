@@ -37,6 +37,9 @@ class Settings {
   /// A release the user chose to skip (its tag): not offered again.
   String? skippedUpdate;
 
+  /// 'system' (follow the OS), 'light' or 'dark'.
+  String themeMode = 'system';
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -58,6 +61,7 @@ class Settings {
     'githubAvatars': githubAvatars,
     'forceTagFetch': forceTagFetch,
     'skippedUpdate': skippedUpdate,
+    'themeMode': themeMode,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -81,7 +85,12 @@ class Settings {
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
-      ..skippedUpdate = j['skippedUpdate'] as String?;
+      ..skippedUpdate = j['skippedUpdate'] as String?
+      ..themeMode = switch (j['themeMode']) {
+        'light' => 'light',
+        'dark' => 'dark',
+        _ => 'system',
+      };
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

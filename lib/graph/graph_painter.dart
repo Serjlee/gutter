@@ -258,7 +258,7 @@ class GraphRowPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
-          ..color = const Color(0xFFB8BDC7),
+          ..color = AppColors.trunkRing,
       );
     }
     if (isHead) {
@@ -268,7 +268,7 @@ class GraphRowPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
-          ..color = Colors.white.withValues(alpha: 0.85),
+          ..color = AppColors.headRing,
       );
     }
   }

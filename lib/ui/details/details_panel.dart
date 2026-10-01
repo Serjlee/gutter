@@ -27,7 +27,7 @@ class DetailsPanel extends StatelessWidget {
     } else if (tab.selectedSha != null) {
       child = CommitDetailsPanel(tab: tab);
     } else {
-      child = const Center(
+      child = Center(
         child: Text(
           'Select a commit',
           style: TextStyle(color: AppColors.textDim),
@@ -73,7 +73,7 @@ class MultiCommitPanel extends StatelessWidget {
             ],
           ),
         ),
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(14, 0, 14, 10),
           child: Text(
             'Shift-click selects a range, Ctrl/Cmd-click adds or removes '
@@ -134,10 +134,7 @@ class MultiCommitPanel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       c.authorName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textDim,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -161,10 +158,7 @@ class CommitDetailsPanel extends StatelessWidget {
       return Center(
         child: tab.detailsLoading
             ? const CircularProgressIndicator()
-            : const Text(
-                'No details',
-                style: TextStyle(color: AppColors.textDim),
-              ),
+            : Text('No details', style: TextStyle(color: AppColors.textDim)),
       );
     }
     final row = tab.graph.rowOf(d.sha);
@@ -217,10 +211,7 @@ class CommitDetailsPanel extends StatelessWidget {
                       stash != null
                           ? 'on '
                           : (parents.length > 1 ? 'parents ' : 'parent '),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textDim,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
                     for (final p in parents)
                       InkWell(
@@ -250,7 +241,7 @@ class CommitDetailsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
             child: SelectableText(
               d.body,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textDim,
                 height: 1.4,
@@ -301,7 +292,7 @@ class CommitDetailsPanel extends StatelessWidget {
                       'authored ${formatDate(authorDate)}'
                       '${differentCommitter ? ' · committed by ${d.committerName}' : ''}',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AppColors.textDim,
                       ),
@@ -925,10 +916,7 @@ class _DirRowState extends State<_DirRow> {
                 else
                   Text(
                     '${widget.fileCount}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textFaint,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AppColors.textFaint),
                   ),
               ],
             ),

@@ -213,7 +213,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                     ? Center(
                         child: tab.loading || tab.loadingLog
                             ? const CircularProgressIndicator()
-                            : const Text(
+                            : Text(
                                 'No commits yet',
                                 style: TextStyle(color: AppColors.textDim),
                               ),
@@ -311,7 +311,7 @@ class _Header extends StatelessWidget {
       child: Text(
         t,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           letterSpacing: 0.5,
           fontWeight: FontWeight.w600,
@@ -332,7 +332,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 26,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.panelAlt,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -617,7 +617,7 @@ class _WipSummary extends StatelessWidget {
             draft.isEmpty ? '// WIP' : draft,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontStyle: FontStyle.italic,
               color: AppColors.textDim,
@@ -787,7 +787,7 @@ class _RefPills extends StatelessWidget {
                       ),
                       child: Text(
                         '+$more',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textDim,
                         ),
@@ -879,7 +879,7 @@ class _RefPills extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 11.5,
-              color: Colors.white,
+              color: AppColors.pillText,
               fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
@@ -887,7 +887,11 @@ class _RefPills extends StatelessWidget {
         for (final i in all.take(iconCount))
           Padding(
             padding: const EdgeInsets.only(left: 4),
-            child: Icon(i, size: 11, color: Colors.white70),
+            child: Icon(
+              i,
+              size: 11,
+              color: AppColors.pillText.withValues(alpha: 0.7),
+            ),
           ),
       ],
     );

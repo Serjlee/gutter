@@ -10,6 +10,8 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlView* view;
+  FlMethodChannel* window_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -26,31 +28,61 @@ static void set_window_icon(GtkWindow* window) {
   gtk_window_set_icon_from_file(window, path, nullptr);
 }
 
-// Gutter is always dark: ask GTK for the dark variant of the theme (title
-// bar buttons, dialogs; with server-side decorations, a hint to the window
-// manager), and make GNOME's header bar compact and the color of the tab
-// strip below it, instead of a tall, light theme default.
-static void style_window_chrome() {
+// Matches the window frame to Gutter's theme: asks GTK for the dark or
+// light variant of the theme (title bar buttons, dialogs; with server-side
+// decorations, a hint to the window manager), and makes GNOME's header bar
+// compact and the color of the tab strip below it, instead of a tall theme
+// default.
+static GtkCssProvider* chrome_css = nullptr;
+
+static void style_window_chrome(gboolean dark) {
   GtkSettings* settings = gtk_settings_get_default();
   if (settings != nullptr) {
-    g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE,
+    g_object_set(settings, "gtk-application-prefer-dark-theme", dark,
                  nullptr);
   }
-  g_autoptr(GtkCssProvider) css = gtk_css_provider_new();
-  gtk_css_provider_load_from_data(
-      css,
+  if (chrome_css == nullptr) {
+    chrome_css = gtk_css_provider_new();
+    gtk_style_context_add_provider_for_screen(
+        gdk_screen_get_default(), GTK_STYLE_PROVIDER(chrome_css),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  }
+  g_autofree gchar* css = g_strdup_printf(
       "headerbar, headerbar:backdrop {"
-      "  min-height: 0; padding: 0 6px; background: #1b1d23;"
-      "  border-bottom: 1px solid #363b45; box-shadow: none; }"
+      "  min-height: 0; padding: 0 6px; background: %s;"
+      "  border-bottom: 1px solid %s; box-shadow: none; }"
       "headerbar .title { font-size: 12px; font-weight: normal;"
-      "  color: #8b93a1; }"
-      "headerbar:backdrop .title { color: #5e6573; }"
+      "  color: %s; }"
+      "headerbar:backdrop .title { color: %s; }"
       "headerbar button.titlebutton { min-height: 20px; min-width: 20px;"
       "  padding: 2px; margin: 4px 0; }",
-      -1, nullptr);
-  gtk_style_context_add_provider_for_screen(
-      gdk_screen_get_default(), GTK_STYLE_PROVIDER(css),
-      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      dark ? "#1b1d23" : "#ffffff", dark ? "#363b45" : "#d0d7de",
+      dark ? "#8b93a1" : "#59636e", dark ? "#5e6573" : "#8c959f");
+  gtk_css_provider_load_from_data(chrome_css, css, -1, nullptr);
+}
+
+// "gutter/window" channel: setDark(bool) restyles the frame when the app's
+// theme changes.
+static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
+                             gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(fl_method_call_get_name(call), "setDark") == 0) {
+    FlValue* args = fl_method_call_get_args(call);
+    gboolean dark = args == nullptr ||
+                    fl_value_get_type(args) != FL_VALUE_TYPE_BOOL ||
+                    fl_value_get_bool(args);
+    style_window_chrome(dark);
+    GdkRGBA background;
+    gdk_rgba_parse(&background, dark ? "#1b1d23" : "#ffffff");
+    if (self->view != nullptr) {
+      fl_view_set_background_color(self->view, &background);
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  fl_method_call_respond(call, response, nullptr);
 }
 
 // Called when first Flutter frame received.
@@ -61,7 +93,7 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
-  style_window_chrome();
+  style_window_chrome(TRUE);
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -116,6 +148,14 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  self->view = view;
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "gutter/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->window_channel, window_method_cb, self, nullptr);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -162,6 +202,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->window_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

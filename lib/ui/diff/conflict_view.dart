@@ -61,8 +61,8 @@ class ConflictView extends StatefulWidget {
   final RepoTabController tab;
   final StatusEntry entry;
 
-  static const currentColor = AppColors.accent;
-  static const incomingColor = AppColors.remoteBranch;
+  static final currentColor = AppColors.accent;
+  static final incomingColor = AppColors.remoteBranch;
 
   @override
   State<ConflictView> createState() => _ConflictViewState();
@@ -328,7 +328,7 @@ class _ConflictViewState extends State<ConflictView> {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.panelAlt,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -456,11 +456,7 @@ class _ConflictViewState extends State<ConflictView> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: Row(
               children: [
-                const Icon(
-                  Icons.warning_amber,
-                  size: 16,
-                  color: AppColors.warning,
-                ),
+                Icon(Icons.warning_amber, size: 16, color: AppColors.warning),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -547,15 +543,11 @@ class _ConflictViewState extends State<ConflictView> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.unfold_more,
-                    size: 14,
-                    color: AppColors.textFaint,
-                  ),
+                  Icon(Icons.unfold_more, size: 14, color: AppColors.textFaint),
                   const SizedBox(width: 6),
                   Text(
                     '$hidden unchanged lines',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       color: AppColors.textFaint,
                     ),
@@ -603,7 +595,7 @@ class _ConflictViewState extends State<ConflictView> {
                       ),
                       TextSpan(
                         text: '  $subtitle',
-                        style: const TextStyle(color: AppColors.textFaint),
+                        style: TextStyle(color: AppColors.textFaint),
                       ),
                     ],
                   ),
@@ -614,7 +606,7 @@ class _ConflictViewState extends State<ConflictView> {
               ),
             ),
             if (lines.isEmpty)
-              const SelectionContainer.disabled(
+              SelectionContainer.disabled(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(13, 0, 12, 6),
                   child: Text(
@@ -679,7 +671,7 @@ class _ConflictViewState extends State<ConflictView> {
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
               child: Row(
                 children: [
-                  const Icon(Icons.merge, size: 15, color: AppColors.warning),
+                  Icon(Icons.merge, size: 15, color: AppColors.warning),
                   const SizedBox(width: 6),
                   Text(
                     'Conflict ${index + 1} of $total',
@@ -738,15 +730,11 @@ class _ConflictViewState extends State<ConflictView> {
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
     decoration: BoxDecoration(
       color: AppColors.success.withValues(alpha: 0.12),
-      border: const Border(top: BorderSide(color: AppColors.border)),
+      border: Border(top: BorderSide(color: AppColors.border)),
     ),
     child: Row(
       children: [
-        const Icon(
-          Icons.check_circle_outline,
-          size: 18,
-          color: AppColors.success,
-        ),
+        Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(
@@ -834,7 +822,7 @@ class _ConflictViewState extends State<ConflictView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.merge, size: 28, color: AppColors.warning),
+          Icon(Icons.merge, size: 28, color: AppColors.warning),
           const SizedBox(height: 10),
           Text(
             text,

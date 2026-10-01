@@ -31,7 +31,7 @@ class ResizeHandle extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
           onVerticalDragEnd: (_) => onEnd?.call(),
-          child: const SizedBox(
+          child: SizedBox(
             height: 5,
             child: Center(child: Divider(height: 1, color: AppColors.border)),
           ),
@@ -44,7 +44,7 @@ class ResizeHandle extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
         onHorizontalDragEnd: (_) => onEnd?.call(),
-        child: const SizedBox(
+        child: SizedBox(
           width: 5,
           child: Center(
             child: VerticalDivider(width: 1, color: AppColors.border),
@@ -134,7 +134,7 @@ class ToolbarButton extends StatelessWidget {
               itemBuilder: (_) => menu!,
               onSelected: (cb) => cb(),
               borderRadius: BorderRadius.circular(4),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Align(
                   alignment: Alignment.topCenter,
@@ -231,7 +231,7 @@ class AppDropdown<T> extends StatelessWidget {
       (i) => i.$1 == value,
       orElse: () => items.first,
     );
-    final base = style ?? const TextStyle(fontSize: 13, color: AppColors.text);
+    final base = style ?? TextStyle(fontSize: 13, color: AppColors.text);
     final label = Text(
       current.$2,
       overflow: TextOverflow.ellipsis,
@@ -259,11 +259,7 @@ class AppDropdown<T> extends StatelessWidget {
           mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
           children: [
             if (expand) Expanded(child: label) else label,
-            const Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: AppColors.textDim,
-            ),
+            Icon(Icons.arrow_drop_down, size: 18, color: AppColors.textDim),
           ],
         ),
       ),
@@ -333,7 +329,7 @@ class SectionHeader extends StatelessWidget {
               child: Text(
                 title.toUpperCase(),
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.6,
@@ -346,10 +342,7 @@ class SectionHeader extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 6),
                 child: Text(
                   '$count',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textFaint,
-                  ),
+                  style: TextStyle(fontSize: 11, color: AppColors.textFaint),
                 ),
               ),
             ...actions,
@@ -460,15 +453,15 @@ class PathLabel extends StatelessWidget {
           if (oldPath != null && oldPath != path)
             TextSpan(
               text: '$oldPath → ',
-              style: const TextStyle(color: AppColors.textFaint),
+              style: TextStyle(color: AppColors.textFaint),
             ),
           TextSpan(
             text: dir,
-            style: const TextStyle(color: AppColors.textDim),
+            style: TextStyle(color: AppColors.textDim),
           ),
           TextSpan(
             text: file,
-            style: const TextStyle(color: AppColors.text),
+            style: TextStyle(color: AppColors.text),
           ),
         ],
       ),

@@ -110,7 +110,7 @@ class _CleanupBranchesDialogState extends State<CleanupBranchesDialog> {
           padding: const EdgeInsets.only(left: 52, bottom: 4),
           child: Text(
             s.note,
-            style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
           ),
         ),
       );
@@ -120,7 +120,7 @@ class _CleanupBranchesDialogState extends State<CleanupBranchesDialog> {
     }
     if (filtering && items.isEmpty) {
       items.add(
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
             'No branches match.',
@@ -235,7 +235,7 @@ class _CleanupBranchesDialogState extends State<CleanupBranchesDialog> {
             ),
             Text(
               '$all of ${s.branches.length}',
-              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+              style: TextStyle(fontSize: 12, color: AppColors.textDim),
             ),
           ],
         ),
@@ -270,7 +270,7 @@ class _CleanupBranchesDialogState extends State<CleanupBranchesDialog> {
           const SizedBox(width: 12),
           Text(
             relativeTime(b.date),
-            style: const TextStyle(fontSize: 12, color: AppColors.textFaint),
+            style: TextStyle(fontSize: 12, color: AppColors.textFaint),
           ),
         ],
       ),

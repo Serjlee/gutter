@@ -58,7 +58,7 @@ class UpdateDialog extends StatelessWidget {
               children: [
                 Text(
                   'You have ${current.isRelease ? current.version : current.label}.',
-                  style: const TextStyle(color: AppColors.textDim),
+                  style: TextStyle(color: AppColors.textDim),
                 ),
                 if (notes.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -93,7 +93,7 @@ class UpdateDialog extends StatelessWidget {
 
   Widget _status(UpdateStage stage, Installation install) {
     final updater = app.updater;
-    const dim = TextStyle(fontSize: 12.5, color: AppColors.textDim);
+    final dim = TextStyle(fontSize: 12.5, color: AppColors.textDim);
     switch (stage) {
       case UpdateStage.downloading:
         final pct = updater.progress;
@@ -111,7 +111,7 @@ class UpdateDialog extends StatelessWidget {
           ],
         );
       case UpdateStage.unpacking:
-        return const Column(
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             LinearProgressIndicator(),
@@ -120,12 +120,12 @@ class UpdateDialog extends StatelessWidget {
           ],
         );
       case UpdateStage.ready:
-        return const Text(
+        return Text(
           'Ready. Restart Gutter now, or it updates when you quit.',
           style: dim,
         );
       case UpdateStage.scheduled:
-        return const Text(
+        return Text(
           'Gutter updates when you quit, and starts the new version next '
           'time.',
           style: dim,
@@ -133,11 +133,11 @@ class UpdateDialog extends StatelessWidget {
       case UpdateStage.failed:
         return Text(
           'Update failed: ${updater.error}',
-          style: const TextStyle(fontSize: 12.5, color: AppColors.danger),
+          style: TextStyle(fontSize: 12.5, color: AppColors.danger),
         );
       case UpdateStage.idle:
         return switch (install.kind) {
-          InstallKind.flatpak => const Text(
+          InstallKind.flatpak => Text(
             'Installed with Flatpak: download the new bundle, then install it '
             'with `flatpak install --user <file>`.',
             style: dim,

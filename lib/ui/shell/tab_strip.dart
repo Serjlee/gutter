@@ -65,7 +65,7 @@ class _HomeTab extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active ? AppColors.toolbar : null,
-            border: const Border(right: BorderSide(color: AppColors.border)),
+            border: Border(right: BorderSide(color: AppColors.border)),
           ),
           child: Icon(
             Icons.grid_view_rounded,
@@ -128,7 +128,7 @@ class _RepoTabState extends State<_RepoTab> {
                         ? AppColors.toolbar
                         : (_hover ? AppColors.hover : null),
                     border: Border(
-                      right: const BorderSide(color: AppColors.border),
+                      right: BorderSide(color: AppColors.border),
                       top: BorderSide(
                         color: widget.active
                             ? AppColors.accent
@@ -159,7 +159,7 @@ class _RepoTabState extends State<_RepoTab> {
                                 ),
                               )
                             else if (tab.operation.name != 'none')
-                              const Padding(
+                              Padding(
                                 padding: EdgeInsets.only(right: 6),
                                 child: Icon(
                                   Icons.warning_amber,
@@ -189,7 +189,7 @@ class _RepoTabState extends State<_RepoTab> {
                             ? InkWell(
                                 onTap: widget.onClose,
                                 borderRadius: BorderRadius.circular(3),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.close,
                                   size: 14,
                                   color: AppColors.textDim,

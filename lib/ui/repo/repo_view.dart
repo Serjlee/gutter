@@ -82,11 +82,7 @@ class _RepoViewState extends State<RepoView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: AppColors.danger,
-                    size: 32,
-                  ),
+                  Icon(Icons.error_outline, color: AppColors.danger, size: 32),
                   const SizedBox(height: 8),
                   Text(tab.loadError!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
@@ -187,7 +183,7 @@ class RepoToolbar extends StatelessWidget {
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.toolbar,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -209,7 +205,7 @@ class RepoToolbar extends StatelessWidget {
                         children: [
                           Text(
                             tab.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               color: AppColors.textDim,
                             ),
@@ -219,7 +215,7 @@ class RepoToolbar extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.call_split,
                                   size: 14,
                                   color: AppColors.accent,
@@ -245,7 +241,7 @@ class RepoToolbar extends StatelessWidget {
                                     padding: const EdgeInsets.only(left: 6),
                                     child: Text(
                                       '↑${head.ahead} ↓${head.behind}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
                                         color: AppColors.textDim,
                                       ),
@@ -348,10 +344,7 @@ class RepoToolbar extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       '$busy…',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textDim,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -402,7 +395,7 @@ class _FetchFailed extends StatelessWidget {
           key: const ValueKey('fetch-failed'),
           borderRadius: BorderRadius.circular(4),
           onTap: () => tab.showOutput(tab.fetchErrorEntry),
-          child: const Padding(
+          child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -441,7 +434,7 @@ class _TagsMoved extends StatelessWidget {
             key: const ValueKey('tags-moved'),
             borderRadius: BorderRadius.circular(4),
             onTap: () => showMovedTags(context, tab),
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -491,7 +484,7 @@ Future<void> showMovedTags(BuildContext context, RepoTabController tab) async {
                     : 'These tags point to different commits on the remote. '
                           'Force Tag Fetch replaces your local tags with the '
                           'remote\'s.',
-                style: const TextStyle(color: AppColors.textDim),
+                style: TextStyle(color: AppColors.textDim),
               ),
               const SizedBox(height: 10),
               Flexible(
@@ -625,7 +618,7 @@ class _SearchBoxState extends State<_SearchBox> {
                       children: [
                         Text(
                           '$hits',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textDim,
                           ),
@@ -736,10 +729,7 @@ class OperationBanner extends StatelessWidget {
               onPressed: idle
                   ? () => tab.run('Abort', () => tab.repo.abortOperation(op))
                   : null,
-              child: const Text(
-                'Abort',
-                style: TextStyle(color: AppColors.danger),
-              ),
+              child: Text('Abort', style: TextStyle(color: AppColors.danger)),
             ),
             if (op == RepoOperation.rebase ||
                 op == RepoOperation.cherryPick ||

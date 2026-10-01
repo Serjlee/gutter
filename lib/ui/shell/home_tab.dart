@@ -166,7 +166,7 @@ class _HomeTabState extends State<HomeTab> {
                       const SizedBox(height: 20),
                       const _Label('SCANNED FOLDERS'),
                       if (app.settings.scanRoots.isEmpty)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.symmetric(vertical: 6),
                           child: Text(
                             'Add a folder to discover every repository inside it.',
@@ -181,7 +181,7 @@ class _HomeTabState extends State<HomeTab> {
                           padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Row(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.folder,
                                 size: 16,
                                 color: AppColors.textDim,
@@ -264,7 +264,7 @@ class _HomeTabState extends State<HomeTab> {
                             child: _Label('ALL REPOSITORIES (${repos.length})'),
                           ),
                           if (repos.isEmpty)
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.all(8),
                               child: Text(
                                 'No repositories yet. Open one or scan a folder.',
@@ -294,7 +294,7 @@ class _Label extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         letterSpacing: 0.6,
         fontWeight: FontWeight.w600,
@@ -400,10 +400,7 @@ class _RepoTileState extends State<_RepoTile> {
                 child: Text(
                   displayPath(p.dirname(widget.path)),
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textFaint,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                 ),
               ),
             ],
@@ -424,6 +421,19 @@ class _SettingsForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _row(
+          'Theme',
+          AppDropdown<String>(
+            key: const ValueKey('theme-mode'),
+            value: s.themeMode,
+            items: const [
+              ('system', 'System', null),
+              ('light', 'Light', null),
+              ('dark', 'Dark', null),
+            ],
+            onChanged: app.setThemeMode,
+          ),
+        ),
         _row(
           'Auto-fetch',
           AppDropdown<int>(
@@ -601,11 +611,7 @@ class _InfoIconState extends State<_InfoIcon> {
       waitDuration: const Duration(milliseconds: 200),
       constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.all(12),
-      textStyle: const TextStyle(
-        fontSize: 12.5,
-        color: AppColors.text,
-        height: 1.4,
-      ),
+      textStyle: TextStyle(fontSize: 12.5, color: AppColors.text, height: 1.4),
       decoration: BoxDecoration(
         color: AppColors.toolbar,
         border: Border.all(color: AppColors.border),
@@ -621,7 +627,7 @@ class _InfoIconState extends State<_InfoIcon> {
       child: GestureDetector(
         key: ValueKey('info-${widget.label}'),
         onTap: () => _tooltip.currentState?.ensureTooltipVisible(),
-        child: const MouseRegion(
+        child: MouseRegion(
           cursor: SystemMouseCursors.help,
           child: Icon(Icons.info_outline, size: 15, color: AppColors.textDim),
         ),
@@ -665,7 +671,7 @@ class _GitPathFieldState extends State<_GitPathField> {
         onSubmitted: widget.app.setGitPath,
         decoration: InputDecoration(
           hintText: _defaultPath,
-          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textFaint),
+          hintStyle: TextStyle(fontSize: 13, color: AppColors.textFaint),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 10,
             vertical: 8,
@@ -706,7 +712,7 @@ class _VersionInfo extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.system_update_alt,
                       size: 16,
                       color: AppColors.accent,
@@ -742,10 +748,7 @@ class _VersionInfo extends StatelessWidget {
                       ? 'Up to date (latest ${latest.tag})'
                       : 'Latest release: ${latest.tag}',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.textFaint,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
                 ),
               ),
               if (!app.updates.current.isRelease)
@@ -758,7 +761,7 @@ class _VersionInfo extends StatelessWidget {
             ],
           );
         } else if (updates.checking) {
-          status = const Text(
+          status = Text(
             'Checking for updates…',
             style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
           );
@@ -768,7 +771,7 @@ class _VersionInfo extends StatelessWidget {
               Flexible(
                 child: Tooltip(
                   message: updates.error!,
-                  child: const Text(
+                  child: Text(
                     'Update check failed',
                     style: TextStyle(
                       fontSize: 11.5,
@@ -789,10 +792,7 @@ class _VersionInfo extends StatelessWidget {
                   child: SelectableText(
                     updates.current.label,
                     key: const ValueKey('app-version'),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textDim,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textDim),
                   ),
                 ),
                 const SizedBox(width: 4),
