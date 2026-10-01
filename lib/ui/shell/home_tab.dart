@@ -220,7 +220,6 @@ class _HomeTabState extends State<HomeTab> {
                           ),
                         ),
                       const SizedBox(height: 20),
-                      const _Label('SETTINGS'),
                       _SettingsForm(app: app),
                     ],
                   ),
@@ -411,6 +410,7 @@ class _RepoTileState extends State<_RepoTile> {
   }
 }
 
+/// The settings, in sections.
 class _SettingsForm extends StatelessWidget {
   const _SettingsForm({required this.app});
   final AppController app;
@@ -421,6 +421,7 @@ class _SettingsForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const _Label('APPEARANCE'),
         _row(
           'Theme',
           AppDropdown<String>(
@@ -433,35 +434,6 @@ class _SettingsForm extends StatelessWidget {
             ],
             onChanged: app.setThemeMode,
           ),
-        ),
-        _row(
-          'Auto-fetch',
-          AppDropdown<int>(
-            value: s.fetchIntervalMinutes,
-            items: const [
-              (0, 'Off', null),
-              (1, 'Every minute', null),
-              (5, 'Every 5 min', null),
-              (10, 'Every 10 min', null),
-              (30, 'Every 30 min', null),
-            ],
-            onChanged: app.setFetchInterval,
-          ),
-        ),
-        _row(
-          'Force tag fetch',
-          AppDropdown<bool>(
-            key: const ValueKey('force-tag-fetch'),
-            value: s.forceTagFetch,
-            items: const [(false, 'Ask', null), (true, 'Always', null)],
-            onChanged: app.setForceTagFetch,
-          ),
-          info:
-              'When a tag moved on the remote (deploy tags like "dev" or '
-              '"staging" often do), git won\'t move your local one.\n\n'
-              'Ask: Gutter lists the moved tags and offers Force Tag Fetch, '
-              'which replaces your local tags with the remote\'s.\n\n'
-              'Always: every fetch does that, without asking.',
         ),
         _row(
           'Zoom',
@@ -494,26 +466,6 @@ class _SettingsForm extends StatelessWidget {
           ),
         ),
         _row(
-          'Commits loaded',
-          AppDropdown<int>(
-            value: s.maxCommits,
-            items: const [
-              (2000, '2,000', null),
-              (20000, '20,000', null),
-              (100000, '100,000', null),
-              (0, 'All', null),
-            ],
-            onChanged: app.setMaxCommits,
-          ),
-          info:
-              'How many commits a repository loads when it opens. '
-              'Scrolling to the bottom of the graph loads the next batch '
-              'of the same size, so older history is always reachable.\n\n'
-              'All loads the whole history at once: simplest, but slower '
-              'to open very large repositories.\n\n'
-              'Applies to repositories opened from now on.',
-        ),
-        _row(
           'Syntax highlighting',
           AppDropdown<bool>(
             key: const ValueKey('syntax-highlighting'),
@@ -542,13 +494,64 @@ class _SettingsForm extends StatelessWidget {
               'view. Authors whose email isn\'t on a GitHub account keep '
               'their initials.',
         ),
+        const SizedBox(height: 20),
+        const _Label('GIT'),
         _row('Git executable', _GitPathField(app: app), expand: true),
+        _row(
+          'Auto-fetch',
+          AppDropdown<int>(
+            value: s.fetchIntervalMinutes,
+            items: const [
+              (0, 'Off', null),
+              (1, 'Every minute', null),
+              (5, 'Every 5 min', null),
+              (10, 'Every 10 min', null),
+              (30, 'Every 30 min', null),
+            ],
+            onChanged: app.setFetchInterval,
+          ),
+        ),
+        _row(
+          'Force tag fetch',
+          AppDropdown<bool>(
+            key: const ValueKey('force-tag-fetch'),
+            value: s.forceTagFetch,
+            items: const [(false, 'Ask', null), (true, 'Always', null)],
+            onChanged: app.setForceTagFetch,
+          ),
+          info:
+              'When a tag moved on the remote (deploy tags like "dev" or '
+              '"staging" often do), git won\'t move your local one.\n\n'
+              'Ask: Gutter lists the moved tags and offers Force Tag Fetch, '
+              'which replaces your local tags with the remote\'s.\n\n'
+              'Always: every fetch does that, without asking.',
+        ),
+        const SizedBox(height: 20),
+        const _Label('HISTORY'),
+        _row(
+          'Commits loaded',
+          AppDropdown<int>(
+            value: s.maxCommits,
+            items: const [
+              (2000, '2,000', null),
+              (20000, '20,000', null),
+              (100000, '100,000', null),
+              (0, 'All', null),
+            ],
+            onChanged: app.setMaxCommits,
+          ),
+          info:
+              'How many commits a repository loads when it opens. '
+              'Scrolling to the bottom of the graph loads the next batch '
+              'of the same size, so older history is always reachable.\n\n'
+              'All loads the whole history at once: simplest, but slower '
+              'to open very large repositories.\n\n'
+              'Applies to repositories opened from now on.',
+        ),
       ],
     );
   }
 
-  /// A label and its control; with [expand] the control takes the rest of
-  /// the row (text fields) instead of the label.
   /// A label and its control; with [expand] the control takes the rest of
   /// the row (text fields) instead of the label. [info] adds an info icon
   /// after the label that explains the setting (hover or click).
