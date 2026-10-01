@@ -720,78 +720,90 @@ class _RefPills extends StatelessWidget {
     final pills = _group();
     final detachedHead = isHeadCommit && !refs.any((r) => r.isHead);
     if (pills.isEmpty && !detachedHead) return const SizedBox();
-    // The first pill, and main/master remotes, show; the rest fold into
-    // "+N".
-    final shown = [
-      for (var i = 0; i < pills.length; i++)
-        if (i == 0 || pills[i].isTrunk) pills[i],
-    ];
-    final folded = pills.where((p) => !shown.contains(p)).toList();
-    final more = folded.length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: LayoutBuilder(
-        builder: (context, c) => Row(
-          children: [
-            if (detachedHead)
-              _pill(
-                context,
-                label: 'HEAD',
-                icon: Icons.adjust,
-                color: laneColor,
-                bold: true,
-              ),
-            for (final (i, p) in shown.indexed)
-              if (i > 0 && p.isTrunk)
-                // Never shortened (within reason): the first pill gives way.
+        builder: (context, c) {
+          // The first pill shows, and main/master remotes when there's room
+          // for them next to it (else their node ring and scroll mark still
+          // show where they are); the rest fold into "+N".
+          final pin = c.maxWidth >= _pinWidth;
+          final shown = [
+            for (var i = 0; i < pills.length; i++)
+              if (i == 0 || (pin && pills[i].isTrunk)) pills[i],
+          ];
+          final folded = pills.where((p) => !shown.contains(p)).toList();
+          final more = folded.length;
+          return Row(
+            children: [
+              if (detachedHead)
+                Flexible(
+                  child: _pill(
+                    context,
+                    label: 'HEAD',
+                    icon: Icons.adjust,
+                    color: laneColor,
+                    bold: true,
+                  ),
+                ),
+              for (final (i, p) in shown.indexed)
+                if (i > 0 && p.isTrunk)
+                  // Never shortened (within reason): the first pill gives
+                  // way.
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: c.maxWidth * 0.6),
+                      child: _pillFor(context, p, short: true),
+                    ),
+                  )
+                else
+                  Flexible(child: _pillFor(context, p)),
+              if (more > 0)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: c.maxWidth * 0.6),
-                    child: _pillFor(context, p, short: true),
-                  ),
-                )
-              else
-                Flexible(child: _pillFor(context, p)),
-            if (more > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: PopupMenuButton<VoidCallback>(
-                  popUpAnimationStyle: AnimationStyle.noAnimation,
-                  tooltip: folded.map((p) => p.label).join('\n'),
-                  padding: EdgeInsets.zero,
-                  itemBuilder: (_) => [
-                    for (final p in folded)
-                      PopupMenuItem<VoidCallback>(
-                        enabled: false,
-                        height: 30,
-                        child: _pillFor(context, p),
+                  child: PopupMenuButton<VoidCallback>(
+                    popUpAnimationStyle: AnimationStyle.noAnimation,
+                    tooltip: folded.map((p) => p.label).join('\n'),
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (_) => [
+                      for (final p in folded)
+                        PopupMenuItem<VoidCallback>(
+                          enabled: false,
+                          height: 30,
+                          // Menus measure their items: no width-dependent
+                          // layout in there.
+                          child: _pillFor(context, p, fit: false),
+                        ),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
                       ),
-                  ],
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.panelAlt,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      '+$more',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textDim,
+                      decoration: BoxDecoration(
+                        color: AppColors.panelAlt,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        '+$more',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textDim,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
+
+  /// Below this, a main/master remote folds like any other pill.
+  static const _pinWidth = 140.0;
 
   /// [p]'s label; [short] drops "origin/" from a remote branch next to
   /// another pill (the cloud icon says it's remote).
@@ -800,7 +812,12 @@ class _RefPills extends StatelessWidget {
       ? p.remotes.first.remoteBranchName
       : p.label;
 
-  Widget _pillFor(BuildContext context, _PillData p, {bool short = false}) {
+  Widget _pillFor(
+    BuildContext context,
+    _PillData p, {
+    bool short = false,
+    bool fit = true,
+  }) {
     final icons = <IconData>[
       if (p.local != null) Icons.laptop_mac,
       if (p.remotes.isNotEmpty) Icons.cloud_outlined,
@@ -832,11 +849,15 @@ class _RefPills extends StatelessWidget {
           color: color,
           bold: p.isHead,
           outlined: p.isTrunk,
+          fit: fit,
         ),
       ),
     );
   }
 
+  /// A ref label. With [fit], icons that don't fit in the width it gets are
+  /// dropped (last first) rather than overflowing, leaving the text some
+  /// room; it then can't be measured for intrinsic sizes (as menus do).
   Widget _pill(
     BuildContext context, {
     required String label,
@@ -845,7 +866,31 @@ class _RefPills extends StatelessWidget {
     required Color color,
     bool bold = false,
     bool outlined = false,
+    bool fit = true,
   }) {
+    final all = [?icon, ...icons];
+    Widget content(int iconCount) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: Colors.white,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+        for (final i in all.take(iconCount))
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Icon(i, size: 11, color: Colors.white70),
+          ),
+      ],
+    );
     return Container(
       height: 21,
       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -856,33 +901,18 @@ class _RefPills extends StatelessWidget {
             : Border.all(color: color.withValues(alpha: 0.8)),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                color: Colors.white,
-                fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-              ),
+      child: !fit || all.isEmpty
+          ? content(all.length)
+          : LayoutBuilder(
+              builder: (context, c) {
+                // Each icon takes 15px; keep 20px for the text.
+                final room = c.maxWidth - 20;
+                final n = room.isFinite
+                    ? (room / 15).floor().clamp(0, all.length)
+                    : all.length;
+                return content(n);
+              },
             ),
-          ),
-          if (icon != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(icon, size: 11, color: Colors.white70),
-            ),
-          for (final i in icons)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(i, size: 11, color: Colors.white70),
-            ),
-        ],
-      ),
     );
   }
 }

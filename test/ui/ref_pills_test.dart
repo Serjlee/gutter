@@ -77,6 +77,56 @@ void main() {
     expect(find.text('v0'), findsNothing);
   });
 
+  testWidgets('labels fit however narrow the window is', (tester) async {
+    late TempRepo upstream;
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      upstream = await TempRepo.create();
+      upstream.commit('one', {'a.txt': '1\n'});
+      t = await TempRepo.create();
+      t.git(['remote', 'add', 'origin', upstream.path]);
+      t.git(['fetch', '-q', 'origin']);
+      // HEAD, origin/main and a tag together; a long name with its remote.
+      t.git([
+        'checkout',
+        '-q',
+        '-b',
+        'feature/a-rather-long-name',
+        'origin/main',
+      ]);
+      t.git(['tag', 'v1']);
+      t.commit('two', {'a.txt': '2\n'});
+      t.git(['branch', 'origin-tracked-with-a-long-name']);
+      t.git([
+        'update-ref',
+        'refs/remotes/origin/origin-tracked-with-a-long-name',
+        'HEAD',
+      ]);
+      t.git(['checkout', '-q', '--detach', 'HEAD~1']);
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+      upstream.dispose();
+    });
+    for (final width in const <double>[1400, 700, 420, 300, 200]) {
+      tester.view.physicalSize = Size(width, 500);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(),
+          home: Scaffold(body: CommitGraphView(tab: tab)),
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'at ${width}px');
+    }
+    addTearDown(tester.view.reset);
+  });
+
   group('scroll marks', () {
     const blue = Color(0xFF0000FF);
     List<ScrollMark> marks({
