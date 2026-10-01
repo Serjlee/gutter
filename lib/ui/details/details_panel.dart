@@ -318,7 +318,7 @@ class CommitDetailsPanel extends StatelessWidget {
             ],
           ),
         ),
-        SectionHeader(title: '${files.length} changed files'),
+        SectionHeader(title: 'Changed files', count: files.length),
         if (tab.detailsLoading) const LinearProgressIndicator(minHeight: 2),
         if (commit != null)
           for (final f in files)
