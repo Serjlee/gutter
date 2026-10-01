@@ -22,6 +22,9 @@ class Settings {
   Map<String, double> columnWidths = {};
   bool diffSplit = false;
 
+  /// Wrap long lines in the unified diff (the split one always wraps).
+  bool diffWrap = false;
+
   /// Show working-tree files as a folder tree instead of a flat list.
   bool fileTree = false;
 
@@ -54,6 +57,7 @@ class Settings {
     'detailsWidth': detailsWidth,
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
+    'diffWrap': diffWrap,
     'fileTree': fileTree,
     // A new key: the old one ("syntaxHighlight") saved the former default,
     // off, for everyone.
@@ -81,6 +85,7 @@ class Settings {
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
+      ..diffWrap = j['diffWrap'] == true
       ..fileTree = j['fileTree'] == true
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false

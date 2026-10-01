@@ -266,6 +266,12 @@ class AppController extends ChangeNotifier {
     _ => platform == Brightness.light ? AppPalette.light : AppPalette.dark,
   };
 
+  void setDiffWrap(bool value) {
+    settings.diffWrap = value;
+    save();
+    notifyListeners();
+  }
+
   void setFileTree(bool value) {
     settings.fileTree = value;
     save();

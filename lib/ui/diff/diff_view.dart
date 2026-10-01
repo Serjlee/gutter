@@ -377,6 +377,19 @@ class _DiffViewState extends State<DiffView> {
                 ],
               ],
               const SizedBox(width: 4),
+              if (_mode == _Mode.unified)
+                SmallIconButton(
+                  key: const ValueKey('diff-wrap'),
+                  icon: Icons.wrap_text,
+                  tooltip: tab.app.settings.diffWrap
+                      ? "Don't wrap long lines"
+                      : 'Wrap long lines',
+                  color: tab.app.settings.diffWrap ? AppColors.accent : null,
+                  onPressed: () => setState(
+                    () => tab.app.setDiffWrap(!tab.app.settings.diffWrap),
+                  ),
+                ),
+              if (_mode == _Mode.unified) const SizedBox(width: 4),
               if (c.maxWidth < 480)
                 AppDropdown<_Mode>(
                   key: const ValueKey('diff-mode'),
@@ -542,33 +555,36 @@ class _DiffViewState extends State<DiffView> {
     final spans = _highlightFor(diff, tab.diffTarget!.path);
     final noWidth = max(3, '$maxNo'.length) * _charWidth + 12;
     final contentWidth = noWidth * 2 + 20 + maxLen * _charWidth + 40;
+    final wrap = tab.app.settings.diffWrap;
     // The code can be selected and copied; line numbers, markers and hunk
     // headers stay out of the selection.
-    return _scrollable(
-      contentWidth,
-      SelectionArea(
-        child: ListView.builder(
-          controller: _vScroll,
-          itemExtent: _lineHeight,
-          itemCount: rows.length,
-          itemBuilder: (context, i) {
-            final (h, l) = rows[i];
-            if (l < 0) {
-              return SelectionContainer.disabled(child: _hunkHeader(diff, h));
-            }
-            final line = diff.hunks[h].lines[l];
-            return _UnifiedLine(
-              line: line,
-              spans: spans?[h][l],
-              numberWidth: noWidth,
-              selected: _selection[h]?.contains(l) ?? false,
-              selectable: _canSelect && line.isChange,
-              onToggle: (shift) => _toggleLine(h, l, shift: shift),
+    final list = SelectionArea(
+      child: ListView.builder(
+        controller: _vScroll,
+        // Wrapped lines take as many rows as they need.
+        itemExtent: wrap ? null : _lineHeight,
+        itemCount: rows.length,
+        itemBuilder: (context, i) {
+          final (h, l) = rows[i];
+          if (l < 0) {
+            return SelectionContainer.disabled(
+              child: SizedBox(height: _lineHeight, child: _hunkHeader(diff, h)),
             );
-          },
-        ),
+          }
+          final line = diff.hunks[h].lines[l];
+          return _UnifiedLine(
+            line: line,
+            spans: spans?[h][l],
+            numberWidth: noWidth,
+            selected: _selection[h]?.contains(l) ?? false,
+            selectable: _canSelect && line.isChange,
+            wrap: wrap,
+            onToggle: (shift) => _toggleLine(h, l, shift: shift),
+          );
+        },
       ),
     );
+    return wrap ? list : _scrollable(contentWidth, list);
   }
 
   Widget _scrollable(double contentWidth, Widget list) {
@@ -741,6 +757,7 @@ class _UnifiedLine extends StatelessWidget {
     required this.numberWidth,
     required this.selected,
     required this.selectable,
+    this.wrap = false,
     required this.onToggle,
   });
 
@@ -749,21 +766,31 @@ class _UnifiedLine extends StatelessWidget {
   final double numberWidth;
   final bool selected;
   final bool selectable;
+
+  /// Long lines wrap (the row grows) instead of running off to the right.
+  final bool wrap;
   final void Function(bool shift) onToggle;
 
   @override
   Widget build(BuildContext context) {
     final (bg, fg) = _colors(line.type, selected);
     final numStyle = monoStyle(size: 11.5, color: AppColors.textFaint);
-    return Container(
+    // Wrapped, a row is as tall as its text, and the numbers and marker sit
+    // on its first line.
+    final cross = wrap ? CrossAxisAlignment.start : CrossAxisAlignment.center;
+    final row = Container(
       color: bg,
+      constraints: wrap ? const BoxConstraints(minHeight: _lineHeight) : null,
+      padding: wrap ? const EdgeInsets.symmetric(vertical: 1) : null,
       child: Row(
+        crossAxisAlignment: wrap ? CrossAxisAlignment.stretch : cross,
         children: [
           _Gutter(
             selectable: selectable,
             selected: selected,
             onToggle: onToggle,
             child: Row(
+              crossAxisAlignment: cross,
               children: [
                 SizedBox(
                   width: numberWidth,
@@ -798,15 +825,16 @@ class _UnifiedLine extends StatelessWidget {
             child: SelectableLine(
               child: Text.rich(
                 _lineSpan(line, spans, fg),
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.clip,
+                maxLines: wrap ? null : 1,
+                softWrap: wrap,
+                overflow: wrap ? TextOverflow.visible : TextOverflow.clip,
               ),
             ),
           ),
         ],
       ),
     );
+    return wrap ? IntrinsicHeight(child: row) : row;
   }
 }
 
