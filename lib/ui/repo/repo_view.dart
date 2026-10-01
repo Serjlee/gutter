@@ -390,6 +390,15 @@ class RepoToolbar extends StatelessWidget {
               tooltip: 'Refresh (F5)',
               onPressed: () => tab.refresh(forceLog: true),
             ),
+            SmallIconButton(
+              key: const ValueKey('toggle-details'),
+              icon: Icons.view_sidebar_outlined,
+              tooltip:
+                  '${tab.detailsOpen ? 'Hide' : 'Show'} the details panel '
+                  '(${shortcut('I')})',
+              color: tab.detailsOpen ? AppColors.accent : null,
+              onPressed: tab.toggleDetails,
+            ),
           ],
         ),
       ),

@@ -102,7 +102,8 @@ Apple's command line tools). You can pick another on the home tab.
 | `Ctrl/Cmd F` | Search commits (`Enter` / `Shift Enter` to step) |
 | `↑ ↓ PgUp PgDn Home End` | Move through the graph |
 | `Ctrl/Cmd Enter` | Commit (in the message box) |
-| `Esc`, mouse back button | Close diff |
+| `Esc`, mouse back button | Close the diff, then the details panel |
+| `Ctrl/Cmd I` | Show / hide the details panel |
 | `P R E S F D` | Interactive rebase: pick / reword / edit / squash / fixup / drop the selected commits |
 | `Alt ↑ ↓` | Interactive rebase: move the selected commits |
 | `Ctrl/Cmd + / - / 0` | Zoom in / out / reset (or `Ctrl/Cmd` + mouse wheel) |

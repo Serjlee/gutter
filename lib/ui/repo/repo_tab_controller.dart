@@ -184,6 +184,8 @@ class RepoTabController extends ChangeNotifier {
   /// again.
   bool detailsOpen = true;
 
+  void toggleDetails() => setDetailsOpen(!detailsOpen);
+
   void setDetailsOpen(bool open) {
     if (detailsOpen == open) return;
     detailsOpen = open;

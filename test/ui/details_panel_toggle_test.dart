@@ -122,6 +122,17 @@ void main() {
     await tester.pump();
     expect(panel, findsOneWidget);
 
+    // The toolbar toggle and its shortcut.
+    await tester.tap(find.byKey(const ValueKey('toggle-details')));
+    await tester.pump();
+    expect(panel, findsNothing);
+    await tester.tap(find.byKey(const ValueKey('toggle-details')));
+    await tester.pump();
+    expect(panel, findsOneWidget);
+    tab.toggleDetails();
+    await tester.pump();
+    expect(panel, findsNothing);
+
     // Let the views' timers (tooltips, scrollbars) run out.
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
