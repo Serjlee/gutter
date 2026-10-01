@@ -178,53 +178,69 @@ class CommitDetailsPanel extends StatelessWidget {
       padding: EdgeInsets.zero,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            runSpacing: 4,
+          padding: const EdgeInsets.fromLTRB(14, 8, 10, 2),
+          child: Row(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    stash != null ? '${stash.ref} ' : 'commit ',
-                    style: monoStyle(size: 12, color: AppColors.textDim),
-                  ),
-                  InkWell(
-                    onTap: () => copyToClipboard(context, d.sha),
-                    child: Tooltip(
-                      message: 'Copy full SHA',
-                      child: Text(
-                        d.sha.substring(0, 10),
-                        style: monoStyle(size: 12, color: AppColors.accent),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (parents.isNotEmpty)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+              Expanded(
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      stash != null
-                          ? 'on '
-                          : (parents.length > 1 ? 'parents ' : 'parent '),
-                      style: TextStyle(fontSize: 12, color: AppColors.textDim),
-                    ),
-                    for (final p in parents)
-                      InkWell(
-                        onTap: () => tab.jumpToSha(p),
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Text(
-                            p.substring(0, 7),
-                            style: monoStyle(size: 12, color: AppColors.accent),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          stash != null ? '${stash.ref} ' : 'commit ',
+                          style: monoStyle(size: 12, color: AppColors.textDim),
+                        ),
+                        InkWell(
+                          onTap: () => copyToClipboard(context, d.sha),
+                          child: Tooltip(
+                            message: 'Copy full SHA',
+                            child: Text(
+                              d.sha.substring(0, 10),
+                              style: monoStyle(
+                                size: 12,
+                                color: AppColors.accent,
+                              ),
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    if (parents.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            stash != null
+                                ? 'on '
+                                : (parents.length > 1 ? 'parents ' : 'parent '),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textDim,
+                            ),
+                          ),
+                          for (final p in parents)
+                            InkWell(
+                              onTap: () => tab.jumpToSha(p),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Text(
+                                  p.substring(0, 7),
+                                  style: monoStyle(
+                                    size: 12,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                   ],
                 ),
+              ),
+              _CloseDetails(tab: tab),
             ],
           ),
         ),
@@ -578,6 +594,7 @@ class WipPanel extends StatelessWidget {
                   color: AppColors.danger,
                   onPressed: () => actions.discard(unstaged),
                 ),
+              _CloseDetails(tab: tab),
             ],
           ),
         ),
@@ -1042,4 +1059,18 @@ Future<void> openExternally(RepoTabController tab, String relPath) async {
   } catch (e) {
     tab.app.notify('Could not open $relPath: $e', error: true);
   }
+}
+
+/// Closes the details panel; clicking a commit or a stash opens it again.
+class _CloseDetails extends StatelessWidget {
+  const _CloseDetails({required this.tab});
+  final RepoTabController tab;
+
+  @override
+  Widget build(BuildContext context) => SmallIconButton(
+    key: const ValueKey('close-details'),
+    icon: Icons.close,
+    tooltip: 'Close panel (Esc)',
+    onPressed: () => tab.setDetailsOpen(false),
+  );
 }

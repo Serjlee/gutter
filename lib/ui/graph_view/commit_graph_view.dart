@@ -427,6 +427,7 @@ class _GraphRowState extends State<_GraphRow> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           widget.onFocus();
+          tab.setDetailsOpen(true);
           // Shift: select a range; Ctrl/Cmd: add or remove this commit.
           final kb = HardwareKeyboard.instance;
           if (kb.isShiftPressed) {

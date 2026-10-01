@@ -179,6 +179,17 @@ class RepoTabController extends ChangeNotifier {
   /// more are. The WIP row and stashes can't be part of it.
   Set<String> multiSelection = const {};
 
+  /// Whether the details panel is shown. It can be closed to give the graph
+  /// more room; clicking a commit or a stash, or opening a file, shows it
+  /// again.
+  bool detailsOpen = true;
+
+  void setDetailsOpen(bool open) {
+    if (detailsOpen == open) return;
+    detailsOpen = open;
+    _notify();
+  }
+
   /// Start of a Shift range.
   String? _anchor;
 
@@ -744,6 +755,7 @@ class RepoTabController extends ChangeNotifier {
   /// Shows [stash]: its row when it's in the graph, else just its details
   /// (when the commit it was made on isn't loaded).
   void showStash(StashEntry stash) {
+    detailsOpen = true;
     final row = graph.rowOf(stash.sha);
     if (row != null) {
       jumpToSha(stash.sha);
@@ -765,11 +777,13 @@ class RepoTabController extends ChangeNotifier {
   }
 
   void openCommitFile(Commit commit, FileChange file) {
+    detailsOpen = true;
     diffTarget = CommitFileTarget(commit, file);
     unawaited(_loadDiff());
   }
 
   void openWorkingFile(StatusEntry entry, {required bool staged}) {
+    detailsOpen = true;
     if (selectedSha != wipSha) {
       selectedSha = wipSha;
       details = null;
@@ -777,6 +791,16 @@ class RepoTabController extends ChangeNotifier {
     }
     diffTarget = WorkingFileTarget(entry, staged: staged);
     unawaited(_loadDiff());
+  }
+
+  /// Esc or the mouse's back button: closes the open file, else the
+  /// details panel.
+  void back() {
+    if (diffTarget != null) {
+      closeDiff();
+    } else {
+      setDetailsOpen(false);
+    }
   }
 
   void closeDiff({bool notify = true}) {

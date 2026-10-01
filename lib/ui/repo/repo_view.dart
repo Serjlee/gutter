@@ -29,6 +29,9 @@ class RepoView extends StatefulWidget {
 class _RepoViewState extends State<RepoView> {
   final searchFocus = FocusNode(debugLabel: 'search');
 
+  /// Holds focus for the tab's own keys (Esc) when nothing in it has focus.
+  final _viewFocus = FocusNode(debugLabel: 'repo view');
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +52,7 @@ class _RepoViewState extends State<RepoView> {
   void dispose() {
     widget.tab.removeListener(_offerForceTagFetch);
     searchFocus.dispose();
+    _viewFocus.dispose();
     super.dispose();
   }
 
@@ -73,99 +77,124 @@ class _RepoViewState extends State<RepoView> {
             searchFocus.requestFocus,
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
             searchFocus.requestFocus,
+        // Fields and views with their own Esc (search, diff) handle it
+        // first; text fields don't, so it's left alone while typing.
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (!_typing) tab.back();
+        },
       },
-      child: ListenableBuilder(
-        listenable: tab,
-        builder: (context, _) {
-          if (tab.loadError != null && tab.graph.rowCount == 0) {
-            return Center(
+      child: Focus(
+        focusNode: _viewFocus,
+        child: ListenableBuilder(
+          listenable: tab,
+          builder: (context, _) {
+            if (tab.loadError != null && tab.graph.rowCount == 0) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: AppColors.danger,
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(tab.loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: tab.load,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            final settings = tab.app.settings;
+            // The mouse's back button works like Esc.
+            return Listener(
+              onPointerDown: (e) {
+                if (e.buttons & kBackMouseButton != 0) {
+                  tab.back();
+                } else if (!_viewFocus.hasFocus) {
+                  // A click in the tab focuses it, so Esc reaches it (what
+                  // was clicked can still take focus itself).
+                  _viewFocus.requestFocus();
+                }
+              },
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline, color: AppColors.danger, size: 32),
-                  const SizedBox(height: 8),
-                  Text(tab.loadError!, textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: tab.load, child: const Text('Retry')),
+                  RepoToolbar(tab: tab, searchFocus: searchFocus),
+                  if (tab.operation != RepoOperation.none ||
+                      tab.stashConflict != null ||
+                      tab.status.conflicted.isNotEmpty)
+                    OperationBanner(tab: tab),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        // Keep side panels from squeezing the graph out.
+                        final maxSide = max(200.0, c.maxWidth * 0.3);
+                        final minSide = min(120.0, maxSide);
+                        final minDetails = min(220.0, maxSide);
+                        final sideW = min(
+                          settings.sidebarWidth,
+                          maxSide * 0.8,
+                        ).clamp(minSide, maxSide);
+                        final detailsW = settings.detailsWidth.clamp(
+                          minDetails,
+                          maxSide,
+                        );
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: sideW,
+                              child: Sidebar(tab: tab),
+                            ),
+                            ResizeHandle(
+                              onDrag: (dx) => setState(
+                                () => settings.sidebarWidth = (sideW + dx)
+                                    .clamp(minSide, maxSide),
+                              ),
+                              onEnd: tab.app.save,
+                            ),
+                            Expanded(
+                              child: tab.diffTarget != null
+                                  ? DiffView(tab: tab)
+                                  : CommitGraphView(tab: tab),
+                            ),
+                            if (tab.detailsOpen) ...[
+                              ResizeHandle(
+                                onDrag: (dx) => setState(
+                                  () => settings.detailsWidth = (detailsW - dx)
+                                      .clamp(220.0, maxSide),
+                                ),
+                                onEnd: tab.app.save,
+                              ),
+                              SizedBox(
+                                width: detailsW,
+                                child: DetailsPanel(tab: tab),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  OutputPanel(tab: tab),
                 ],
               ),
             );
-          }
-          final settings = tab.app.settings;
-          // The mouse's back button leaves the diff, like Esc.
-          return Listener(
-            onPointerDown: (e) {
-              if (e.buttons & kBackMouseButton != 0 && tab.diffTarget != null) {
-                tab.closeDiff();
-              }
-            },
-            child: Column(
-              children: [
-                RepoToolbar(tab: tab, searchFocus: searchFocus),
-                if (tab.operation != RepoOperation.none ||
-                    tab.stashConflict != null ||
-                    tab.status.conflicted.isNotEmpty)
-                  OperationBanner(tab: tab),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      // Keep side panels from squeezing the graph out.
-                      final maxSide = max(200.0, c.maxWidth * 0.3);
-                      final minSide = min(120.0, maxSide);
-                      final minDetails = min(220.0, maxSide);
-                      final sideW = min(
-                        settings.sidebarWidth,
-                        maxSide * 0.8,
-                      ).clamp(minSide, maxSide);
-                      final detailsW = settings.detailsWidth.clamp(
-                        minDetails,
-                        maxSide,
-                      );
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            width: sideW,
-                            child: Sidebar(tab: tab),
-                          ),
-                          ResizeHandle(
-                            onDrag: (dx) => setState(
-                              () => settings.sidebarWidth = (sideW + dx).clamp(
-                                minSide,
-                                maxSide,
-                              ),
-                            ),
-                            onEnd: tab.app.save,
-                          ),
-                          Expanded(
-                            child: tab.diffTarget != null
-                                ? DiffView(tab: tab)
-                                : CommitGraphView(tab: tab),
-                          ),
-                          ResizeHandle(
-                            onDrag: (dx) => setState(
-                              () => settings.detailsWidth = (detailsW - dx)
-                                  .clamp(220.0, maxSide),
-                            ),
-                            onEnd: tab.app.save,
-                          ),
-                          SizedBox(
-                            width: detailsW,
-                            child: DetailsPanel(tab: tab),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                OutputPanel(tab: tab),
-              ],
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
+
+  /// Whether a text field has focus.
+  bool get _typing =>
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<EditableText>() !=
+      null;
 }
 
 class RepoToolbar extends StatelessWidget {
