@@ -423,8 +423,13 @@ class _GraphRowState extends State<_GraphRow> {
         isCommit && (tab.refsBySha[sha] ?? const <GitRef>[]).any(isTrunkRef);
 
     Color? bg;
-    if (selected) {
-      bg = laneColor.withValues(alpha: 0.22);
+    if (selected && tab.multiSelection.isNotEmpty) {
+      // Several commits: one color, so they read as one selection.
+      bg = AppColors.selection;
+    } else if (selected) {
+      // The commit's lane color; lighter on a light background, where it
+      // shows more.
+      bg = laneColor.withValues(alpha: AppColors.current.isDark ? 0.22 : 0.14);
     } else if (_hover) {
       bg = AppColors.hover;
     } else if (isHit) {
