@@ -5,7 +5,7 @@ Flutter on top of your system `git`.
 
 > **Disclaimer:** This app was heavily vibe coded with Claude Opus 5.5. Mostly out of spite of GitKraken becoming ever so bloated and unstable.
 
-![Commit graph](docs/graph.png)
+![Commit graph, dark and light themes](docs/graph.png)
 
 ## Install
 
