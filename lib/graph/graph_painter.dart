@@ -211,7 +211,7 @@ class GraphRowPainter extends CustomPainter {
         final tp = _iconPainter(Icons.inventory_2_outlined, color);
         tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
       case NodeStyle.merge:
-        canvas.drawCircle(center, 5, Paint()..color = color);
+        canvas.drawCircle(center, _mergeRadius, Paint()..color = color);
       case NodeStyle.commit:
         final r = metrics.nodeRadius;
         canvas.drawCircle(center, r, Paint()..color = color);
@@ -250,11 +250,13 @@ class GraphRowPainter extends CustomPainter {
         final tp = _initialsPainter(initials);
         tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
     }
+    // The rings hug the node: the avatar circle, or a merge's dot.
+    final nodeR = style == NodeStyle.merge ? _mergeRadius : metrics.nodeRadius;
     if (trunk) {
       canvas.drawCircle(
         center,
         // Around HEAD's ring when both are here.
-        metrics.nodeRadius + (isHead ? 5 : 2.5),
+        nodeR + (isHead ? 5 : 2.5),
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
@@ -264,7 +266,7 @@ class GraphRowPainter extends CustomPainter {
     if (isHead) {
       canvas.drawCircle(
         center,
-        metrics.nodeRadius + 2.5,
+        nodeR + 2.5,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
@@ -272,6 +274,8 @@ class GraphRowPainter extends CustomPainter {
       );
     }
   }
+
+  static const _mergeRadius = 5.0;
 
   static final _iconCache = <(int, int), TextPainter>{};
 
