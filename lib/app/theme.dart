@@ -235,6 +235,8 @@ ThemeData buildTheme() {
         : ColorScheme.light(
             primary: AppColors.accent,
             secondary: AppColors.accent,
+            // Text on the accent (selected segments): it's dark here.
+            onSecondary: Colors.white,
             surface: AppColors.panel,
             onSurface: AppColors.text,
             error: AppColors.danger,
