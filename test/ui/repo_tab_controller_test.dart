@@ -100,6 +100,26 @@ void main() {
       expect(tab.status.unstaged.single.path, 'a.txt');
     });
 
+    test('a clean tree shows the checked-out commit', () async {
+      await tab.load();
+      await Future<void>.delayed(Duration.zero);
+      expect(tab.selectedSha, tab.headSha);
+
+      // Changes to commit: the WIP row is shown; once committed, the new
+      // checked-out commit.
+      t.write('a.txt', 'changed\n');
+      await tab.refresh();
+      await tab.select(wipSha);
+      await tab.run('Stage', () => tab.repo.stageAll());
+      tab.commitMessage.text = 'three';
+      expect(await tab.commit(), isTrue);
+      for (var i = 0; i < 100 && tab.details?.subject != 'three'; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(tab.selectedSha, tab.headSha);
+      expect(tab.details!.subject, 'three');
+    });
+
     test('stashes appear in the graph and go away when dropped', () async {
       await tab.load();
       t.write('a.txt', 'a\nb\nstashed\n');

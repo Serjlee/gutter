@@ -28,9 +28,16 @@ class DetailsPanel extends StatelessWidget {
       child = CommitDetailsPanel(tab: tab);
     } else {
       child = Center(
-        child: Text(
-          'Select a commit',
-          style: TextStyle(color: AppColors.textDim),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            tab.graph.rowCount == 0 && !tab.loading
+                ? 'No commits yet. Add files to the repository folder: '
+                      'they show up here, ready for the first commit.'
+                : 'Select a commit',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textDim),
+          ),
         ),
       );
     }

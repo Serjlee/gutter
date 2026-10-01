@@ -474,6 +474,16 @@ class RepoTabController extends ChangeNotifier {
       details = null;
       commitFiles = const [];
     }
+    // Nothing selected and nothing to commit (just opened, or just
+    // committed): show the checked-out commit rather than an empty panel.
+    final head = headSha;
+    if (selectedSha == null &&
+        multiSelection.isEmpty &&
+        status.isClean &&
+        head != null &&
+        graph.rowOf(head) != null) {
+      unawaited(select(head));
+    }
     _updateSearchHits();
     _notify();
   }
