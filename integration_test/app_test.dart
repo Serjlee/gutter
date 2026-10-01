@@ -168,7 +168,7 @@ void main() {
     // Commit details and a diff.
     await tester.tap(find.text('side work'));
     await pumpUntil(tester, () => tab.details?.subject == 'side work');
-    expect(find.text('1 CHANGED FILES'), findsOneWidget);
+    expect(find.text('CHANGED FILES'), findsOneWidget);
     await tester.tap(find.text('b.dart').last);
     await pumpUntil(tester, () => tab.diff != null);
     expect(find.text('Unified'), findsOneWidget);

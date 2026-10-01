@@ -105,11 +105,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(tab.selectedSha, tab.headSha);
 
-      // Changes to commit: the WIP row is shown; once committed, the new
-      // checked-out commit.
+      // Changes to commit: the panel shows them again; once committed, the
+      // new checked-out commit.
       t.write('a.txt', 'changed\n');
       await tab.refresh();
-      await tab.select(wipSha);
+      expect(tab.selectedSha, isNull); // the WIP panel
+      expect(tab.details, isNull);
       await tab.run('Stage', () => tab.repo.stageAll());
       tab.commitMessage.text = 'three';
       expect(await tab.commit(), isTrue);
@@ -118,6 +119,12 @@ void main() {
       }
       expect(tab.selectedSha, tab.headSha);
       expect(tab.details!.subject, 'three');
+
+      // A commit picked by hand stays, changes or not.
+      await tab.select(tab.headSha!);
+      t.write('a.txt', 'changed again\n');
+      await tab.refresh();
+      expect(tab.selectedSha, tab.headSha);
     });
 
     test('stashes appear in the graph and go away when dropped', () async {

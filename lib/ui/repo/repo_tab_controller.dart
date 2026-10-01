@@ -477,7 +477,15 @@ class RepoTabController extends ChangeNotifier {
       commitFiles = const [];
     }
     // Nothing selected and nothing to commit (just opened, or just
-    // committed): show the checked-out commit rather than an empty panel.
+    // committed): show the checked-out commit rather than an empty panel;
+    // the changes again once there are some.
+    if (_autoSelected && !status.isClean && multiSelection.isEmpty) {
+      _autoSelected = false;
+      selectedSha = null;
+      details = null;
+      detailsCommit = null;
+      commitFiles = const [];
+    }
     final head = headSha;
     if (selectedSha == null &&
         multiSelection.isEmpty &&
@@ -485,6 +493,7 @@ class RepoTabController extends ChangeNotifier {
         head != null &&
         graph.rowOf(head) != null) {
       unawaited(select(head));
+      _autoSelected = true;
     }
     _updateSearchHits();
     _notify();
@@ -688,7 +697,13 @@ class RepoTabController extends ChangeNotifier {
     _notify();
   }
 
+  /// Whether the selection was made for the user: the checked-out commit,
+  /// shown while there was nothing to commit. It gives way to the changes
+  /// when some show up.
+  bool _autoSelected = false;
+
   Future<void> select(String sha, {bool keepAnchor = false}) async {
+    _autoSelected = false;
     if (!keepAnchor) _anchor = sha;
     if (multiSelection.isNotEmpty) {
       multiSelection = const {};
