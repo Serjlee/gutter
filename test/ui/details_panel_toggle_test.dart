@@ -88,6 +88,10 @@ void main() {
     await tester.pump();
     expect(tab.diffTarget, isNull);
     expect(panel, findsOneWidget);
+    // The graph has the keys again.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await settle();
+    expect(tab.details?.subject, 'two');
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(panel, findsNothing);

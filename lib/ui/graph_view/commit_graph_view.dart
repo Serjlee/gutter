@@ -106,6 +106,14 @@ class _CommitGraphViewState extends State<CommitGraphView> {
     tab.scrollToRow.addListener(_onScrollRequest);
     tab.app.avatars.addListener(_onAvatars);
     _scroll.addListener(_onScroll);
+    // Keys go to the graph when it shows up (a tab opening, a diff
+    // closing), so the arrow keys work straight away; unless a text field
+    // has them.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final typing = FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<EditableText>();
+      if (mounted && typing == null) _focus.requestFocus();
+    });
   }
 
   void _onAvatars() {
