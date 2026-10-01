@@ -215,11 +215,20 @@ ChangeKind changeKindFromLetter(String c) {
 }
 
 class FileChange {
-  FileChange({required this.path, required this.kind, this.oldPath});
+  FileChange({
+    required this.path,
+    required this.kind,
+    this.oldPath,
+    this.source,
+  });
 
   final String path;
   final String? oldPath;
   final ChangeKind kind;
+
+  /// The commit holding the file when it isn't the one shown: a stash's
+  /// untracked files live in its third parent. Compared to nothing.
+  final String? source;
 
   @override
   String toString() => 'FileChange($kind $oldPath -> $path)';

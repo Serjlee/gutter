@@ -161,9 +161,8 @@ class CommitDetailsPanel extends StatelessWidget {
             : Text('No details', style: TextStyle(color: AppColors.textDim)),
       );
     }
-    final row = tab.graph.rowOf(d.sha);
-    final commit = row == null ? null : tab.graph.commitAt(row);
-    final stash = row == null ? null : tab.graph.stashAt(row);
+    final commit = tab.detailsCommit;
+    final stash = tab.stashes.where((s) => s.sha == d.sha).firstOrNull;
     // A stash's other parents (index, untracked files) aren't in the graph.
     final parents = stash != null ? d.parents.take(1).toList() : d.parents;
     final refs = tab.refsBySha[d.sha] ?? const <GitRef>[];
@@ -312,6 +311,8 @@ class CommitDetailsPanel extends StatelessWidget {
               path: f.path,
               oldPath: f.oldPath,
               selected: selectedPath == f.path,
+              // A stash's untracked files.
+              note: f.source != null ? 'untracked' : null,
               onTap: () => tab.openCommitFile(commit, f),
             ),
       ],
@@ -376,6 +377,7 @@ class _FileRow extends StatefulWidget {
     this.onSecondaryTap,
     this.depth = 0,
     this.nameOnly = false,
+    this.note,
   });
 
   final ChangeKind kind;
@@ -389,6 +391,9 @@ class _FileRow extends StatefulWidget {
   /// Tree nesting level; with [nameOnly] only the file name is shown.
   final int depth;
   final bool nameOnly;
+
+  /// A word after the path ("untracked").
+  final String? note;
 
   @override
   State<_FileRow> createState() => _FileRowState();
@@ -430,6 +435,17 @@ class _FileRowState extends State<_FileRow> {
                   oldPath: widget.oldPath,
                 ),
               ),
+              if (widget.note != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    widget.note!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
+                ),
               if (_hover || widget.selected) ...widget.actions,
             ],
           ),

@@ -195,6 +195,9 @@ class RepoTabController extends ChangeNotifier {
 
   CommitDetails? details;
   List<FileChange> commitFiles = const [];
+
+  /// The commit (or stash) [details] describes.
+  Commit? detailsCommit;
   bool detailsLoading = false;
 
   DiffTarget? diffTarget;
@@ -674,6 +677,7 @@ class RepoTabController extends ChangeNotifier {
     final token = ++_selectToken;
     if (sha == wipSha) {
       details = null;
+      detailsCommit = null;
       commitFiles = const [];
       _notify();
       return;
@@ -682,17 +686,33 @@ class RepoTabController extends ChangeNotifier {
     _notify();
     final row = graph.rowOf(sha);
     final commit = row == null ? null : graph.commitAt(row);
+    final stash = stashes.where((s) => s.sha == sha).firstOrNull;
     try {
       final d = await repo.commitDetails(sha);
-      final files = commit == null
+      final files = stash != null
+          ? await repo.stashFiles(stash)
+          : commit == null
           ? <FileChange>[]
           : await repo.commitFiles(commit);
       if (token != _selectToken) return;
       details = d;
+      // Stashes whose base isn't loaded have no graph row: their files
+      // still open, through a commit made from the details.
+      detailsCommit =
+          commit ??
+          Commit(
+            sha: d.sha,
+            parents: d.parents.take(1).toList(),
+            authorName: d.authorName,
+            authorEmail: d.authorEmail,
+            authorTime: d.authorTime,
+            subject: d.subject,
+          );
       commitFiles = files;
     } catch (e) {
       if (token != _selectToken) return;
       details = null;
+      detailsCommit = null;
       commitFiles = const [];
       _reportError(e);
     } finally {
@@ -719,6 +739,17 @@ class RepoTabController extends ChangeNotifier {
     if (row == null) return;
     unawaited(select(h));
     scrollToRow.value = row;
+  }
+
+  /// Shows [stash]: its row when it's in the graph, else just its details
+  /// (when the commit it was made on isn't loaded).
+  void showStash(StashEntry stash) {
+    final row = graph.rowOf(stash.sha);
+    if (row != null) {
+      jumpToSha(stash.sha);
+    } else {
+      unawaited(select(stash.sha));
+    }
   }
 
   void jumpToSha(String sha) {
@@ -804,7 +835,7 @@ class RepoTabController extends ChangeNotifier {
                   file.oldPath ?? file.path,
                 );
         }
-        return repo.fileContent(commit.sha, file.path);
+        return repo.fileContent(file.source ?? commit.sha, file.path);
       case WorkingFileTarget(:final entry, :final staged):
         return staged
             ? repo.fileContent('', entry.path) // ":path" = index
@@ -839,7 +870,7 @@ class RepoTabController extends ChangeNotifier {
               : await text(parent, file.oldPath ?? file.path),
           file.kind == ChangeKind.deleted
               ? null
-              : await text(commit.sha, file.path),
+              : await text(file.source ?? commit.sha, file.path),
         );
       case WorkingFileTarget(:final entry, :final staged):
         final oldPath = entry.oldPath ?? entry.path;

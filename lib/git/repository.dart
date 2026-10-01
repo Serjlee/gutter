@@ -327,19 +327,51 @@ class Repository {
 
   static const _emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
+  /// What [stash] changed: its tracked changes (against the commit it was
+  /// made on), then the untracked files it holds, as added.
+  Future<List<FileChange>> stashFiles(StashEntry stash) async {
+    final tracked = parseNameStatus(
+      await _out([
+        'diff',
+        '-z',
+        '--name-status',
+        '-M',
+        stash.parents.first,
+        stash.sha,
+      ]),
+    );
+    if (stash.parents.length < 3) return tracked;
+    final untracked = stash.parents[2];
+    final names = (await _out([
+      'ls-tree',
+      '-r',
+      '-z',
+      '--name-only',
+      untracked,
+    ])).split('\x00').where((n) => n.isNotEmpty);
+    return [
+      ...tracked,
+      for (final n in names)
+        FileChange(path: n, kind: ChangeKind.added, source: untracked),
+    ];
+  }
+
   Future<FileDiff?> commitFileDiff(
     Commit commit,
     FileChange file, {
     int context = 3,
   }) async {
-    final base = commit.parents.isEmpty ? _emptyTree : commit.parents.first;
+    final source = file.source;
+    final base = source != null || commit.parents.isEmpty
+        ? _emptyTree
+        : commit.parents.first;
     final paths = [if (file.oldPath != null) file.oldPath!, file.path];
     final out = await _out([
       'diff',
       '-M',
       '-U$context',
       base,
-      commit.sha,
+      source ?? commit.sha,
       '--',
       ...paths,
     ]);
