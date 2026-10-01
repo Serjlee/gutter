@@ -614,7 +614,7 @@ class _DiffViewState extends State<DiffView> {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Text(
           label,
-          style: TextStyle(fontSize: 11.5, color: color ?? AppColors.accent),
+          style: TextStyle(fontSize: 12, color: color ?? AppColors.accent),
         ),
       ),
     );
@@ -774,7 +774,7 @@ class _UnifiedLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg) = _colors(line.type, selected);
-    final numStyle = monoStyle(size: 11.5, color: AppColors.textFaint);
+    final numStyle = monoStyle(size: 12, color: AppColors.textFaint);
     // Wrapped, a row is as tall as its text, and the numbers and marker sit
     // on its first line.
     final cross = wrap ? CrossAxisAlignment.start : CrossAxisAlignment.center;
@@ -874,7 +874,7 @@ class _SplitLine extends StatelessWidget {
               padding: const EdgeInsets.only(top: 1),
               child: Text(
                 number?.toString() ?? '',
-                style: monoStyle(size: 11.5, color: AppColors.textFaint),
+                style: monoStyle(size: 12, color: AppColors.textFaint),
               ),
             ),
           ),

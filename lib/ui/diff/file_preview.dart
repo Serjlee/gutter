@@ -145,10 +145,7 @@ class _FilePreviewState extends State<FilePreview> {
                       child: Text(
                         '${i + 1}',
                         textAlign: TextAlign.right,
-                        style: monoStyle(
-                          size: 11.5,
-                          color: AppColors.textFaint,
-                        ),
+                        style: monoStyle(size: 12, color: AppColors.textFaint),
                       ),
                     ),
                   ),

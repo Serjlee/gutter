@@ -547,10 +547,7 @@ class _ConflictViewState extends State<ConflictView> {
                   const SizedBox(width: 6),
                   Text(
                     '$hidden unchanged lines',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textFaint,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                   ),
                 ],
               ),
@@ -601,7 +598,7 @@ class _ConflictViewState extends State<ConflictView> {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11.5),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ),
@@ -827,7 +824,7 @@ class _ConflictViewState extends State<ConflictView> {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13.5),
+            style: const TextStyle(fontSize: 13),
           ),
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 14),

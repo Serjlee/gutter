@@ -390,7 +390,7 @@ class _RepoTileState extends State<_RepoTile> {
               Text(
                 p.basename(widget.path),
                 style: const TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -751,7 +751,7 @@ class _VersionInfo extends StatelessWidget {
                       ? 'Up to date (latest ${latest.tag})'
                       : 'Latest release: ${latest.tag}',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+                  style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                 ),
               ),
               if (!app.updates.current.isRelease)
@@ -766,7 +766,7 @@ class _VersionInfo extends StatelessWidget {
         } else if (updates.checking) {
           status = Text(
             'Checking for updates…',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+            style: TextStyle(fontSize: 12, color: AppColors.textFaint),
           );
         } else if (updates.error != null) {
           status = Row(
@@ -776,10 +776,7 @@ class _VersionInfo extends StatelessWidget {
                   message: updates.error!,
                   child: Text(
                     'Update check failed',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textFaint,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                   ),
                 ),
               ),

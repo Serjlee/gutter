@@ -187,7 +187,7 @@ class _OutputPanelState extends State<OutputPanel> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: monoStyle(
-                            size: 11.5,
+                            size: 12,
                             color: latest.failed
                                 ? AppColors.danger
                                 : AppColors.textFaint,
@@ -224,7 +224,7 @@ class _OutputPanelState extends State<OutputPanel> {
                       Text(
                         'Background refreshes',
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 12,
                           color: AppColors.textDim,
                         ),
                       ),
@@ -370,7 +370,7 @@ class _EntryRow extends StatelessWidget {
                         _firstLine(output),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: monoStyle(size: 11.5, color: AppColors.danger),
+                        style: monoStyle(size: 12, color: AppColors.danger),
                       ),
                     ),
                   ),
@@ -437,7 +437,7 @@ class _EntryRow extends StatelessWidget {
                 child: SelectableText(
                   output.isEmpty ? '(no output)' : output,
                   style: monoStyle(
-                    size: 11.5,
+                    size: 12,
                     color: e.failed ? AppColors.danger : AppColors.text,
                   ),
                 ),

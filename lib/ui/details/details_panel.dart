@@ -314,10 +314,7 @@ class CommitDetailsPanel extends StatelessWidget {
                       'authored ${formatDate(authorDate)}'
                       '${differentCommitter ? ' · committed by ${d.committerName}' : ''}',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.textDim,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -463,10 +460,7 @@ class _FileRowState extends State<_FileRow> {
                   padding: const EdgeInsets.only(left: 8),
                   child: Text(
                     widget.note!,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textFaint,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                   ),
                 ),
               if (_hover || widget.selected) ...widget.actions,
