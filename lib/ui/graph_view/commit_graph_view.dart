@@ -306,17 +306,26 @@ class _Header extends StatelessWidget {
   final VoidCallback onResetGraph;
 
   Widget _title(String t, double? width, {bool expand = false}) {
+    final style = TextStyle(
+      fontSize: 11,
+      letterSpacing: 0.5,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textDim,
+    );
+    // A title that doesn't fit is left out rather than cut to "GR…".
     final text = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        t,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 11,
-          letterSpacing: 0.5,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDim,
-        ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final needed = (TextPainter(
+            text: TextSpan(text: t, style: style),
+            textDirection: TextDirection.ltr,
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout()).width;
+          return needed > c.maxWidth
+              ? const SizedBox.shrink()
+              : Text(t, maxLines: 1, softWrap: false, style: style);
+        },
       ),
     );
     if (expand) return Expanded(child: text);
