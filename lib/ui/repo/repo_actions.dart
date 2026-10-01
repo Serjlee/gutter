@@ -406,8 +406,9 @@ class RepoActions {
       menuItem(
         'Copy SHAs',
         () => copyToClipboard(
-          context,
+          tab.app,
           commits.reversed.map((c) => c.sha).join('\n'),
+          label: '${commits.length} SHAs',
         ),
         icon: Icons.tag,
       ),
@@ -741,12 +742,16 @@ class RepoActions {
       const PopupMenuDivider(),
       menuItem(
         'Copy commit SHA',
-        () => copyToClipboard(context, c.sha),
+        () => copyToClipboard(
+          tab.app,
+          c.sha,
+          label: 'SHA ${c.sha.substring(0, 7)}',
+        ),
         icon: Icons.tag,
       ),
       menuItem(
         'Copy commit message',
-        () => copyToClipboard(context, c.subject),
+        () => copyToClipboard(tab.app, c.subject, label: 'the commit message'),
         icon: Icons.notes,
       ),
     ];
@@ -816,7 +821,7 @@ class RepoActions {
           const PopupMenuDivider(),
           menuItem(
             'Copy branch name',
-            () => copyToClipboard(context, ref.name),
+            () => copyToClipboard(tab.app, ref.name),
             icon: Icons.copy,
           ),
         ];
@@ -851,7 +856,7 @@ class RepoActions {
           ),
           menuItem(
             'Copy branch name',
-            () => copyToClipboard(context, ref.name),
+            () => copyToClipboard(tab.app, ref.name),
             icon: Icons.copy,
           ),
         ];

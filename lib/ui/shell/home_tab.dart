@@ -363,7 +363,11 @@ class _RepoTileState extends State<_RepoTile> {
           ),
           menuItem(
             'Copy path',
-            () => copyToClipboard(context, widget.path),
+            () => copyToClipboard(
+              widget.app,
+              widget.path,
+              label: displayPath(widget.path),
+            ),
             icon: Icons.copy,
           ),
           menuItem(

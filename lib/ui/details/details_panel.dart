@@ -201,7 +201,11 @@ class CommitDetailsPanel extends StatelessWidget {
                           style: monoStyle(size: 12, color: AppColors.textDim),
                         ),
                         InkWell(
-                          onTap: () => copyToClipboard(context, d.sha),
+                          onTap: () => copyToClipboard(
+                            tab.app,
+                            d.sha,
+                            label: 'SHA ${d.sha.substring(0, 7)}',
+                          ),
                           child: Tooltip(
                             message: 'Copy full SHA',
                             child: Text(
@@ -772,7 +776,7 @@ class WipPanel extends StatelessWidget {
             ),
             menuItem(
               'Copy path',
-              () => copyToClipboard(context, e.path),
+              () => copyToClipboard(tab.app, e.path),
               icon: Icons.copy,
             ),
           ]),
@@ -825,7 +829,7 @@ class WipPanel extends StatelessWidget {
             ),
             menuItem(
               'Copy path',
-              () => copyToClipboard(context, e.path),
+              () => copyToClipboard(tab.app, e.path),
               icon: Icons.copy,
             ),
           ]),
@@ -861,7 +865,7 @@ class WipPanel extends StatelessWidget {
             ),
             menuItem(
               'Copy path',
-              () => copyToClipboard(context, e.path),
+              () => copyToClipboard(tab.app, e.path),
               icon: Icons.copy,
             ),
           ]),

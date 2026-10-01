@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart';
 
@@ -472,8 +473,17 @@ class PathLabel extends StatelessWidget {
   }
 }
 
-Future<void> copyToClipboard(BuildContext context, String text) async {
+/// Copies [text] and says so: "Copied [label]", or the text itself (its
+/// first line, shortened) when no [label] says what it is.
+Future<void> copyToClipboard(
+  AppController app,
+  String text, {
+  String? label,
+}) async {
   await Clipboard.setData(ClipboardData(text: text));
+  var shown = label ?? text.split('\n').first;
+  if (shown.length > 60) shown = '${shown.substring(0, 59)}…';
+  app.notify('Copied $shown');
 }
 
 /// [path] for display, with the home folder shortened to `~`.
