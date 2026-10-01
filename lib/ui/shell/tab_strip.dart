@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../repo/repo_tab_controller.dart';
+import '../widgets/common.dart';
 
 class TabStrip extends StatelessWidget {
   const TabStrip({super.key, required this.app});
@@ -57,7 +58,7 @@ class _HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Repositories (Ctrl+T)',
+      message: 'Repositories (${shortcut('T')})',
       child: InkWell(
         onTap: onTap,
         child: Container(

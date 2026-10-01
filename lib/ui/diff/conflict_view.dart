@@ -356,7 +356,7 @@ class _ConflictViewState extends State<ConflictView> {
               child: const Text('Cancel'),
             ),
             Tooltip(
-              message: 'Save (Ctrl/Cmd+S)',
+              message: 'Save (${shortcut('S')})',
               child: FilledButton(
                 onPressed: _saveEdit,
                 child: const Text('Save'),

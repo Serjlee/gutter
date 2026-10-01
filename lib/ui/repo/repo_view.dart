@@ -634,7 +634,7 @@ class _SearchBoxState extends State<_SearchBox> {
             );
           },
           decoration: InputDecoration(
-            hintText: 'Search commits (Ctrl+F)',
+            hintText: 'Search commits (${shortcut('F')})',
             prefixIcon: const Icon(Icons.search, size: 16),
             prefixIconConstraints: const BoxConstraints(minWidth: 30),
             contentPadding: const EdgeInsets.symmetric(vertical: 8),

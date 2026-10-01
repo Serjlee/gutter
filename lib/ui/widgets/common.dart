@@ -499,6 +499,17 @@ String relativeTime(DateTime d) {
   return formatDate(d).substring(0, 10);
 }
 
+/// The main shortcut modifier as labels show it: ⌘ on macOS, Ctrl
+/// elsewhere (the bindings take either).
+final String modKey = Platform.isMacOS ? '⌘' : 'Ctrl';
+
+/// A shortcut label for [key] with the main modifier: "⌘F" on macOS,
+/// "Ctrl+F" elsewhere.
+String shortcut(String key) => Platform.isMacOS ? '⌘$key' : 'Ctrl+$key';
+
+/// A shortcut label for [key] with Alt: "⌥↑" on macOS, "Alt+↑" elsewhere.
+String altShortcut(String key) => Platform.isMacOS ? '⌥$key' : 'Alt+$key';
+
 /// Opens a file or URL with the platform's default handler.
 Future<void> openWithSystem(String target) async {
   final cmd = Platform.isMacOS

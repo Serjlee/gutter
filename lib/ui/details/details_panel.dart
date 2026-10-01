@@ -76,7 +76,7 @@ class MultiCommitPanel extends StatelessWidget {
         Padding(
           padding: EdgeInsets.fromLTRB(14, 0, 14, 10),
           child: Text(
-            'Shift-click selects a range, Ctrl/Cmd-click adds or removes '
+            'Shift-click selects a range, $modKey-click adds or removes '
             'a commit.',
             style: TextStyle(fontSize: 12, color: AppColors.textDim),
           ),
@@ -1008,8 +1008,10 @@ class _CommitComposer extends StatelessWidget {
               minLines: 4,
               maxLines: 10,
               style: const TextStyle(fontSize: 13),
-              decoration: const InputDecoration(
-                hintText: 'Commit message\n\nFirst line is the summary. Ctrl+Enter to commit.',
+              decoration: InputDecoration(
+                hintText:
+                    'Commit message\n\nFirst line is the summary. '
+                    '${shortcut('Enter')} to commit.',
                 hintMaxLines: 4,
               ),
             ),

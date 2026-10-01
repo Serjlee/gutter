@@ -545,7 +545,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Newest on top. Drag or Alt+↑↓ to reorder; Shift/Ctrl-click '
+                  'Newest on top. Drag or ${altShortcut('↑↓')} to reorder; Shift/$modKey-click '
                   'to select several. Keys: P pick, R reword, E edit, '
                   'S squash, F fixup, D drop. Squash/Fixup fold commits into '
                   'the one below them.',

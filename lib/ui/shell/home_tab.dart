@@ -442,7 +442,7 @@ class _SettingsForm extends StatelessWidget {
             children: [
               SmallIconButton(
                 icon: Icons.remove,
-                tooltip: 'Zoom out (Ctrl -)',
+                tooltip: 'Zoom out (${shortcut('-')})',
                 onPressed: s.zoom > minZoom ? app.zoomOut : null,
               ),
               SizedBox(
@@ -459,7 +459,7 @@ class _SettingsForm extends StatelessWidget {
               ),
               SmallIconButton(
                 icon: Icons.add,
-                tooltip: 'Zoom in (Ctrl +)',
+                tooltip: 'Zoom in (${shortcut('+')})',
                 onPressed: s.zoom < maxZoom ? app.zoomIn : null,
               ),
             ],
