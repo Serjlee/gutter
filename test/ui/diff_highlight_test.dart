@@ -5,6 +5,7 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/ui/diff/diff_view.dart';
 import 'package:gutter/ui/diff/syntax.dart';
+import 'package:gutter/ui/repo/output_panel.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
 
 import '../support/temp_repo.dart';
@@ -87,6 +88,62 @@ void main() {
     expect(colors(shown()!), colors(expected));
 
     // Let the view's timers (tooltips, scrollbars) run out.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('opening a diff logs its git commands after the frame', (
+    tester,
+  ) async {
+    // Highlighting loads the file's two versions with git, which the output
+    // panel lists: starting that while building the diff marked the panel
+    // dirty mid-build.
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('one', {'a.dart': 'void main() {}\n'});
+      t.commit('two', {'a.dart': 'void main() => print(1);\n'});
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+      final commit = tab.graph.commits.first;
+      await tab.select(commit.sha);
+      tab.openCommitFile(commit, tab.commitFiles.single);
+      for (var i = 0; i < 100 && tab.diff == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+    });
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final logged = t.repo.commands.entries.length;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: Column(
+            children: [
+              OutputPanel(tab: tab),
+              Expanded(child: DiffView(tab: tab)),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    for (var i = 0; i < 20 && t.repo.commands.entries.length == logged; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 15)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(t.repo.commands.entries.length, greaterThan(logged));
+    expect(tester.takeException(), isNull);
+
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
   });

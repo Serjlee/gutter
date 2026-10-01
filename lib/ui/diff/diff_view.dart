@@ -85,7 +85,11 @@ class _DiffViewState extends State<DiffView> {
       _fullFor = diff;
       _fullOld = _fullNew = null;
       _fullReady = false;
-      unawaited(_loadFull(diff, lang));
+      // After this frame: git commands notify the output panel, which can't
+      // rebuild while this view is building.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadFull(diff, lang));
+      });
     }
     if (identical(diff, _spansFor) && lang == _spansLang) return _spans;
     _spansFor = diff;

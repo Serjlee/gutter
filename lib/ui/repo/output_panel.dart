@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
@@ -62,8 +63,23 @@ class _OutputPanelState extends State<OutputPanel> {
       if (tab.outputShowsBackground || !e.background) e,
   ];
 
+  bool _rebuildQueued = false;
+
   void _onLog() {
     if (!mounted) return;
+    // A command can start while another widget builds (one loading what it
+    // shows, from initState or build): this panel can't be marked dirty
+    // then, so it catches up after the frame.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_rebuildQueued) return;
+      _rebuildQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _rebuildQueued = false;
+        _onLog();
+      });
+      return;
+    }
     setState(() {});
     if (_atBottom) _scrollToEnd();
   }

@@ -90,4 +90,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ListView), findsNothing);
   });
+
+  testWidgets('a command started while another widget builds shows up '
+      'after the frame', (tester) async {
+    final log = tab.repo.commands;
+    var started = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Spacer(),
+              OutputPanel(tab: tab),
+              // Built after the panel, starting a command as it does: as a
+              // view loading what it shows from initState would.
+              StatefulBuilder(
+                builder: (_, _) {
+                  if (!started) {
+                    started = true;
+                    log.start(['show', 'HEAD:a.txt'], cwd: t.dir.path);
+                  }
+                  return const SizedBox();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pump();
+    expect(find.text('git show HEAD:a.txt'), findsOneWidget);
+  });
 }
