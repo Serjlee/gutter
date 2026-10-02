@@ -52,15 +52,9 @@ scan a folder under Documents or Desktop, macOS asks for access. The app
 isn't sandboxed (`macos/Runner/*.entitlements`): it runs `git` and reads
 repositories anywhere on disk.
 
-**Flatpak.** The repository is served from GitHub Pages and signed; it
-also has a [page](https://serjlee.github.io/gutter/) with the steps.
-Each release also attaches a `.flatpak` file, which adds the repository
-when installed. Gutter was installed from an older `.flatpak` file? Install
-it once from the repository (or a new file) to get updates. It fetches the
-Freedesktop runtime from Flathub. Gutter runs
-your system's git through `flatpak-spawn --host`, so your config,
-credential helpers, signing keys and hooks work as in a terminal, and it
-can read files anywhere (`--filesystem=host`).
+**Flatpak.** Gutter runs your system's git through `flatpak-spawn --host`,
+so your config, credential helpers, signing keys and hooks work as in a
+terminal, and it can read files anywhere (`--filesystem=host`).
 
 **Which git.** Gutter looks on `PATH`, then in `/opt/homebrew/bin`,
 `/usr/local/bin` and `/usr/bin` (Homebrew's first on macOS: apps opened
@@ -145,7 +139,7 @@ Besides your own fetch, pull and push, Gutter makes two kinds of requests:
   into view.
 
 Fetch, pull and push use your git setup (SSH agent, credential helper).
-Gutter never shows a password prompt
+Gutter never shows a password prompt.
 
 ## Development
 
@@ -158,7 +152,7 @@ flutter analyze && flutter test
 ```
 
 <details>
-<summary>More commands, layout and releases</summary>
+<summary>More commands and layout</summary>
 
 ```sh
 xvfb-run flutter drive --profile -d linux \
@@ -168,7 +162,6 @@ dart run tool/bench_layout.dart 200000            # graph layout benchmark
 dart run tool/bench_repo.dart /path/to/big/repo   # history load timings
 tool/make_demo_repo.sh /tmp/demo                  # branchy demo repository
 tool/make_icons.sh                                # icons from assets/icon/source.png
-tool/make_flatpak_site.sh <repo> <site> <url> <key> # Flatpak repository site (CI)
 ```
 
 ```
@@ -179,26 +172,7 @@ lib/app/     app state, settings, theme, zoom, avatars
 lib/ui/      shell, tabs, graph view, sidebar, details, diff, dialogs
 ```
 
-- **Releases**: `git tag -a v0.1.0 -m "What's new…" && git push origin
-  v0.1.0` builds the macOS zip, the Linux tarball and the Flatpak, and
-  publishes them as a GitHub Release (`.github/workflows/release.yml`).
-  The tag's message opens the release notes. It also publishes the
-  Flatpak repository to GitHub Pages, which needs, once:
-  - Settings → Pages → Source: **GitHub Actions**; then Settings →
-    Environments → `github-pages` → add a tag rule `v*`, so tags may
-    deploy.
-  - A signing key, passphrase-less, as the `FLATPAK_GPG_PRIVATE_KEY`
-    secret:
-    ```sh
-    gpg --batch --passphrase '' --quick-gen-key \
-      "Gutter Flatpak repository <you@example.com>" rsa4096 sign never
-    gpg --armor --export-secret-keys "Gutter Flatpak repository" \
-      | gh secret set FLATPAK_GPG_PRIVATE_KEY
-    ```
-    Keep a backup: users who installed from the repository only accept
-    updates signed with it.
-- **Version label**: tagged builds embed their version, shown on the home
-  tab. For a local build, pass
+- **Version label**: for a local build, pass
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
 - **Flatpak locally**: see `linux/flatpak/dev.gutter.gutter.yml`.
 
