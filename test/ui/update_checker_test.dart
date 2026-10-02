@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
@@ -124,7 +126,14 @@ void main() {
       null,
       Settings(),
       updates: checker,
-      updater: Updater(installation: const Installation(InstallKind.flatpak)),
+      updater: Updater(
+        installation: const Installation(InstallKind.flatpak),
+        flatpakInfo: '/nonexistent',
+        // flatpak update on the host, then the installed commit.
+        runOnHost: (command) async =>
+            ProcessResult(0, 0, command[1] == 'info' ? 'bbb222\n' : '', ''),
+        startOnHost: (_) async {},
+      ),
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -138,13 +147,23 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('update-available')), findsOneWidget);
     expect(find.text('v0.2.0 is available'), findsOneWidget);
-    // The dialog: Flatpak installs update with flatpak.
+    // The dialog: Flatpak installs update with flatpak, then restart.
     await tester.tap(find.byKey(const ValueKey('update-open')));
     await tester.pump();
     expect(find.text('Gutter 0.2.0 is available'), findsOneWidget);
     expect(find.text('You have 0.1.0.'), findsOneWidget);
-    expect(find.textContaining('flatpak update'), findsOneWidget);
-    expect(find.text('Copy update command'), findsOneWidget);
+    expect(find.text('Update now'), findsOneWidget);
+    await tester.runAsync(() => app.updater.prepare(release));
+    await tester.pump();
+    expect(find.textContaining('Updated. Restart Gutter'), findsOneWidget);
+    expect(find.text('Restart now'), findsOneWidget);
+    expect(find.text('Install on quit'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('update-later')));
+    await tester.pump();
+    // A new dialog for another check: skip this version.
+    app.updater.stage = UpdateStage.idle;
+    await tester.tap(find.byKey(const ValueKey('update-open')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('update-skip')));
     await tester.pump();
     expect(app.settings.skippedUpdate, 'v0.2.0');

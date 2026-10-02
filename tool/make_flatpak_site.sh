@@ -63,8 +63,8 @@ cat > "$site/index.html" <<EOF
 </style>
 <h1><img src="icon.png" width="48" height="48" alt="">Gutter</h1>
 <p>A fast, local-only git client. This is its Flatpak repository: install
-Gutter from it once, and updates come with <code>flatpak update</code> or
-your software center.</p>
+Gutter from it once, and from then on it updates itself (or with
+<code>flatpak update</code> and your software center).</p>
 <h2>Install</h2>
 <pre>flatpak install --user $url/gutter.flatpakref</pre>
 <p>Or add the repository, then install from it:</p>

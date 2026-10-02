@@ -183,4 +183,103 @@ void main() {
       'y z.tar.gz': 'B' * 64,
     });
   });
+
+  group('Flatpak', () {
+    late Directory dir;
+    late String info;
+    late List<List<String>> ran;
+    late List<List<String>> started;
+    late String installedCommit;
+    late ProcessResult updateResult;
+
+    ReleaseInfo release() => ReleaseInfo(
+      tag: 'v0.2.0',
+      url: 'https://example.com/release',
+      publishedAt: null,
+      assets: const [],
+    );
+
+    Updater flatpakUpdater() => Updater(
+      installation: const Installation(InstallKind.flatpak),
+      flatpakInfo: info,
+      runOnHost: (command) async {
+        ran.add(command);
+        return switch (command[1]) {
+          'update' => updateResult,
+          'info' => ProcessResult(0, 0, '$installedCommit\n', ''),
+          _ => ProcessResult(0, 1, '', 'unexpected'),
+        };
+      },
+      startOnHost: (command) async => started.add(command),
+    );
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('gutter_flatpak_');
+      // What the sandbox says about the running app.
+      info = p.join(dir.path, '.flatpak-info');
+      File(info).writeAsStringSync(
+        '[Application]\nname=dev.gutter.gutter\n\n'
+        '[Instance]\napp-commit=aaa111\nbranch=master\n',
+      );
+      ran = [];
+      started = [];
+      installedCommit = 'bbb222';
+      updateResult = ProcessResult(0, 0, 'Updating…', '');
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('updates on the host, then relaunches there', () async {
+      final u = flatpakUpdater();
+      expect(u.runningFlatpakCommit(), 'aaa111');
+      await u.prepare(release());
+      expect(u.error, isNull);
+      expect(u.stage, UpdateStage.ready);
+      expect(ran.first, [
+        'flatpak',
+        'update',
+        '-y',
+        '--noninteractive',
+        'dev.gutter.gutter',
+      ]);
+
+      await u.install(relaunch: true);
+      expect(u.stage, UpdateStage.scheduled);
+      expect(started.single, ['sh', '-c', flatpakRelaunchScript]);
+    });
+
+    test('nothing newer: says why, offers to try again', () async {
+      installedCommit = 'aaa111'; // still the running one
+      final u = flatpakUpdater();
+      await u.prepare(release());
+      expect(u.stage, UpdateStage.failed);
+      expect(u.error, contains('nothing newer'));
+      expect(u.error, contains('.flatpak file'));
+    });
+
+    test('a failed flatpak update shows its last line', () async {
+      updateResult = ProcessResult(0, 1, '', 'Looking…\nerror: No remote refs');
+      final u = flatpakUpdater();
+      await u.prepare(release());
+      expect(u.stage, UpdateStage.failed);
+      expect(u.error, 'flatpak update failed: error: No remote refs');
+      expect(ran, hasLength(1)); // no point asking what's installed
+    });
+
+    test('already updated by a software center: just restart', () async {
+      // flatpak update finds nothing to do, but the installed version is
+      // newer than the running one.
+      updateResult = ProcessResult(0, 0, 'Nothing to do.', '');
+      final u = flatpakUpdater();
+      await u.prepare(release());
+      expect(u.stage, UpdateStage.ready);
+    });
+
+    test('install on quit has nothing left to do', () async {
+      final u = flatpakUpdater();
+      await u.prepare(release());
+      await u.install(relaunch: false);
+      expect(u.stage, UpdateStage.scheduled);
+      expect(started, isEmpty);
+    });
+  });
 }

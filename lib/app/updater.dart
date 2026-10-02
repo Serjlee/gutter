@@ -16,8 +16,8 @@ enum InstallKind {
   /// The folder of the Linux tarball.
   linuxBundle,
 
-  /// A Flatpak: it updates from Gutter's Flatpak repository, with
-  /// `flatpak update` or a software center.
+  /// A Flatpak: it updates from Gutter's Flatpak repository, running
+  /// `flatpak update` on the host (as a software center would).
   flatpak,
 
   /// Can't update itself; see [Installation.reason].
@@ -38,7 +38,9 @@ class Installation {
   final String? reason;
 
   bool get canSelfUpdate =>
-      kind == InstallKind.macApp || kind == InstallKind.linuxBundle;
+      kind == InstallKind.macApp ||
+      kind == InstallKind.linuxBundle ||
+      kind == InstallKind.flatpak;
 
   static final _macZip = RegExp(r'^Gutter-macos-.*\.zip$');
   static final _linuxTarball = RegExp(r'^gutter-linux-x64-.*\.tar\.gz$');
@@ -127,14 +129,44 @@ class UpdateException implements Exception {
 
 enum UpdateStage { idle, downloading, unpacking, ready, scheduled, failed }
 
+/// Runs a command on the host, outside the Flatpak sandbox.
+typedef HostRunner = Future<ProcessResult> Function(List<String> command);
+
+/// Starts a command on the host that outlives Gutter.
+typedef HostStarter = Future<void> Function(List<String> command);
+
 /// Downloads a release, checks it against the release's SHA256SUMS, unpacks
-/// it next to the installed copy, and swaps it in once Gutter quits.
+/// it next to the installed copy, and swaps it in once Gutter quits. A
+/// Flatpak updates with flatpak instead.
 class Updater extends ChangeNotifier {
-  Updater({this._installation, HttpClient Function()? httpClient})
-    : _httpClient = httpClient ?? _defaultClient;
+  Updater({
+    this._installation,
+    HttpClient Function()? httpClient,
+    HostRunner? runOnHost,
+    HostStarter? startOnHost,
+    String? flatpakInfo,
+  }) : _httpClient = httpClient ?? _defaultClient,
+       _runOnHost = runOnHost ?? _defaultRunOnHost,
+       _startOnHost = startOnHost ?? _defaultStartOnHost,
+       _flatpakInfo = flatpakInfo ?? '/.flatpak-info';
 
   final Installation? _installation;
   final HttpClient Function() _httpClient;
+  final HostRunner _runOnHost;
+  final HostStarter _startOnHost;
+  final String _flatpakInfo;
+
+  static const flatpakApp = 'dev.gutter.gutter';
+
+  // The host command ends with Gutter (--watch-bus).
+  static Future<ProcessResult> _defaultRunOnHost(List<String> command) =>
+      Process.run('flatpak-spawn', ['--host', '--watch-bus', ...command]);
+
+  static Future<void> _defaultStartOnHost(List<String> command) =>
+      Process.start('flatpak-spawn', [
+        '--host',
+        ...command,
+      ], mode: ProcessStartMode.detached);
 
   late final Installation installation = _installation ?? Installation.detect();
 
@@ -165,6 +197,7 @@ class Updater extends ChangeNotifier {
         (stage == UpdateStage.ready || stage == UpdateStage.scheduled)) {
       return;
     }
+    if (installation.kind == InstallKind.flatpak) return _updateFlatpak(r);
     release = r;
     error = null;
     progress = null;
@@ -219,6 +252,63 @@ class Updater extends ChangeNotifier {
     }
   }
 
+  /// Updates the Flatpak from its remote, on the host. It's ready when the
+  /// installed version differs from the running one (also when a software
+  /// center already updated it).
+  Future<void> _updateFlatpak(ReleaseInfo r) async {
+    release = r;
+    error = null;
+    progress = null;
+    _set(UpdateStage.downloading);
+    try {
+      final update = await _runOnHost([
+        'flatpak',
+        'update',
+        '-y',
+        '--noninteractive',
+        flatpakApp,
+      ]);
+      if (update.exitCode != 0) {
+        final out = '${update.stderr}'.trim();
+        throw UpdateException(
+          'flatpak update failed: '
+          '${out.isEmpty ? 'exit code ${update.exitCode}' : out.split('\n').last}',
+        );
+      }
+      final info = await _runOnHost([
+        'flatpak',
+        'info',
+        '--show-commit',
+        flatpakApp,
+      ]);
+      final installed = '${info.stdout}'.trim();
+      if (installed.isEmpty || installed == runningFlatpakCommit()) {
+        throw UpdateException(
+          'Flatpak found nothing newer yet: the repository may still be '
+          'publishing ${r.tag}, so try again in a few minutes. Installed '
+          'from an older downloaded .flatpak file? Install the new one from '
+          'the release page once: from then on, Gutter updates itself.',
+        );
+      }
+      _set(UpdateStage.ready);
+    } catch (e) {
+      error = e is UpdateException ? e.message : e.toString();
+      _set(UpdateStage.failed);
+    }
+  }
+
+  /// The commit of the running Flatpak, from its /.flatpak-info.
+  String? runningFlatpakCommit() {
+    try {
+      return RegExp(
+        r'^app-commit=(\w+)',
+        multiLine: true,
+      ).firstMatch(File(_flatpakInfo).readAsStringSync())?.group(1);
+    } on FileSystemException {
+      return null;
+    }
+  }
+
   /// Unpacks [archive] into [out]; returns the new app bundle or folder.
   Future<String> _unpack(File archive, Directory out) async {
     Future<void> run(String exe, List<String> args) async {
@@ -256,6 +346,12 @@ class Updater extends ChangeNotifier {
   /// now", quit right after.
   Future<void> install({required bool relaunch, int? waitFor}) async {
     if (stage != UpdateStage.ready) return;
+    if (installation.kind == InstallKind.flatpak) {
+      // Already installed: the next start runs it.
+      if (relaunch) await _startOnHost(['sh', '-c', flatpakRelaunchScript]);
+      _set(UpdateStage.scheduled);
+      return;
+    }
     final script = File(p.join(_work!, 'install.sh'))
       ..writeAsStringSync(installScript);
     await Process.start('/bin/sh', [
@@ -341,6 +437,17 @@ Map<String, String> parseSha256Sums(String text) => {
   ).allMatches(text))
     m.group(2)!.trim(): m.group(1)!,
 };
+
+/// On the host: waits (up to 10 s) for Gutter's Flatpak to quit, then
+/// starts it again.
+@visibleForTesting
+const flatpakRelaunchScript = r'''
+for i in $(seq 50); do
+  flatpak ps --columns=application | grep -qx dev.gutter.gutter || break
+  sleep 0.2
+done
+exec flatpak run dev.gutter.gutter
+''';
 
 /// Waits for Gutter (pid $1) to quit, puts the new version ($3) in place of
 /// the current one ($2), and with $4 = 1 starts it. $5 is the work folder,

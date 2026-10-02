@@ -28,8 +28,9 @@ Or download the latest build from the
 
 From then on the macOS app and the tarball update themselves: Gutter offers
 each new release, downloads it, checks it against the release's checksums
-and swaps it in when you restart or quit. The Flatpak updates with
-`flatpak update` or your software center.
+and swaps it in when you restart or quit. The Flatpak updates from its
+repository: Gutter runs `flatpak update` for you, and your software center
+or `flatpak update` work too.
 
 <details>
 <summary>More on installing</summary>

@@ -201,6 +201,10 @@ jobs:
           # git runs on the host, as the app does it.
           dbus-run-session -- flatpak run --command=flatpak-spawn \
             dev.gutter.gutter --host git --version
+          # The updater compares the running commit with the installed one.
+          flatpak run --command=grep dev.gutter.gutter -q '^app-commit=' /.flatpak-info
+          dbus-run-session -- flatpak run --command=flatpak-spawn \
+            dev.gutter.gutter --host flatpak info --show-commit dev.gutter.gutter
           # The app starts and keeps running.
           code=0
           dbus-run-session -- xvfb-run -a timeout 20 flatpak run dev.gutter.gutter || code=$?
@@ -257,7 +261,7 @@ jobs:
           Or run `tool/install_macos.sh` from the repository, which downloads, installs and clears the flag.
 
           **Linux**, either:
-          - Flatpak, from Gutter's repository (updates come with `flatpak update` or your software center):
+          - Flatpak, from Gutter's repository (Gutter then updates itself; `flatpak update` and software centers work too):
             ```sh
             flatpak install --user https://serjlee.github.io/gutter/gutter.flatpakref
             ```

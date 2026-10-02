@@ -7,9 +7,6 @@ import '../../app/updater.dart';
 import '../widgets/common.dart';
 import 'dialogs.dart';
 
-/// Updates the Flatpak from Gutter's repository.
-const flatpakUpdate = 'flatpak update dev.gutter.gutter';
-
 /// Offers the latest release: its notes, then download, install and restart
 /// (or a plain download where Gutter can't replace itself).
 Future<void> showUpdateDialog(BuildContext context, AppController app) async {
@@ -106,7 +103,9 @@ class UpdateDialog extends StatelessWidget {
             LinearProgressIndicator(value: pct),
             const SizedBox(height: 6),
             Text(
-              pct == null
+              install.kind == InstallKind.flatpak
+                  ? 'Updating with Flatpak…'
+                  : pct == null
                   ? 'Downloading…'
                   : 'Downloading… ${(pct * 100).round()}%',
               style: dim,
@@ -124,7 +123,10 @@ class UpdateDialog extends StatelessWidget {
         );
       case UpdateStage.ready:
         return Text(
-          'Ready. Restart Gutter now, or it updates when you quit.',
+          install.kind == InstallKind.flatpak
+              ? 'Updated. Restart Gutter now, or the new version starts next '
+                    'time.'
+              : 'Ready. Restart Gutter now, or it updates when you quit.',
           style: dim,
         );
       case UpdateStage.scheduled:
@@ -141,10 +143,7 @@ class UpdateDialog extends StatelessWidget {
       case UpdateStage.idle:
         return switch (install.kind) {
           InstallKind.flatpak => Text(
-            'Installed with Flatpak: update it with your software center, or '
-            'run `$flatpakUpdate`. If that finds nothing, it came from an '
-            'older downloaded .flatpak file: install the new one from the '
-            'release page once, and from then on Flatpak updates it.',
+            'Gutter updates with Flatpak, from its repository.',
             style: dim,
           ),
           InstallKind.unsupported => Text(
@@ -174,14 +173,18 @@ class UpdateDialog extends StatelessWidget {
         return [later];
       case UpdateStage.ready:
         return [
-          TextButton(
-            key: const ValueKey('update-on-quit'),
-            onPressed: () async {
-              await updater.install(relaunch: false);
-              if (context.mounted) close();
-            },
-            child: const Text('Install on quit'),
-          ),
+          // A Flatpak is already updated: there's nothing to do on quit.
+          if (install.kind == InstallKind.flatpak)
+            later
+          else
+            TextButton(
+              key: const ValueKey('update-on-quit'),
+              onPressed: () async {
+                await updater.install(relaunch: false);
+                if (context.mounted) close();
+              },
+              child: const Text('Install on quit'),
+            ),
           FilledButton(
             key: const ValueKey('update-restart'),
             autofocus: true,
@@ -222,26 +225,6 @@ class UpdateDialog extends StatelessWidget {
           onPressed: () => openWithSystem(release.url),
           child: const Text('Release page'),
         );
-        if (install.kind == InstallKind.flatpak) {
-          return [
-            skip,
-            page,
-            later,
-            FilledButton(
-              key: const ValueKey('update-copy-command'),
-              autofocus: true,
-              onPressed: () {
-                copyToClipboard(
-                  app,
-                  flatpakUpdate,
-                  label: 'the update command',
-                );
-                close();
-              },
-              child: const Text('Copy update command'),
-            ),
-          ];
-        }
         if (!install.canSelfUpdate) return [skip, later, page];
         return [
           skip,
@@ -252,7 +235,11 @@ class UpdateDialog extends StatelessWidget {
             autofocus: true,
             onPressed: () => updater.prepare(release),
             child: Text(
-              stage == UpdateStage.failed ? 'Try again' : 'Download & Update',
+              stage == UpdateStage.failed
+                  ? 'Try again'
+                  : install.kind == InstallKind.flatpak
+                  ? 'Update now'
+                  : 'Download & Update',
             ),
           ),
         ];
