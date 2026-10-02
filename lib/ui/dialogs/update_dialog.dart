@@ -7,6 +7,9 @@ import '../../app/updater.dart';
 import '../widgets/common.dart';
 import 'dialogs.dart';
 
+/// Updates the Flatpak from Gutter's repository.
+const flatpakUpdate = 'flatpak update dev.gutter.gutter';
+
 /// Offers the latest release: its notes, then download, install and restart
 /// (or a plain download where Gutter can't replace itself).
 Future<void> showUpdateDialog(BuildContext context, AppController app) async {
@@ -138,8 +141,10 @@ class UpdateDialog extends StatelessWidget {
       case UpdateStage.idle:
         return switch (install.kind) {
           InstallKind.flatpak => Text(
-            'Installed with Flatpak: download the new bundle, then install it '
-            'with `flatpak install --user <file>`.',
+            'Installed with Flatpak: update it with your software center, or '
+            'run `$flatpakUpdate`. If that finds nothing, it came from an '
+            'older downloaded .flatpak file: install the new one from the '
+            'release page once, and from then on Flatpak updates it.',
             style: dim,
           ),
           InstallKind.unsupported => Text(
@@ -218,17 +223,22 @@ class UpdateDialog extends StatelessWidget {
           child: const Text('Release page'),
         );
         if (install.kind == InstallKind.flatpak) {
-          final asset = install.assetIn(release);
           return [
             skip,
+            page,
             later,
             FilledButton(
+              key: const ValueKey('update-copy-command'),
               autofocus: true,
               onPressed: () {
-                openWithSystem(asset?.url ?? release.url);
+                copyToClipboard(
+                  app,
+                  flatpakUpdate,
+                  label: 'the update command',
+                );
                 close();
               },
-              child: const Text('Download'),
+              child: const Text('Copy update command'),
             ),
           ];
         }

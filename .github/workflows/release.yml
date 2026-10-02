@@ -1,8 +1,9 @@
 name: Release
 
 # Pushing a tag like v0.1.0 builds the macOS and Linux apps and publishes
-# them as a GitHub Release. Running the workflow manually only builds and
-# uploads the artifacts (as dev builds).
+# them as a GitHub Release, and the Flatpak repository on GitHub Pages.
+# Running the workflow manually only builds and uploads the artifacts (as
+# dev builds).
 on:
   push:
     tags: ['v*']
@@ -19,6 +20,7 @@ jobs:
       commit: ${{ steps.v.outputs.commit }}
       label: ${{ steps.v.outputs.label }}
       build_args: ${{ steps.v.outputs.build_args }}
+      pages_url: ${{ steps.v.outputs.pages_url }}
     steps:
       - id: v
         run: |
@@ -37,6 +39,8 @@ jobs:
             build_args="$build_args --build-name=$version --build-number=$GITHUB_RUN_NUMBER"
           fi
           {
+            # Where the Flatpak repository is served (GitHub Pages).
+            echo "pages_url=https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}"
             echo "commit=$commit"
             echo "version=$version"
             echo "label=$label"
@@ -132,6 +136,14 @@ jobs:
           tar xzf gutter-linux-x64-*.tar.gz --strip-components=1 \
             -C build/linux/x64/release/bundle
       - run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+      - name: Version in the metadata
+        if: needs.version.outputs.version != ''
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # Software centers show it.
+          sed -i "s|</component>|  <releases>\n    <release version=\"$VERSION\" date=\"$(date -u +%F)\"/>\n  </releases>\n</component>|" \
+            linux/flatpak/dev.gutter.gutter.metainfo.xml
       - name: Build
         run: |
           flatpak remote-add --user --if-not-exists flathub \
@@ -139,11 +151,36 @@ jobs:
           flatpak-builder --user --install-deps-from=flathub \
             --disable-rofiles-fuse --force-clean --repo=repo \
             build/flatpak linux/flatpak/dev.gutter.gutter.yml
+      - name: Sign the repository
+        if: needs.version.outputs.version != ''
+        env:
+          KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$KEY" ]]; then
+            echo "::error::The FLATPAK_GPG_PRIVATE_KEY secret isn't set (README: Releases)."
+            exit 1
+          fi
+          gpg --batch --import <<< "$KEY"
+          fpr=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
+          gpg --export "$fpr" > gutter.gpg
+          flatpak build-sign repo dev.gutter.gutter master --gpg-sign="$fpr"
+          # Only this version: clients download just the files they lack.
+          flatpak build-update-repo repo --title=Gutter --default-branch=master \
+            --generate-static-deltas --prune --gpg-sign="$fpr"
       - name: Bundle
+        env:
+          PAGES_URL: ${{ needs.version.outputs.pages_url }}
         run: |
           # The runtime comes from Flathub when the bundle is installed.
+          # Release bundles also add the Flatpak repository, so they update
+          # from it.
+          remote=()
+          if [[ -f gutter.gpg ]]; then
+            remote=(--repo-url="$PAGES_URL/repo/" --gpg-keys=gutter.gpg)
+          fi
           flatpak build-bundle \
             --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "${remote[@]}" \
             repo "gutter-linux-x64-${{ needs.version.outputs.label }}.flatpak" \
             dev.gutter.gutter
       - name: Smoke test
@@ -172,6 +209,14 @@ jobs:
         with:
           name: flatpak
           path: gutter-linux-x64-*.flatpak
+      - name: Pack the repository
+        if: needs.version.outputs.version != ''
+        run: tar czf flatpak-repo.tar.gz repo gutter.gpg
+      - uses: actions/upload-artifact@v4
+        if: needs.version.outputs.version != ''
+        with:
+          name: flatpak-repo
+          path: flatpak-repo.tar.gz
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -212,8 +257,12 @@ jobs:
           Or run `tool/install_macos.sh` from the repository, which downloads, installs and clears the flag.
 
           **Linux**, either:
-          - Flatpak (`gutter-linux-x64-*.flatpak`): `flatpak install --user gutter-linux-x64-*.flatpak`, then `flatpak run dev.gutter.gutter` or open Gutter from your app menu. It runs your system's git.
-          - Tarball (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3.
+          - Flatpak, from Gutter's repository (updates come with `flatpak update` or your software center):
+            ```sh
+            flatpak install --user https://serjlee.github.io/gutter/gutter.flatpakref
+            ```
+            Or install `gutter-linux-x64-*.flatpak` from here (`flatpak install --user <file>`): it adds the repository too. It runs your system's git.
+          - Tarball (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3. It updates itself.
 
           Requires `git` on the `PATH`.
           NOTES
@@ -230,3 +279,33 @@ jobs:
             gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
               --title "Gutter $GITHUB_REF_NAME" --notes-file notes.md
           fi
+
+  # The Flatpak repository, on GitHub Pages: Settings → Pages → Source:
+  # GitHub Actions, and the github-pages environment must allow v* tags.
+  pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, flatpak, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak-repo
+      - name: Site
+        env:
+          PAGES_URL: ${{ needs.version.outputs.pages_url }}
+        run: |
+          tar xzf flatpak-repo.tar.gz
+          tool/make_flatpak_site.sh repo site "$PAGES_URL" gutter.gpg
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

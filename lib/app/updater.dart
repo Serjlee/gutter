@@ -16,8 +16,8 @@ enum InstallKind {
   /// The folder of the Linux tarball.
   linuxBundle,
 
-  /// Installed from the Flatpak bundle: updates are downloaded, not
-  /// installed.
+  /// A Flatpak: it updates from Gutter's Flatpak repository, with
+  /// `flatpak update` or a software center.
   flatpak,
 
   /// Can't update itself; see [Installation.reason].

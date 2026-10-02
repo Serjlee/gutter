@@ -9,21 +9,27 @@ Flutter on top of your system `git`.
 
 ## Install
 
-Download the latest build from the
-[Releases](https://github.com/serjlee/gutter/releases) page. Gutter needs
-`git` installed.
+Gutter needs `git` installed.
+
+- **Linux, Flatpak**: install it from Gutter's Flatpak repository:
+  ```sh
+  flatpak install --user https://serjlee.github.io/gutter/gutter.flatpakref
+  ```
+
+Or download the latest build from the
+[Releases](https://github.com/serjlee/gutter/releases) page:
 
 - **macOS** (`Gutter-macos-<version>.zip`, Apple Silicon and Intel): move
   `Gutter.app` to `/Applications`, then clear the quarantine flag (the app
   isn't notarized):
   `xattr -dr com.apple.quarantine /Applications/Gutter.app`
-- **Linux, Flatpak**: `flatpak install --user gutter-linux-x64-<version>.flatpak`
 - **Linux, tarball**: extract `gutter-linux-x64-<version>.tar.gz` and run
   `./gutter` (needs GTK 3).
 
 From then on the macOS app and the tarball update themselves: Gutter offers
 each new release, downloads it, checks it against the release's checksums
-and swaps it in when you restart or quit. The Flatpak offers the download.
+and swaps it in when you restart or quit. The Flatpak updates with
+`flatpak update` or your software center.
 
 <details>
 <summary>More on installing</summary>
@@ -45,7 +51,12 @@ scan a folder under Documents or Desktop, macOS asks for access. The app
 isn't sandboxed (`macos/Runner/*.entitlements`): it runs `git` and reads
 repositories anywhere on disk.
 
-**Flatpak.** It fetches the Freedesktop runtime from Flathub. Gutter runs
+**Flatpak.** The repository is served from GitHub Pages and signed; it
+also has a [page](https://serjlee.github.io/gutter/) with the steps.
+Each release also attaches a `.flatpak` file, which adds the repository
+when installed. Gutter was installed from an older `.flatpak` file? Install
+it once from the repository (or a new file) to get updates. It fetches the
+Freedesktop runtime from Flathub. Gutter runs
 your system's git through `flatpak-spawn --host`, so your config,
 credential helpers, signing keys and hooks work as in a terminal, and it
 can read files anywhere (`--filesystem=host`).
@@ -156,6 +167,7 @@ dart run tool/bench_layout.dart 200000            # graph layout benchmark
 dart run tool/bench_repo.dart /path/to/big/repo   # history load timings
 tool/make_demo_repo.sh /tmp/demo                  # branchy demo repository
 tool/make_icons.sh                                # icons from assets/icon/source.png
+tool/make_flatpak_site.sh <repo> <site> <url> <key> # Flatpak repository site (CI)
 ```
 
 ```
@@ -169,7 +181,21 @@ lib/ui/      shell, tabs, graph view, sidebar, details, diff, dialogs
 - **Releases**: `git tag -a v0.1.0 -m "What's new…" && git push origin
   v0.1.0` builds the macOS zip, the Linux tarball and the Flatpak, and
   publishes them as a GitHub Release (`.github/workflows/release.yml`).
-  The tag's message opens the release notes.
+  The tag's message opens the release notes. It also publishes the
+  Flatpak repository to GitHub Pages, which needs, once:
+  - Settings → Pages → Source: **GitHub Actions**; then Settings →
+    Environments → `github-pages` → add a tag rule `v*`, so tags may
+    deploy.
+  - A signing key, passphrase-less, as the `FLATPAK_GPG_PRIVATE_KEY`
+    secret:
+    ```sh
+    gpg --batch --passphrase '' --quick-gen-key \
+      "Gutter Flatpak repository <you@example.com>" rsa4096 sign never
+    gpg --armor --export-secret-keys "Gutter Flatpak repository" \
+      | gh secret set FLATPAK_GPG_PRIVATE_KEY
+    ```
+    Keep a backup: users who installed from the repository only accept
+    updates signed with it.
 - **Version label**: tagged builds embed their version, shown on the home
   tab. For a local build, pass
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.

@@ -138,12 +138,13 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('update-available')), findsOneWidget);
     expect(find.text('v0.2.0 is available'), findsOneWidget);
-    // The dialog: Flatpak installs get a plain download.
+    // The dialog: Flatpak installs update with flatpak.
     await tester.tap(find.byKey(const ValueKey('update-open')));
     await tester.pump();
     expect(find.text('Gutter 0.2.0 is available'), findsOneWidget);
     expect(find.text('You have 0.1.0.'), findsOneWidget);
-    expect(find.text('Download'), findsOneWidget);
+    expect(find.textContaining('flatpak update'), findsOneWidget);
+    expect(find.text('Copy update command'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('update-skip')));
     await tester.pump();
     expect(app.settings.skippedUpdate, 'v0.2.0');
