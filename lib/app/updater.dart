@@ -162,6 +162,8 @@ class Updater extends ChangeNotifier {
   static Future<ProcessResult> _defaultRunOnHost(List<String> command) =>
       Process.run('flatpak-spawn', ['--host', '--watch-bus', ...command]);
 
+  // flatpak-spawn waits for [command]: it has to return quickly, or it keeps
+  // the sandbox alive after Gutter quits.
   static Future<void> _defaultStartOnHost(List<String> command) =>
       Process.start('flatpak-spawn', [
         '--host',
@@ -439,14 +441,18 @@ Map<String, String> parseSha256Sums(String text) => {
 };
 
 /// On the host: waits (up to 10 s) for Gutter's Flatpak to quit, then
-/// starts it again.
+/// starts it again. It runs in the background so that flatpak-spawn, which
+/// waits for it inside the sandbox (and so keeps the sandbox alive), returns
+/// right away.
 @visibleForTesting
 const flatpakRelaunchScript = r'''
-for i in $(seq 50); do
-  flatpak ps --columns=application | grep -qx dev.gutter.gutter || break
-  sleep 0.2
-done
-exec flatpak run dev.gutter.gutter
+(
+  for i in $(seq 50); do
+    flatpak ps --columns=application | grep -qx dev.gutter.gutter || break
+    sleep 0.2
+  done
+  exec flatpak run dev.gutter.gutter
+) </dev/null >/dev/null 2>&1 &
 ''';
 
 /// Waits for Gutter (pid $1) to quit, puts the new version ($3) in place of
