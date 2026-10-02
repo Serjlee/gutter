@@ -747,20 +747,13 @@ class _RefPills extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: LayoutBuilder(
         builder: (context, c) {
-          // The first pill shows, and main/master remotes when there's room
-          // for them next to it (else their node ring and scroll mark still
-          // show where they are); the rest fold into "+N".
-          final pin = c.maxWidth >= _pinWidth;
-          final shown = [
-            for (var i = 0; i < pills.length; i++)
-              if (i == 0 || (pin && pills[i].isTrunk)) pills[i],
-          ];
-          final folded = pills.where((p) => !shown.contains(p)).toList();
-          final more = folded.length;
+          final fit = _fit(context, pills, c.maxWidth, detachedHead);
+          final folded = pills.where((p) => !fit.shown.contains(p)).toList();
           return Row(
             children: [
               if (detachedHead)
-                Flexible(
+                SizedBox(
+                  width: fit.headWidth,
                   child: _pill(
                     context,
                     label: 'HEAD',
@@ -769,22 +762,21 @@ class _RefPills extends StatelessWidget {
                     bold: true,
                   ),
                 ),
-              for (final (i, p) in shown.indexed)
-                if (i > 0 && p.isTrunk)
-                  // Never shortened (within reason): the first pill gives
-                  // way.
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: c.maxWidth * 0.6),
-                      child: _pillFor(context, p, short: true),
-                    ),
-                  )
-                else
-                  Flexible(child: _pillFor(context, p)),
-              if (more > 0)
+              for (final (i, p) in fit.shown.indexed)
                 Padding(
-                  padding: const EdgeInsets.only(left: 4),
+                  padding: EdgeInsets.only(
+                    left: i == 0 && !detachedHead ? 0 : _gap,
+                  ),
+                  child: SizedBox(
+                    width: fit.widths[i],
+                    child: _pillFor(context, p, short: fit.short(p)),
+                  ),
+                ),
+              if (fit.chip)
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: fit.shown.isEmpty && !detachedHead ? 0 : _gap,
+                  ),
                   child: PopupMenuButton<VoidCallback>(
                     popUpAnimationStyle: AnimationStyle.noAnimation,
                     tooltip: folded.map((p) => p.label).join('\n'),
@@ -809,7 +801,7 @@ class _RefPills extends StatelessWidget {
                         borderRadius: BorderRadius.circular(3),
                       ),
                       child: Text(
-                        '+$more',
+                        '+${folded.length}',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textDim,
@@ -825,8 +817,111 @@ class _RefPills extends StatelessWidget {
     );
   }
 
-  /// Below this, a main/master remote folds like any other pill.
-  static const _pinWidth = 140.0;
+  static const _gap = 4.0;
+
+  /// Shortened below this, a label isn't worth showing (about five
+  /// characters and "…", its icons dropped).
+  static const _minWidth = 64.0;
+
+  /// Which labels show in [width], and how wide each is: as many as fit
+  /// (in order: the checked-out branch, main/master, branches, remotes,
+  /// tags), the widest shortened first, none below [_minWidth]. A tag and
+  /// main/master stay when others fold into "+N".
+  _Fit _fit(
+    BuildContext context,
+    List<_PillData> pills,
+    double width,
+    bool detachedHead,
+  ) {
+    final scaler = MediaQuery.textScalerOf(context);
+    // Measured as drawn: in the app's text style (its font).
+    final base = DefaultTextStyle.of(context).style;
+    double text(String s, double size, {bool bold = false}) => (TextPainter(
+      text: TextSpan(
+        text: s,
+        style: base.merge(
+          TextStyle(
+            fontSize: size,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout()).width;
+    // A pill: text, its icons (15 each), padding and border, and a pixel to
+    // spare for rounding.
+    final measured = <(_PillData, bool), double>{};
+    double natural(_PillData p, {required bool short}) =>
+        measured[(p, short)] ??=
+            text(_label(p, short: short), 11.5, bold: p.isHead) +
+            _icons(p).length * 15 +
+            12 +
+            (p.isTrunk ? 3 : 2) +
+            1;
+    double plus(int n) => n == 0 ? 0 : _gap + text('+$n', 11) + 10 + 1;
+
+    final headWidth = detachedHead
+        ? min(width, text('HEAD', 11.5, bold: true) + 15 + 12 + 2 + 1)
+        : 0.0;
+    final room = width - headWidth;
+    // A main/master remote after another label drops "origin/".
+    bool short(_PillData p, List<_PillData> shown) =>
+        p.isTrunk && (detachedHead || (shown.isNotEmpty && shown.first != p));
+
+    final shown = [...pills];
+
+    // Widths: the space left shared out, the narrowest labels first, so
+    // only the widest ones are shortened.
+    List<double> share(List<_PillData> shown, {bool chip = true}) {
+      var space =
+          room -
+          (chip ? plus(pills.length - shown.length) : 0) -
+          _gap * (shown.length - (detachedHead ? 0 : 1));
+      final nat = [for (final p in shown) natural(p, short: short(p, shown))];
+      final order = [for (var i = 0; i < shown.length; i++) i]
+        ..sort((a, b) => nat[a].compareTo(nat[b]));
+      final widths = List<double>.filled(shown.length, 0);
+      for (final (k, i) in order.indexed) {
+        final w = max(0.0, min(nat[i], space / (shown.length - k)));
+        widths[i] = w;
+        space -= w;
+      }
+      return widths;
+    }
+
+    // Shortened too much (one that's whole is fine, however short).
+    bool squeezed(List<double> widths) => [
+      for (final (i, w) in widths.indexed)
+        w < min(_minWidth, natural(shown[i], short: short(shown[i], shown))),
+    ].any((x) => x);
+
+    var widths = share(shown);
+    // Too narrow for them all: the last labels fold into "+N"; main/master
+    // and a tag last (main/master first: its ring and scroll mark still
+    // show it).
+    while (shown.length > 1 && squeezed(widths)) {
+      final tag = shown.where((p) => p.type == RefType.tag).firstOrNull;
+      bool kept(_PillData p) => p == shown.first || p.isTrunk || p == tag;
+      var i = shown.lastIndexWhere((p) => !kept(p));
+      if (i < 0) i = shown.lastIndexWhere((p) => p != shown.first && p.isTrunk);
+      shown.removeAt(i < 0 ? shown.length - 1 : i);
+      widths = share(shown);
+    }
+    // No room for a label and "+N": just the label, or just "+N".
+    var chip = shown.length < pills.length;
+    if (chip && (widths.isEmpty || squeezed(widths))) {
+      chip = false;
+      widths = share(shown, chip: false);
+    }
+    if (widths.isEmpty || widths.first <= 0) {
+      shown.clear();
+      widths = [];
+      chip = pills.isNotEmpty && room >= plus(pills.length);
+    }
+    return _Fit(shown, widths, headWidth, chip, (p) => short(p, shown));
+  }
 
   /// [p]'s label; [short] drops "origin/" from a remote branch next to
   /// another pill (the cloud icon says it's remote).
@@ -835,17 +930,19 @@ class _RefPills extends StatelessWidget {
       ? p.remotes.first.remoteBranchName
       : p.label;
 
+  static List<IconData> _icons(_PillData p) => [
+    if (p.local != null) Icons.laptop_mac,
+    if (p.remotes.isNotEmpty) Icons.cloud_outlined,
+    if (p.tag != null) Icons.sell_outlined,
+  ];
+
   Widget _pillFor(
     BuildContext context,
     _PillData p, {
     bool short = false,
     bool fit = true,
   }) {
-    final icons = <IconData>[
-      if (p.local != null) Icons.laptop_mac,
-      if (p.remotes.isNotEmpty) Icons.cloud_outlined,
-      if (p.tag != null) Icons.sell_outlined,
-    ];
+    final icons = _icons(p);
     final color = p.type == RefType.tag ? AppColors.tag : laneColor;
     return GestureDetector(
       onDoubleTap: p.type == RefType.tag
@@ -942,4 +1039,21 @@ class _RefPills extends StatelessWidget {
             ),
     );
   }
+}
+
+/// The labels that fit in a commit's ref cell ([_RefPills._fit]).
+class _Fit {
+  _Fit(this.shown, this.widths, this.headWidth, this.chip, this.short);
+  final List<_PillData> shown;
+  final List<double> widths;
+
+  /// The detached HEAD label's.
+  final double headWidth;
+
+  /// Whether "+N" shows the labels that don't.
+  final bool chip;
+
+  /// Whether a pill shows its short label (a main/master remote after
+  /// another label).
+  final bool Function(_PillData) short;
 }

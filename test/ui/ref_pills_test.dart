@@ -10,7 +10,9 @@ import 'package:gutter/ui/repo/repo_tab_controller.dart';
 import '../support/temp_repo.dart';
 
 void main() {
-  testWidgets('origin/main never folds into "+N"', (tester) async {
+  testWidgets('every label that fits shows, origin/main and tags too', (
+    tester,
+  ) async {
     late TempRepo upstream;
     late TempRepo t;
     late RepoTabController tab;
@@ -27,7 +29,11 @@ void main() {
       t.git(['tag', 'v1']);
       t.git(['update-ref', 'refs/remotes/origin/other', 'HEAD~1']);
       t.git(['tag', 'v0', 'HEAD~1']);
-      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      // A wide column: the test font's glyphs are wider than real ones.
+      tab = RepoTabController(
+        t.repo,
+        AppController(null, Settings()..columnWidths = {'refs': 300}),
+      );
       await tab.load();
     });
     addTearDown(() {
@@ -47,10 +53,11 @@ void main() {
     await tester.pump();
 
     // The head row: feature, then origin/main (as "main", with the cloud
-    // icon), then the tag folded.
+    // icon), then the tag: all of them, nothing folded.
     expect(find.text('feature'), findsOneWidget);
     expect(find.text('main'), findsOneWidget);
-    expect(find.text('+1'), findsNWidgets(2));
+    expect(find.text('v1'), findsOneWidget);
+    expect(find.textContaining('+'), findsNothing);
     // Marked by a light border, not bold (only the checked-out branch is).
     final main = tester.widget<Text>(find.text('main'));
     expect(main.style!.fontWeight, isNot(FontWeight.w700));
@@ -72,9 +79,61 @@ void main() {
       tester.widget<Text>(find.text('one')).style!.fontWeight,
       isNot(FontWeight.w700),
     );
-    // Other remote branches still fold behind the first pill as before.
+    // A remote branch and a tag: both.
     expect(find.text('origin/other'), findsOneWidget);
-    expect(find.text('v0'), findsNothing);
+    expect(find.text('v0'), findsOneWidget);
+  });
+
+  testWidgets('what doesn\'t fit folds into "+N", but a tag shows', (
+    tester,
+  ) async {
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('one', {'a.txt': '1\n'});
+      for (final b in ['alpha', 'bravo', 'charlie', 'delta']) {
+        t.git(['branch', b]);
+      }
+      t.git(['tag', 'v9']);
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+    });
+    tester.view.physicalSize = const Size(1400, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(body: CommitGraphView(tab: tab)),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    // The checked-out branch first, the tag last; branches in between as
+    // long as each keeps some room, the others folded.
+    expect(find.text('main'), findsOneWidget);
+    expect(find.text('v9'), findsOneWidget);
+    final shown = [
+      'alpha',
+      'bravo',
+      'charlie',
+      'delta',
+    ].where((b) => find.text(b).evaluate().isNotEmpty).length;
+    expect(shown, lessThan(4));
+    expect(find.text('+${4 - shown}'), findsOneWidget);
+    // No label is squeezed to nothing.
+    for (final e in find.byType(Text).evaluate()) {
+      final text = (e.widget as Text).data ?? '';
+      if (['main', 'alpha', 'bravo', 'charlie', 'delta', 'v9'].contains(text)) {
+        expect((e.renderObject as RenderBox).size.width, greaterThan(10));
+      }
+    }
   });
 
   testWidgets('labels fit however narrow the window is', (tester) async {
