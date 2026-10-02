@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
@@ -283,8 +284,32 @@ class RepoTabController extends ChangeNotifier {
     return null;
   }
 
+  bool _notifyQueued = false;
+
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    // Not while a frame is building or tearing down widgets, when nothing
+    // may be marked for rebuild: a gesture can fire then (a tap left
+    // pending by a double-click detector that goes away). Right after it.
+    if (_inFrame) {
+      if (_notifyQueued) return;
+      _notifyQueued = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _notifyQueued = false;
+        if (!_disposed) notifyListeners();
+      });
+      return;
+    }
+    notifyListeners();
+  }
+
+  static bool get _inFrame {
+    try {
+      return SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks;
+    } catch (_) {
+      return false; // no binding (plain unit tests)
+    }
   }
 
   // --------------------------------------------------------------- loading
