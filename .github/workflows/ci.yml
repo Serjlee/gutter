@@ -1,10 +1,12 @@
 name: CI
 
-# Linux only: macOS and Linux release builds run in the Release workflow.
+# Tests on Linux, the real app on Linux and Windows: release builds run in
+# the Release workflow.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # A newer push supersedes a running CI for the same branch / PR.
 concurrency:
@@ -46,3 +48,18 @@ jobs:
           xvfb-run -a flutter drive --profile -d linux \
             --driver test_driver/integration_test.dart \
             --target integration_test/app_test.dart
+
+  # The same on Windows, where it's the first run of the real app.
+  integration-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: >-
+          flutter drive --profile -d windows
+          --driver test_driver/integration_test.dart
+          --target integration_test/app_test.dart

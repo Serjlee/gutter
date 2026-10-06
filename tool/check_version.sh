@@ -3,13 +3,18 @@
 # commit $3 (the --dart-define values the home tab shows). Guards releases
 # against builds that would show "unknown version".
 #
-# Usage: tool/check_version.sh <libapp.so | App.framework/App> <version> <commit>
+# Usage: tool/check_version.sh <libapp.so | App.framework/App | app.so> <version> <commit>
 set -euo pipefail
 
 binary="$1" version="$2" commit="$3"
 found=$(mktemp)
 trap 'rm -f "$found"' EXIT
-strings -a "$binary" > "$found"
+if command -v strings >/dev/null; then
+  strings -a "$binary" > "$found"
+else
+  # Git Bash on Windows has no strings: the same, with grep.
+  LC_ALL=C grep -a -o '[[:print:]]\{4,\}' "$binary" > "$found"
+fi
 status=0
 for value in "$version" "$commit"; do
   [[ -z "$value" ]] && continue

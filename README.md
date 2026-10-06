@@ -1,6 +1,6 @@
 # Gutter
 
-A fast git client for macOS and Linux, inspired by GitKraken. Built with
+A fast git client for macOS, Linux and Windows, inspired by GitKraken. Built with
 Flutter on top of your system `git`.
 
 > **Disclaimer:** This app was heavily vibe coded with Claude Opus 5.5. Mostly out of spite of GitKraken becoming ever so bloated and unstable.
@@ -26,8 +26,13 @@ Or download the latest build from the
   `xattr -dr com.apple.quarantine /Applications/Gutter.app`
 - **Linux, tarball**: extract `gutter-linux-x64-<version>.tar.gz` and run
   `./gutter` (needs GTK 3).
+- **Windows** (x64): run `Gutter-windows-x64-<version>-setup.exe`, or
+  extract `Gutter-windows-x64-<version>.zip` anywhere and run `gutter.exe`.
+  Neither is signed: on SmartScreen's warning, click **More info → Run
+  anyway**.
 
-From then on the macOS app and the tarball update themselves: Gutter offers
+From then on the macOS app, the tarball and both Windows builds update
+themselves: Gutter offers
 each new release, downloads it, checks it against the release's checksums
 and swaps it in when you restart or quit. The Flatpak updates from its
 repository: Gutter runs `flatpak update` for you, and your software center
@@ -57,10 +62,19 @@ repositories anywhere on disk.
 so your config, credential helpers, signing keys and hooks work as in a
 terminal, and it can read files anywhere (`--filesystem=host`).
 
+**Windows.** The installer installs for your user only
+(`%LOCALAPPDATA%\Programs\Gutter`), so neither it nor updates ask for admin
+rights. Windows doesn't come with git: if Gutter can't find it, the home tab
+offers to install Git for Windows with `winget` (or get it from
+[git-scm.com](https://git-scm.com/downloads)). Its Git Credential Manager
+signs you in to GitHub and others; for SSH remotes, start the "OpenSSH
+Authentication Agent" service and `ssh-add` your key.
+
 **Which git.** Gutter looks on `PATH`, then in `/opt/homebrew/bin`,
 `/usr/local/bin` and `/usr/bin` (Homebrew's first on macOS: apps opened
 from Finder don't get your shell's `PATH`, and `/usr/bin/git` needs
-Apple's command line tools). You can pick another on the home tab.
+Apple's command line tools); on Windows, in Git for Windows' install
+folders. You can pick another on the home tab.
 
 </details>
 
@@ -147,10 +161,11 @@ Gutter never shows a password prompt.
 ## Development
 
 You need Flutter (stable) and git; on Linux also
-`clang cmake ninja-build pkg-config libgtk-3-dev`.
+`clang cmake ninja-build pkg-config libgtk-3-dev`; on Windows, Visual
+Studio with "Desktop development with C++".
 
 ```sh
-flutter run -d macos          # or: -d linux
+flutter run -d macos          # or: -d linux, -d windows
 flutter analyze && flutter test
 ```
 
@@ -178,6 +193,8 @@ lib/ui/      shell, tabs, graph view, sidebar, details, diff, dialogs
 - **Version label**: for a local build, pass
   `--dart-define=GUTTER_VERSION=0.1.0 --dart-define=GUTTER_COMMIT=$(git rev-parse --short HEAD)`.
 - **Flatpak locally**: see `linux/flatpak/dev.gutter.gutter.yml`.
+- **Windows installer locally**: after `flutter build windows`, run
+  `iscc /DAppVersion=0.1.0 windows\installer\gutter.iss` (Inno Setup 6).
 
 </details>
 
