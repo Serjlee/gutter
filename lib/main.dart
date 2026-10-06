@@ -36,6 +36,7 @@ Future<void> main(List<String> args) async {
   final app = AppController(store, store.load());
   runApp(GutterApp(app: app));
   app.startUpdateChecks();
+  unawaited(app.checkGit());
 
   // Repositories passed on the command line open as tabs.
   await app.restoreSession();
