@@ -26,6 +26,7 @@ void main() {
     tester,
   ) async {
     final app = AppController(null, Settings());
+    var winget = true;
     Future<void> show(String platform) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -34,9 +35,10 @@ void main() {
             body: ListenableBuilder(
               listenable: app,
               builder: (_, _) => GitMissingBanner(
-                key: ValueKey(platform),
+                key: ValueKey('$platform $winget'),
                 app: app,
                 platform: platform,
+                hasWinget: () async => winget,
               ),
             ),
           ),
@@ -50,9 +52,17 @@ void main() {
 
     app.gitProblem = 'Gutter can\'t find git.';
     await show('windows');
+    await tester.pump();
     expect(find.text('Git isn\'t installed'), findsOneWidget);
     expect(find.text('Install Git'), findsOneWidget);
     expect(find.textContaining('Git for Windows'), findsOneWidget);
+
+    // No winget (Windows Server before 2025): only the download.
+    winget = false;
+    await show('windows');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('git-install')), findsNothing);
+    expect(find.textContaining('download and install Git'), findsOneWidget);
 
     await show('macos');
     expect(find.text('Install command line tools'), findsOneWidget);

@@ -65,8 +65,9 @@ terminal, and it can read files anywhere (`--filesystem=host`).
 **Windows.** The installer installs for your user only
 (`%LOCALAPPDATA%\Programs\Gutter`), so neither it nor updates ask for admin
 rights. Windows doesn't come with git: if Gutter can't find it, the home tab
-offers to install Git for Windows with `winget` (or get it from
-[git-scm.com](https://git-scm.com/downloads)). Its Git Credential Manager
+offers to install Git for Windows with `winget` where there is one (not on
+Windows Server before 2025), or to get it from
+[git-scm.com](https://git-scm.com/downloads). Its Git Credential Manager
 signs you in to GitHub and others; for SSH remotes, start the "OpenSSH
 Authentication Agent" service and `ssh-add` your key.
 

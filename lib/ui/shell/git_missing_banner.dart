@@ -7,15 +7,36 @@ import '../../app/theme.dart';
 import '../../git/git_runner.dart';
 import '../widgets/common.dart';
 
+/// Whether winget runs. Windows 10 and 11 have it (once App Installer has
+/// updated from the Store), Windows Server only from 2025.
+Future<bool> wingetAvailable() async {
+  try {
+    final r = await Process.run('winget', [
+      '--version',
+    ]).timeout(const Duration(seconds: 10));
+    return r.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Shown on the home tab while git doesn't run: why, and how to get it.
 /// Gutter checks again when its window gets focus back (from installing
 /// it, say), or on "Check again".
 class GitMissingBanner extends StatefulWidget {
-  const GitMissingBanner({super.key, required this.app, this.platform});
+  const GitMissingBanner({
+    super.key,
+    required this.app,
+    this.platform,
+    this.hasWinget = wingetAvailable,
+  });
   final AppController app;
 
   /// 'windows', 'macos' or 'linux'; this system's when null (for tests).
   final String? platform;
+
+  /// Whether "Install Git" can use winget (overridable for tests).
+  final Future<bool> Function() hasWinget;
 
   @override
   State<GitMissingBanner> createState() => _GitMissingBannerState();
@@ -24,7 +45,20 @@ class GitMissingBanner extends StatefulWidget {
 class _GitMissingBannerState extends State<GitMissingBanner> {
   bool _checking = false;
 
+  /// Whether winget runs; null until known.
+  bool? _winget;
+
   AppController get app => widget.app;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_platform == 'windows') {
+      widget.hasWinget().then((ok) {
+        if (mounted) setState(() => _winget = ok);
+      });
+    }
+  }
 
   String get _platform =>
       widget.platform ??
@@ -56,6 +90,12 @@ class _GitMissingBannerState extends State<GitMissingBanner> {
     if (problem == null) return const SizedBox.shrink();
     final missing = problem.startsWith('Gutter can\'t find git');
     final (String hint, Widget? install) = switch (_platform) {
+      'windows' when _winget != true => (
+        'Windows doesn\'t come with git: download and install Git for '
+            'Windows (with its credential manager, for signing in to GitHub '
+            'and others).',
+        null,
+      ),
       'windows' => (
         'Windows doesn\'t come with git: install Git for Windows (with its '
             'credential manager, for signing in to GitHub and others).',
