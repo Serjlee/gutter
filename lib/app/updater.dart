@@ -22,11 +22,7 @@ enum InstallKind {
 
   /// Installed on Windows with the installer (it left its uninstaller next
   /// to gutter.exe): the new installer runs silently once Gutter quits.
-  windowsInstaller,
-
-  /// The folder of the Windows zip: swapped for the new one, as the Linux
-  /// tarball's.
-  windowsFolder,
+  windows,
 
   /// Can't update itself; see [Installation.reason].
   unsupported,
@@ -47,22 +43,17 @@ class Installation {
 
   bool get canSelfUpdate => kind != InstallKind.unsupported;
 
-  bool get isWindows =>
-      kind == InstallKind.windowsInstaller || kind == InstallKind.windowsFolder;
-
   static final _macZip = RegExp(r'^Gutter-macos-.*\.zip$');
   static final _linuxTarball = RegExp(r'^gutter-linux-x64-.*\.tar\.gz$');
   static final _flatpak = RegExp(r'^gutter-linux-x64-.*\.flatpak$');
   static final _windowsSetup = RegExp(r'^Gutter-windows-x64-.*-setup\.exe$');
-  static final _windowsZip = RegExp(r'^Gutter-windows-x64-.*\.zip$');
 
   /// The file of [release] for this installation.
   ReleaseAsset? assetIn(ReleaseInfo release) => switch (kind) {
     InstallKind.macApp => release.asset(_macZip.hasMatch),
     InstallKind.linuxBundle => release.asset(_linuxTarball.hasMatch),
     InstallKind.flatpak => release.asset(_flatpak.hasMatch),
-    InstallKind.windowsInstaller => release.asset(_windowsSetup.hasMatch),
-    InstallKind.windowsFolder => release.asset(_windowsZip.hasMatch),
+    InstallKind.windows => release.asset(_windowsSetup.hasMatch),
     InstallKind.unsupported => null,
   };
 
@@ -102,16 +93,15 @@ class Installation {
     }
     if (windows ?? Platform.isWindows) {
       final dir = p.dirname(exe);
-      if (!Directory(p.join(dir, 'data', 'flutter_assets')).existsSync()) {
+      if (!File(p.join(dir, 'unins000.exe')).existsSync()) {
         return const Installation(
           InstallKind.unsupported,
-          reason: 'Gutter isn\'t running from its install folder.',
+          reason:
+              'Gutter wasn\'t installed with its installer: install it with '
+              'Gutter-windows-x64-<version>-setup.exe to get updates.',
         );
       }
-      if (File(p.join(dir, 'unins000.exe')).existsSync()) {
-        return Installation(InstallKind.windowsInstaller, path: dir);
-      }
-      return _writable(dir, InstallKind.windowsFolder);
+      return Installation(InstallKind.windows, path: dir);
     }
     if (linux ?? Platform.isLinux) {
       final dir = p.dirname(exe);
@@ -244,7 +234,7 @@ class Updater extends ChangeNotifier {
     _set(UpdateStage.downloading);
     // Next to the installed copy (so the swap is a rename), except for the
     // installer, which puts Gutter in place itself.
-    final work = installation.kind == InstallKind.windowsInstaller
+    final work = installation.kind == InstallKind.windows
         ? p.join(Directory.systemTemp.path, 'gutter-update')
         : p.join(p.dirname(installation.path), '.gutter-update');
     try {
@@ -280,7 +270,7 @@ class Updater extends ChangeNotifier {
         );
       }
 
-      if (installation.kind == InstallKind.windowsInstaller) {
+      if (installation.kind == InstallKind.windows) {
         _staged = file.path; // the new installer
         _set(UpdateStage.ready);
         return;
@@ -380,14 +370,11 @@ class Updater extends ChangeNotifier {
       await run('codesign', ['--verify', '--deep', '--strict', app.path]);
       return app.path;
     }
-    // Windows 10 and 11 come with a tar that reads zips too.
-    final windows = installation.kind == InstallKind.windowsFolder;
-    await run('tar', [windows ? '-xf' : 'xzf', archive.path, '-C', out.path]);
-    final exe = windows ? 'gutter.exe' : 'gutter';
+    await run('tar', ['xzf', archive.path, '-C', out.path]);
     final dir = out
         .listSync()
         .whereType<Directory>()
-        .where((d) => File(p.join(d.path, exe)).existsSync())
+        .where((d) => File(p.join(d.path, 'gutter')).existsSync())
         .firstOrNull;
     if (dir == null) throw UpdateException('The download has no Gutter.');
     return dir.path;
@@ -406,10 +393,9 @@ class Updater extends ChangeNotifier {
     }
     final gutterPid = '${waitFor ?? pid}';
     final again = relaunch ? '1' : '0';
-    if (installation.isWindows) {
-      final setup = installation.kind == InstallKind.windowsInstaller;
+    if (installation.kind == InstallKind.windows) {
       final script = File(p.join(_work!, 'install.ps1'))
-        ..writeAsStringSync(setup ? windowsSetupScript : windowsSwapScript);
+        ..writeAsStringSync(windowsSetupScript);
       await _startDetached('powershell.exe', [
         '-NoProfile',
         '-ExecutionPolicy',
@@ -419,15 +405,9 @@ class Updater extends ChangeNotifier {
         '-File',
         script.path,
         gutterPid,
-        if (setup) ...[
-          _staged!,
-          again,
-          p.join(installation.path, 'gutter.exe'),
-        ] else ...[
-          installation.path,
-          _staged!,
-          again,
-        ],
+        _staged!,
+        again,
+        p.join(installation.path, 'gutter.exe'),
         _work!,
       ]);
       _set(UpdateStage.scheduled);
@@ -561,46 +541,6 @@ if [ "$relaunch" = 1 ]; then
   fi
 fi
 rm -rf "$work"
-''';
-
-/// Windows: waits for Gutter (pid GutterPid) to quit, puts the new folder
-/// (New) in place of the current one (Current), back again if that fails,
-/// and with Relaunch = 1 starts it. Moves are retried: a virus scanner can
-/// hold the new files for a moment. Work, next to Current (so the moves
-/// are renames), is removed at the end. Windows PowerShell 5.1 syntax.
-@visibleForTesting
-const windowsSwapScript = r'''
-param([int]$GutterPid, [string]$Current, [string]$New, [string]$Relaunch,
-  [string]$Work)
-while (Get-Process -Id $GutterPid -ErrorAction SilentlyContinue) {
-  Start-Sleep -Milliseconds 200
-}
-function Move-Retrying([string]$From, [string]$To) {
-  for ($i = 0; $i -lt 25; $i++) {
-    try {
-      Move-Item -LiteralPath $From -Destination $To -ErrorAction Stop
-      return $true
-    } catch {
-      Start-Sleep -Milliseconds 200
-    }
-  }
-  return $false
-}
-$previous = Join-Path $Work 'previous'
-if (Test-Path -LiteralPath $previous) {
-  Remove-Item -LiteralPath $previous -Recurse -Force
-}
-if (Move-Retrying $Current $previous) {
-  if (Move-Retrying $New $Current) {
-    Remove-Item -LiteralPath $previous -Recurse -Force -ErrorAction SilentlyContinue
-  } else {
-    Move-Retrying $previous $Current | Out-Null
-  }
-}
-if ($Relaunch -eq '1') {
-  Start-Process -FilePath (Join-Path $Current 'gutter.exe')
-}
-Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
 ''';
 
 /// Windows: waits for Gutter (pid GutterPid) to quit, runs the new

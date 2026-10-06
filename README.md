@@ -26,12 +26,10 @@ Or download the latest build from the
   `xattr -dr com.apple.quarantine /Applications/Gutter.app`
 - **Linux, tarball**: extract `gutter-linux-x64-<version>.tar.gz` and run
   `./gutter` (needs GTK 3).
-- **Windows** (x64): run `Gutter-windows-x64-<version>-setup.exe`, or
-  extract `Gutter-windows-x64-<version>.zip` anywhere and run `gutter.exe`.
-  Neither is signed: on SmartScreen's warning, click **More info → Run
-  anyway**.
+- **Windows** (x64): run `Gutter-windows-x64-<version>-setup.exe`. It isn't
+  signed: on SmartScreen's warning, click **More info → Run anyway**.
 
-From then on the macOS app, the tarball and both Windows builds update
+From then on the macOS app, the tarball and the Windows app update
 themselves: Gutter offers
 each new release, downloads it, checks it against the release's checksums
 and swaps it in when you restart or quit. The Flatpak updates from its

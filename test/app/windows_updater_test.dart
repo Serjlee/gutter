@@ -7,7 +7,7 @@ import 'package:gutter/app/update_checker.dart';
 import 'package:gutter/app/updater.dart';
 import 'package:path/path.dart' as p;
 
-/// A Windows install folder: gutter.exe and its data, and the installer's
+/// A Windows Gutter folder: gutter.exe and its data, and the installer's
 /// uninstaller when [installed].
 String _folder(String root, {bool installed = false}) {
   final dir = p.join(root, 'Gutter');
@@ -41,17 +41,17 @@ void main() {
   setUp(() => root = Directory.systemTemp.createTempSync('gutter_win_'));
   tearDown(() => root.deleteSync(recursive: true));
 
-  test('knows an installed copy from the zip\'s folder', () {
-    final zip = _folder(p.join(root.path, 'zip'));
+  test('only an installed copy updates itself', () {
+    final copied = _folder(p.join(root.path, 'copy'));
     final installed = _folder(p.join(root.path, 'inst'), installed: true);
     Installation detect(String dir) => Installation.detect(
       executable: p.join(dir, 'gutter.exe'),
       windows: true,
       flatpak: false,
     );
-    expect(detect(zip).kind, InstallKind.windowsFolder);
-    expect(detect(installed).kind, InstallKind.windowsInstaller);
-    expect(detect(root.path).kind, InstallKind.unsupported);
+    expect(detect(installed).kind, InstallKind.windows);
+    expect(detect(copied).kind, InstallKind.unsupported);
+    expect(detect(copied).reason, contains('setup.exe'));
 
     final release = ReleaseInfo(
       tag: 'v0.2.0',
@@ -59,9 +59,8 @@ void main() {
       publishedAt: null,
       assets: [
         for (final n in [
-          'Gutter-windows-x64-0.2.0-setup.exe',
-          'Gutter-windows-x64-0.2.0.zip',
           'gutter-linux-x64-0.2.0.tar.gz',
+          'Gutter-windows-x64-0.2.0-setup.exe',
         ])
           ReleaseAsset(name: n, url: n),
       ],
@@ -70,7 +69,6 @@ void main() {
       detect(installed).assetIn(release)?.name,
       'Gutter-windows-x64-0.2.0-setup.exe',
     );
-    expect(detect(zip).assetIn(release)?.name, 'Gutter-windows-x64-0.2.0.zip');
   });
 
   test(
@@ -94,7 +92,7 @@ void main() {
 
       final started = <(String, List<String>)>[];
       final u = Updater(
-        installation: Installation(InstallKind.windowsInstaller, path: dir),
+        installation: Installation(InstallKind.windows, path: dir),
         httpClient: HttpClient.new,
         startDetached: (exe, args) async => started.add((exe, args)),
       );
@@ -132,7 +130,7 @@ void main() {
   );
 
   group(
-    'install scripts',
+    'install script',
     skip: _pwsh == null
         ? 'no PowerShell'
         // Unix stand-ins for Gutter and the installer.
@@ -158,33 +156,6 @@ void main() {
         expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
         expect(await gutter.exitCode, 0); // it waited for Gutter
       }
-
-      test('the zip\'s folder is swapped, then Gutter restarts', () async {
-        final work = p.join(root.path, 'work');
-        final current = _folder(root.path);
-        final fresh = Directory(p.join(work, 'new', 'Gutter'))
-          ..createSync(recursive: true);
-        final launched = p.join(root.path, 'launched');
-        _stub(p.join(fresh.path, 'gutter.exe'), launched);
-
-        await run(
-          windowsSwapScript,
-          (pid) => ['$pid', current, fresh.path, '1', work],
-        );
-        expect(
-          File(p.join(current, 'data', 'flutter_assets')).existsSync(),
-          isFalse,
-        ); // the old folder is gone
-        expect(
-          File(p.join(current, 'gutter.exe')).readAsStringSync(),
-          contains('#!/bin/sh'),
-        );
-        for (var i = 0; i < 50 && !File(launched).existsSync(); i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        expect(File(launched).existsSync(), isTrue);
-        expect(Directory(work).existsSync(), isFalse);
-      });
 
       test('the installer runs silently, then Gutter restarts', () async {
         final work = p.join(root.path, 'work');

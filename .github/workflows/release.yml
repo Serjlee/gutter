@@ -147,20 +147,15 @@ jobs:
           GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
         run: tool/check_version.sh build/windows/x64/runner/Release/data/app.so "$GUTTER_VERSION" "$GUTTER_COMMIT"
 
-      - name: Package
+      - name: Installer
         shell: pwsh
         env:
           LABEL: ${{ needs.version.outputs.label }}
         run: |
-          # The zip holds a Gutter folder, as the updater expects.
-          New-Item -ItemType Directory dist/Gutter | Out-Null
-          Copy-Item -Recurse build/windows/x64/runner/Release/* dist/Gutter/
-          Push-Location dist
-          7z a -tzip "../Gutter-windows-x64-$env:LABEL.zip" Gutter | Out-Null
-          Pop-Location
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-          & $iscc /Q "/DAppVersion=$env:LABEL" "/DSourceDir=$PWD\dist\Gutter" `
+          & $iscc /Q "/DAppVersion=$env:LABEL" `
+            "/DSourceDir=$PWD\build\windows\x64\runner\Release" `
             "/O$PWD" windows\installer\gutter.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
@@ -185,9 +180,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: |
-            Gutter-windows-x64-*.zip
-            Gutter-windows-x64-*-setup.exe
+          path: Gutter-windows-x64-*-setup.exe
 
   flatpak:
     needs: [version, linux]
@@ -335,16 +328,14 @@ jobs:
             Or install `gutter-linux-x64-*.flatpak` from here (`flatpak install --user <file>`): it adds the repository too. It runs your system's git.
           - Tarball (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3. It updates itself.
 
-          **Windows**, either:
-          - Installer (`Gutter-windows-x64-*-setup.exe`): installs for your user, no admin rights needed. It isn't code-signed: if SmartScreen stops it, click **More info** → **Run anyway**. Gutter then updates itself.
-          - Zip (`Gutter-windows-x64-*.zip`): extract and run `Gutter\gutter.exe`. It updates itself too.
+          **Windows** (`Gutter-windows-x64-*-setup.exe`): installs for your user, no admin rights needed. It isn't code-signed: if SmartScreen stops it, click **More info** → **Run anyway**. Gutter then updates itself.
 
           Gutter offers to install Git for Windows if it's missing.
 
           Requires `git` on the `PATH`.
           NOTES
           assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz gutter-linux-x64-*.flatpak \
-            Gutter-windows-x64-*.zip Gutter-windows-x64-*-setup.exe)
+            Gutter-windows-x64-*-setup.exe)
           # The in-app updater checks its download against this.
           sha256sum "${assets[@]}" > SHA256SUMS
           assets+=(SHA256SUMS)
