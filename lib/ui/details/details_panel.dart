@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -255,25 +256,40 @@ class CommitDetailsPanel extends StatelessWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: SelectableText(
-            d.subject,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        // A double click on the message rewords it (not a stash's).
+        _OnDoubleClick(
+          key: const ValueKey('commit-message'),
+          onDoubleClick: stash != null || commit == null
+              ? null
+              : () => RepoActions(context, tab).reword(commit),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: SelectableText(
+                  d.subject,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (d.body.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                  child: SelectableText(
+                    d.body,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textDim,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (d.body.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-            child: SelectableText(
-              d.body,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textDim,
-                height: 1.4,
-              ),
-            ),
-          ),
         if (refs.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -1079,5 +1095,45 @@ class _CloseDetails extends StatelessWidget {
     icon: Icons.close,
     tooltip: 'Close panel (Esc)',
     onPressed: () => tab.setDetailsOpen(false),
+  );
+}
+
+/// Calls [onDoubleClick] on a double click in [child], from the raw pointer
+/// events: the selectable text inside keeps its own clicks (a double click
+/// there selects a word too).
+class _OnDoubleClick extends StatefulWidget {
+  const _OnDoubleClick({
+    super.key,
+    required this.onDoubleClick,
+    required this.child,
+  });
+  final VoidCallback? onDoubleClick;
+  final Widget child;
+
+  @override
+  State<_OnDoubleClick> createState() => _OnDoubleClickState();
+}
+
+class _OnDoubleClickState extends State<_OnDoubleClick> {
+  Duration? _lastTime;
+  Offset _lastPosition = Offset.zero;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (e) {
+      final action = widget.onDoubleClick;
+      if (action == null || e.buttons != kPrimaryButton) return;
+      final last = _lastTime;
+      if (last != null &&
+          e.timeStamp - last <= kDoubleTapTimeout &&
+          (e.position - _lastPosition).distance <= kDoubleTapSlop) {
+        _lastTime = null;
+        action();
+      } else {
+        _lastTime = e.timeStamp;
+        _lastPosition = e.position;
+      }
+    },
+    child: widget.child,
   );
 }
