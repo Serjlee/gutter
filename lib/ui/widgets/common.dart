@@ -507,12 +507,15 @@ Future<void> copyToClipboard(
 }
 
 /// [path] for display, with the home folder shortened to `~`.
-String displayPath(String path, {String? home}) {
-  home ??= Platform.environment['HOME'];
-  if (home == null || home.isEmpty || home == '/') return path;
+String displayPath(String path, {String? home, String? separator}) {
+  final sep = separator ?? Platform.pathSeparator;
+  home ??= Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
+  if (home == null || home.isEmpty || home == sep) return path;
   if (path == home) return '~';
-  final prefix = home.endsWith('/') ? home : '$home/';
-  return path.startsWith(prefix) ? '~/${path.substring(prefix.length)}' : path;
+  final prefix = home.endsWith(sep) ? home : '$home$sep';
+  return path.startsWith(prefix)
+      ? '~$sep${path.substring(prefix.length)}'
+      : path;
 }
 
 String formatDate(DateTime d) {

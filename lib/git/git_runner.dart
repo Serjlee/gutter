@@ -172,26 +172,45 @@ class GitRunner {
     );
   }
 
-  static String resolveGitPath() {
+  /// The git to run: the first one found on PATH or in the usual places
+  /// (overridable for tests), else plain `git` (which then fails to run).
+  static String resolveGitPath({
+    Map<String, String>? environment,
+    bool? windows,
+    bool? macOS,
+    bool Function(String path)? exists,
+  }) {
     // The host's PATH, not the sandbox's, decides.
-    if (inFlatpak) return 'git';
-    final exe = Platform.isWindows ? 'git.exe' : 'git';
-    final pathEnv = Platform.environment['PATH'] ?? '';
+    if (inFlatpak && environment == null) return 'git';
+    final env = environment ?? Platform.environment;
+    final win = windows ?? Platform.isWindows;
+    final mac = macOS ?? Platform.isMacOS;
+    final found = exists ?? (String f) => File(f).existsSync();
+    final exe = win ? 'git.exe' : 'git';
+    final sep = win ? r'\' : '/';
     // Apps started from Finder/Dock only get /usr/bin:/bin:… on PATH, where
     // /usr/bin/git is a stub that fails until Apple's command line tools
     // are installed: prefer Homebrew's git, as a terminal would.
     const homebrew = ['/opt/homebrew/bin', '/usr/local/bin'];
     final dirs = [
-      if (Platform.isMacOS) ...homebrew,
-      ...pathEnv.split(Platform.isWindows ? ';' : ':'),
-      ...homebrew,
-      '/usr/bin',
-      '/bin',
+      if (mac) ...homebrew,
+      ...(env['PATH'] ?? '').split(win ? ';' : ':'),
+      if (win) ...[
+        // Where Git for Windows installs (machine-wide, or for the user):
+        // found even when PATH predates the install.
+        for (final base in [env['ProgramFiles'], env['ProgramW6432']])
+          if (base != null) '$base\\Git\\cmd',
+        if (env['LOCALAPPDATA'] case final local?) '$local\\Programs\\Git\\cmd',
+      ] else ...[
+        ...homebrew,
+        '/usr/bin',
+        '/bin',
+      ],
     ];
     for (final d in dirs) {
       if (d.isEmpty) continue;
-      final f = File('$d${Platform.pathSeparator}$exe');
-      if (f.existsSync()) return f.path;
+      final f = d.endsWith(sep) ? '$d$exe' : '$d$sep$exe';
+      if (found(f)) return f;
     }
     return exe;
   }

@@ -5,13 +5,13 @@ import 'git_runner.dart';
 /// A short, readable explanation of why a git command failed, with a hint
 /// at the fix for the usual suspects (credentials, ssh, the network…).
 /// The full output stays available through [gitErrorDetails].
-String summarizeGitError(Object e) {
+String summarizeGitError(Object e, {bool? windows}) {
   if (e is ProcessException) {
     return 'Couldn\'t run ${e.executable}: ${e.message}. Is git installed? '
         'You can set its path in the settings on the home tab.';
   }
   if (e is! GitException) return e.toString();
-  final summary = _summarize(e);
+  final summary = _summarize(e, windows ?? Platform.isWindows);
   // `fetch --all` names the remote that failed only at the end.
   final failed = RegExp(r'could not fetch (\S+)')
       .allMatches(e.stderr)
@@ -22,7 +22,7 @@ String summarizeGitError(Object e) {
   return summary == e.message ? '$which.' : '$which. $summary';
 }
 
-String _summarize(GitException e) {
+String _summarize(GitException e, bool windows) {
   final text = '${e.stderr}\n${e.stdout}';
   final s = text.toLowerCase();
   bool has(String x) => s.contains(x);
@@ -30,13 +30,24 @@ String _summarize(GitException e) {
   if (has('terminal prompts disabled') ||
       has('could not read username') ||
       has('could not read password')) {
-    return 'The remote asked for a username and password, and Gutter can\'t '
-        'prompt for them. Set up a credential helper (for GitHub: '
-        '`gh auth setup-git`) or use an SSH remote.';
+    return windows
+        ? 'The remote asked for a username and password, and Gutter can\'t '
+              'prompt for them. Use Git Credential Manager, which comes with '
+              'Git for Windows (`git config --global credential.helper '
+              'manager`), or an SSH remote.'
+        : 'The remote asked for a username and password, and Gutter can\'t '
+              'prompt for them. Set up a credential helper (for GitHub: '
+              '`gh auth setup-git`) or use an SSH remote.';
   }
   if (has('permission denied (publickey')) {
-    return 'SSH authentication failed. Gutter can\'t ask for a key '
-        'passphrase: add your key to the SSH agent (`ssh-add`).';
+    return windows
+        ? 'SSH authentication failed. Gutter can\'t ask for a key '
+              'passphrase: start Windows\' "OpenSSH Authentication Agent" '
+              'service, add your key (`ssh-add`), and have git use Windows\' '
+              'ssh: `git config --global core.sshCommand '
+              'C:/Windows/System32/OpenSSH/ssh.exe`.'
+        : 'SSH authentication failed. Gutter can\'t ask for a key '
+              'passphrase: add your key to the SSH agent (`ssh-add`).';
   }
   if (has('host key verification failed')) {
     return 'The server\'s SSH host key isn\'t trusted yet. Connect once from '
