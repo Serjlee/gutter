@@ -47,4 +47,8 @@ mkdir -p linux/flatpak/icons
 for s in 48 64 128 256 512; do
   convert "$work/icon.png" -filter Lanczos -resize "${s}x$s" -strip "linux/flatpak/icons/$s.png"
 done
+# Windows app icon: the logo on transparency, as Windows icons are.
+convert "$work/icon.png" -filter Lanczos \
+  -define icon:auto-resize=256,128,64,48,32,24,16 \
+  windows/runner/resources/app_icon.ico
 echo "Icons updated."
