@@ -90,6 +90,7 @@ Apple's command line tools). You can pick another on the home tab.
 <summary>Screenshots</summary>
 
 ![Home tab](docs/dashboard.png)
+![Tab groups](docs/tab-groups.png)
 ![Line staging](docs/line-staging.png)
 ![Diff with syntax highlighting](docs/diff-highlight.png)
 ![Interactive rebase](docs/interactive-rebase.png)
