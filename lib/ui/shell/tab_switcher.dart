@@ -256,27 +256,35 @@ class _TabSwitcherState extends State<TabSwitcher> {
               style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
             ),
           ),
-          if (hover)
-            IconButton(
-              tooltip: 'Close',
-              iconSize: 14,
-              visualDensity: VisualDensity.compact,
-              onPressed: () {
-                app.closeTab(app.tabs.indexOf(t));
-                if (app.tabs.isEmpty) {
-                  Navigator.pop(context);
-                } else {
-                  setState(() {
-                    if (!app.tabs.contains(_picked)) {
-                      _picked = _tabs().firstOrNull;
-                    }
-                  });
-                }
-              },
-              icon: const Icon(Icons.close),
-            )
-          else
-            const SizedBox(width: 8),
+          // A fixed slot, so the path doesn't shift on hover.
+          SizedBox(
+            width: 28,
+            child: hover
+                ? InkWell(
+                    borderRadius: BorderRadius.circular(3),
+                    onTap: () {
+                      app.closeTab(app.tabs.indexOf(t));
+                      if (app.tabs.isEmpty) {
+                        Navigator.pop(context);
+                      } else {
+                        setState(() {
+                          if (!app.tabs.contains(_picked)) {
+                            _picked = _tabs().firstOrNull;
+                          }
+                        });
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
         ],
       ),
     );

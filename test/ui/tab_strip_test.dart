@@ -63,7 +63,7 @@ void main() {
   ) async {
     // The whole tab or chip, not just its label.
     final rect = tester.getRect(
-      find.ancestor(of: onto, matching: find.byType(Tooltip)).first,
+      find.ancestor(of: onto, matching: find.byType(GestureDetector)).first,
     );
     final from = tester.getCenter(what);
     final g = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
@@ -98,6 +98,46 @@ void main() {
     // Beside an ungrouped tab: out of the group.
     await drag(tester, find.text('beta'), find.text('gamma'), 0.95);
     expect(order(), ['delta*', 'alpha*', 'gamma', 'beta']);
+  });
+
+  testWidgets('a tab shows its path after a second, but not while dragging', (
+    tester,
+  ) async {
+    await pumpStrip(tester, ['alpha', 'beta', 'gamma']);
+    final path = app.tabs[1].repo.path;
+    // Only the hovered tab has a tooltip: a hundred would be a hundred
+    // widgets to rebuild whenever tooltips are hidden for a drag.
+    expect(find.byType(Tooltip), findsNWidgets(2)); // home and all tabs
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(find.text('beta')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(find.text(path), findsOneWidget);
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(path), findsNothing);
+    expect(find.byType(Tooltip), findsNWidgets(2));
+
+    // While dragging another tab over it: no tooltip.
+    final start = tester.getCenter(find.text('alpha'));
+    final over = tester.getCenter(find.text('beta'));
+    final drag = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    for (var i = 1; i <= 8; i++) {
+      await drag.moveTo(Offset.lerp(start, over, i / 8)!);
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(find.text(path), findsNothing);
+    await drag.up();
+    await tester.pump();
   });
 
   testWidgets('chips collapse and expand; menus group and ungroup', (

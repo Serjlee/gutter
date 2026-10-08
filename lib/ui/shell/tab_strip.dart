@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -50,6 +51,13 @@ class _TabStripState extends State<TabStrip> {
 
   /// Whether a tab or chip is being dragged (tooltips would get in the way).
   bool _dragging = false;
+
+  /// The widget built for each tab and chip, with what it was built from:
+  /// reused while that's unchanged, so a change (a drag hint, a group
+  /// collapsing, a tab becoming active) rebuilds the few items it touches
+  /// instead of all of them (a hundred tabs take about 10 ms to rebuild).
+  final _built = <Object, ({List<Object?> from, Widget widget})>{};
+  final _inUse = <Object>{};
   RepoTabController? _shownActive;
 
   AppController get app => widget.app;
@@ -153,7 +161,7 @@ class _TabStripState extends State<TabStrip> {
   }
 
   /// A drop target over one tab or chip ([on]).
-  Widget _target(Object on, Widget Function(_Zone? zone) child) {
+  Widget _target(Object on, Widget child) {
     bool accepts(_Drag d) => switch (d) {
       _TabDrag(:final tab) => tab != on,
       _GroupDrag(:final group) =>
@@ -174,7 +182,7 @@ class _TabStripState extends State<TabStrip> {
           _setHint(null);
           _drop(d.data, on, zone);
         },
-        builder: (context, _, _) => child(_hint?.$1 == on ? _hint!.$2 : null),
+        builder: (context, _, _) => child,
       ),
     );
   }
@@ -258,11 +266,20 @@ class _TabStripState extends State<TabStrip> {
 
   @override
   Widget build(BuildContext context) {
+    // Also redrawn alone for changes of order and groups.
+    return ValueListenableBuilder<int>(
+      valueListenable: app.tabLayout,
+      builder: (context, _, _) => _strip(context),
+    );
+  }
+
+  Widget _strip(BuildContext context) {
     _revealActive();
     final tabs = app.tabs;
     _tabKeys.removeWhere((t, _) => !tabs.contains(t));
     _chipKeys.removeWhere((g, _) => !app.groups.contains(g));
     final items = <Widget>[];
+    _inUse.clear();
     TabGroup? current;
     for (var i = 0; i < tabs.length; i++) {
       final tab = tabs[i];
@@ -270,8 +287,9 @@ class _TabStripState extends State<TabStrip> {
       if (g != null && g != current) items.add(_chip(g));
       current = g;
       if (g != null && g.collapsed) continue;
-      items.add(_tab(tab, i));
+      items.add(_tab(tab));
     }
+    _built.removeWhere((on, _) => !_inUse.contains(on));
     return TooltipVisibility(
       visible: !_dragging,
       child: Container(
@@ -319,9 +337,30 @@ class _TabStripState extends State<TabStrip> {
     );
   }
 
+  /// The drop target for [on] (a tab or group), reused from the last build
+  /// unless [from] (what its look depends on), the drop hint on it or the
+  /// palette changed.
+  Widget _item(
+    Object on,
+    List<Object?> from,
+    Widget Function(_Zone? zone) build,
+  ) {
+    final zone = _hint?.$1 == on ? _hint!.$2 : null;
+    final key = [AppColors.current, zone, ...from];
+    _inUse.add(on);
+    final hit = _built[on];
+    if (hit != null && listEquals(hit.from, key)) return hit.widget;
+    final widget = KeyedSubtree(
+      key: ValueKey(on),
+      child: _target(on, build(zone)),
+    );
+    _built[on] = (from: key, widget: widget);
+    return widget;
+  }
+
   Widget _chip(TabGroup g) {
     final count = app.tabsIn(g).length;
-    return _target(g, (zone) {
+    return _item(g, [g.name, g.color, g.collapsed, count], (zone) {
       final chip = _GroupChip(
         key: _chipKey(g),
         group: g,
@@ -347,13 +386,14 @@ class _TabStripState extends State<TabStrip> {
     });
   }
 
-  Widget _tab(RepoTabController tab, int i) {
+  Widget _tab(RepoTabController tab) {
     final g = tab.group;
-    return _target(tab, (zone) {
+    final active = app.activeTab == tab;
+    return _item(tab, [active, g?.color], (zone) {
       final view = _RepoTab(
         key: _tabKey(tab),
         tab: tab,
-        active: app.activeIndex == i,
+        active: active,
         groupColor: g == null ? null : AppColors.group(g.color),
         dropOnto: zone == _Zone.onto,
         onTap: () => app.activate(app.tabs.indexOf(tab)),
@@ -387,6 +427,21 @@ class _TabStripState extends State<TabStrip> {
     });
   }
 }
+
+/// [child] with a tooltip after a second over it, built only while the
+/// pointer is [hover]ing: a strip of a hundred tabs would otherwise keep a
+/// hundred tooltips alive, all rebuilt whenever they're hidden for a drag.
+Widget _tipWhenHovered({
+  required bool hover,
+  required String message,
+  required Widget child,
+}) => hover
+    ? Tooltip(
+        message: message,
+        waitDuration: const Duration(seconds: 1),
+        child: child,
+      )
+    : child;
 
 /// A group's name for menus and lists: its name, else its color.
 String groupLabel(TabGroup g) => g.name.isNotEmpty
@@ -480,16 +535,16 @@ class _GroupChipState extends State<_GroupChip> {
     final color = AppColors.group(g.color);
     final named = g.name.isNotEmpty;
     final label = [if (named) g.name, if (g.collapsed) '${widget.count}'];
-    return Tooltip(
-      message:
-          '${groupLabel(g)}: ${widget.count} tab${widget.count == 1 ? '' : 's'}'
-          '\nClick to ${g.collapsed ? 'expand' : 'collapse'}, right-click to '
-          'edit',
-      waitDuration: const Duration(seconds: 1),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: _tipWhenHovered(
+        hover: _hover,
+        message:
+            '${groupLabel(g)}: ${widget.count} tab${widget.count == 1 ? '' : 's'}'
+            '\nClick to ${g.collapsed ? 'expand' : 'collapse'}, right-click to '
+            'edit',
         child: GestureDetector(
           onTap: widget.onTap,
           onSecondaryTapUp: widget.onEdit == null
@@ -834,9 +889,9 @@ class _RepoTabState extends State<_RepoTab> {
             child: GestureDetector(
               onTap: widget.onTap,
               onSecondaryTapUp: (d) => widget.onMenu(d.globalPosition),
-              child: Tooltip(
+              child: _tipWhenHovered(
+                hover: _hover,
                 message: tab.repo.path,
-                waitDuration: const Duration(seconds: 1),
                 child: Container(
                   height: 36,
                   constraints: const BoxConstraints(

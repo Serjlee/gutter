@@ -58,6 +58,13 @@ class AppController extends ChangeNotifier {
   /// The groups of [tabs]; a group without tabs is dropped.
   final groups = <TabGroup>[];
 
+  /// Counts changes of the tabs' order and groups (and groups' names,
+  /// colors, collapsed state). Only the tab strip shows those: it listens
+  /// to this, and the rest of the app isn't rebuilt for them (which, with
+  /// a big repository open, takes longer than a frame). Opening, closing
+  /// and showing tabs notify the controller itself, as before.
+  final tabLayout = ValueNotifier<int>(0);
+
   /// Index into [tabs], or -1 for the home tab.
   int activeIndex = -1;
 
@@ -216,7 +223,8 @@ class AppController extends ChangeNotifier {
     _normalize();
     if (next == activeTab && next != null) {
       activeIndex = tabs.indexOf(next);
-      _changed();
+      _layoutChanged();
+      notifyListeners();
     } else {
       activate(next == null ? -1 : tabs.indexOf(next));
     }
@@ -257,7 +265,7 @@ class AppController extends ChangeNotifier {
     tabs.insert(index.clamp(0, tabs.length), tab);
     activeIndex = active == null ? -1 : tabs.indexOf(active);
     tab.group = group;
-    _changed();
+    _layoutChanged();
   }
 
   /// Moves [group]'s tabs together to [index] (counted before the move).
@@ -272,7 +280,7 @@ class AppController extends ChangeNotifier {
     tabs.removeWhere(members.contains);
     tabs.insertAll(at.clamp(0, tabs.length), members);
     activeIndex = active == null ? -1 : tabs.indexOf(active);
-    _changed();
+    _layoutChanged();
   }
 
   /// Puts [members] in a new group, gathered where the first of them is.
@@ -303,7 +311,7 @@ class AppController extends ChangeNotifier {
     for (final t in ordered) {
       t.group = group;
     }
-    _changed();
+    _layoutChanged();
     return group;
   }
 
@@ -331,19 +339,19 @@ class AppController extends ChangeNotifier {
     for (final t in tabsIn(group)) {
       t.group = null;
     }
-    _changed();
+    _layoutChanged();
   }
 
   void closeGroup(TabGroup group) => closeTabs(tabsIn(group));
 
   void renameGroup(TabGroup group, String name) {
     group.name = name.trim();
-    _changed();
+    _layoutChanged();
   }
 
   void setGroupColor(TabGroup group, int color) {
     group.color = color;
-    _changed();
+    _layoutChanged();
   }
 
   /// Collapses or expands [group]. Collapsing the active tab's group shows
@@ -361,7 +369,7 @@ class AppController extends ChangeNotifier {
       activate(next == null ? -1 : tabs.indexOf(next));
       return;
     }
-    _changed();
+    _layoutChanged();
   }
 
   /// Ctrl+Tab: the next shown tab (home included), skipping collapsed
@@ -402,10 +410,11 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void _changed() {
+  /// A change of order or groups: redraws the tab strip only.
+  void _layoutChanged() {
     _normalize();
     _persistTabs();
-    notifyListeners();
+    tabLayout.value++;
   }
 
   void _persistTabs() {
@@ -604,6 +613,7 @@ class AppController extends ChangeNotifier {
     updates.dispose();
     updater.dispose();
     avatars.dispose();
+    tabLayout.dispose();
     _messages.close();
     super.dispose();
   }
