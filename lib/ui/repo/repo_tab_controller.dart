@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 
 import '../../app/app_controller.dart';
 import '../../app/avatars.dart';
+import '../../app/tab_groups.dart';
 import '../../git/git_errors.dart';
 import '../../git/conflict.dart';
 import '../../git/git_runner.dart';
@@ -165,8 +166,14 @@ class RepoTabController extends ChangeNotifier {
   String? _preparedMessage;
   String? headSha;
 
+  /// Whether the repository is loading. A tab restored from the last
+  /// session waits to be shown first ([started]).
   bool loading = true;
+  bool started = false;
   String? loadError;
+
+  /// The tab group it's in, if any (managed by [AppController]).
+  TabGroup? group;
   bool loadingLog = false;
   int maxCommits = 0;
 
@@ -314,7 +321,13 @@ class RepoTabController extends ChangeNotifier {
 
   // --------------------------------------------------------------- loading
 
+  /// Loads the repository unless that has started already.
+  Future<void> ensureLoaded() async {
+    if (!started) await load();
+  }
+
   Future<void> load() async {
+    started = true;
     maxCommits = app.settings.maxCommits;
     loading = true;
     _notify();

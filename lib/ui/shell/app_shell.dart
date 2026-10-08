@@ -11,6 +11,7 @@ import '../dialogs/update_dialog.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
 import 'tab_strip.dart';
+import 'tab_switcher.dart';
 
 /// Top-level layout: tab strip + active tab content, global shortcuts and
 /// message snackbars.
@@ -175,6 +176,11 @@ class _AppShellState extends State<AppShell> {
     both(LogicalKeyboardKey.numpad0, app.zoomReset);
     both(LogicalKeyboardKey.keyT, () => app.activate(-1));
     both(LogicalKeyboardKey.keyO, _openRepoDialog);
+    both(
+      LogicalKeyboardKey.keyA,
+      () => showTabSwitcher(context, app),
+      shift: true,
+    );
     both(LogicalKeyboardKey.keyW, () {
       if (app.activeIndex >= 0) app.closeTab(app.activeIndex);
     });

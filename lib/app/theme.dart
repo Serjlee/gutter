@@ -34,6 +34,8 @@ class AppPalette {
     required this.trunkRing,
     required this.scrollbarThumb,
     required this.lanes,
+    required this.groups,
+    required this.groupText,
   });
 
   final Brightness brightness;
@@ -79,6 +81,11 @@ class AppPalette {
 
   /// Graph lane colors.
   final List<Color> lanes;
+
+  /// Tab group colors, named by [groupColorNames]; text on them in
+  /// [groupText].
+  final List<Color> groups;
+  final Color groupText;
 
   bool get isDark => brightness == Brightness.dark;
 
@@ -126,6 +133,18 @@ class AppPalette {
       Color(0xFF7BD938),
       Color(0xFF2ECE9D),
     ],
+    groups: [
+      Color(0xFF8AB4F8),
+      Color(0xFF81C995),
+      Color(0xFFFDD663),
+      Color(0xFFFCAD70),
+      Color(0xFFF28B82),
+      Color(0xFFFF8BCB),
+      Color(0xFFD7AEFB),
+      Color(0xFF78D9EC),
+      Color(0xFFBDC1C6),
+    ],
+    groupText: Color(0xFF1B1D23),
   );
 
   /// GitHub-like light; lanes darkened where pale on white.
@@ -172,6 +191,18 @@ class AppPalette {
       Color(0xFF4C9A1A),
       Color(0xFF1A9E78),
     ],
+    groups: [
+      Color(0xFF1A73E8),
+      Color(0xFF1E8E3E),
+      Color(0xFFB06000),
+      Color(0xFFD9622B),
+      Color(0xFFD93025),
+      Color(0xFFD01884),
+      Color(0xFF9334E6),
+      Color(0xFF007B83),
+      Color(0xFF5F6368),
+    ],
+    groupText: Color(0xFFFFFFFF),
   );
 }
 
@@ -213,6 +244,8 @@ abstract final class AppColors {
   static List<Color> get lanes => current.lanes;
 
   static Color lane(int i) => lanes[i % lanes.length];
+  static Color group(int i) => current.groups[i % current.groups.length];
+  static Color get groupText => current.groupText;
 }
 
 const monoFont = 'monospace';
