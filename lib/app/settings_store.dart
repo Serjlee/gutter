@@ -29,6 +29,16 @@ class Settings {
   bool sidebarOpen = true;
   double detailsWidth = 380;
   Map<String, double> columnWidths = {};
+
+  /// The interactive rebase editor's size, as last resized.
+  double rebaseWidth = 960;
+  double rebaseHeight = 620;
+
+  /// The share of its width the commit list takes.
+  double rebaseSplit = 0.6;
+
+  /// The share of the height the message takes above the changed files.
+  double rebaseMessageSplit = 1 / 3;
   bool diffSplit = false;
 
   /// Wrap long lines in the unified diff (the split one always wraps).
@@ -68,6 +78,10 @@ class Settings {
     'sidebarOpen': sidebarOpen,
     'detailsWidth': detailsWidth,
     'columnWidths': columnWidths,
+    'rebaseWidth': rebaseWidth,
+    'rebaseHeight': rebaseHeight,
+    'rebaseSplit': rebaseSplit,
+    'rebaseMessageSplit': rebaseMessageSplit,
     'diffSplit': diffSplit,
     'diffWrap': diffWrap,
     'fileTree': fileTree,
@@ -102,6 +116,10 @@ class Settings {
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
       ..sidebarOpen = j['sidebarOpen'] != false
       ..detailsWidth = num_(j['detailsWidth'], 380)
+      ..rebaseWidth = num_(j['rebaseWidth'], 960)
+      ..rebaseHeight = num_(j['rebaseHeight'], 620)
+      ..rebaseSplit = num_(j['rebaseSplit'], 0.6)
+      ..rebaseMessageSplit = num_(j['rebaseMessageSplit'], 1 / 3)
       ..diffSplit = j['diffSplit'] == true
       ..diffWrap = j['diffWrap'] == true
       ..fileTree = j['fileTree'] == true

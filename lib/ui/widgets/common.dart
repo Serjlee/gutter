@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,7 @@ class ResizeHandle extends StatelessWidget {
     required this.onDrag,
     this.onEnd,
     this.vertical = false,
+    this.line = true,
   });
 
   /// Called with the drag distance: horizontal, or vertical for a
@@ -23,6 +25,9 @@ class ResizeHandle extends StatelessWidget {
   final VoidCallback? onEnd;
   final bool vertical;
 
+  /// Draw the divider line (off where a gap already separates the panes).
+  final bool line;
+
   @override
   Widget build(BuildContext context) {
     if (vertical) {
@@ -30,11 +35,14 @@ class ResizeHandle extends StatelessWidget {
         cursor: SystemMouseCursors.resizeRow,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
           onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
           onVerticalDragEnd: (_) => onEnd?.call(),
           child: SizedBox(
             height: 5,
-            child: Center(child: Divider(height: 1, color: AppColors.border)),
+            child: line
+                ? Center(child: Divider(height: 1, color: AppColors.border))
+                : null,
           ),
         ),
       );
@@ -43,13 +51,18 @@ class ResizeHandle extends StatelessWidget {
       cursor: SystemMouseCursors.resizeColumn,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        // From where the button went down: the divider stays under the
+        // pointer.
+        dragStartBehavior: DragStartBehavior.down,
         onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
         onHorizontalDragEnd: (_) => onEnd?.call(),
         child: SizedBox(
           width: 5,
-          child: Center(
-            child: VerticalDivider(width: 1, color: AppColors.border),
-          ),
+          child: line
+              ? Center(
+                  child: VerticalDivider(width: 1, color: AppColors.border),
+                )
+              : null,
         ),
       ),
     );

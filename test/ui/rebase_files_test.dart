@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +17,7 @@ void main() {
     late TempRepo t;
     late RepoTabController tab;
     late List<RebaseStep> steps;
+    double? messageSplit;
     await tester.runAsync(() async {
       t = await TempRepo.create();
       t.commit('base', {'a.txt': 'one\n'});
@@ -41,6 +43,7 @@ void main() {
             branch: 'main',
             baseLabel: 'base',
             hasMerges: false,
+            onMessageSplit: (s) => messageSplit = s,
           ),
         ),
       ),
@@ -62,6 +65,24 @@ void main() {
     await settle();
     expect(file('c.txt'), findsOneWidget);
     expect(file('a.txt'), findsNothing);
+
+    // The message takes a third of the height above the files, until the
+    // gap between them is dragged.
+    final message = find.byType(TextField);
+    final split = find.byKey(const ValueKey('rebase-files-split'));
+    double messageHeight() => tester.getSize(message).height;
+    final both =
+        tester.getRect(find.byKey(const ValueKey('rebase-files-pane'))).bottom -
+        tester.getRect(message).top;
+    expect(messageHeight(), closeTo((both - 12) / 3, 1));
+    await tester.drag(
+      split,
+      const Offset(0, 100),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    expect(messageHeight(), closeTo((both - 12) / 3 + 100, 1));
+    expect(messageSplit, greaterThan(1 / 3));
 
     // Down to the older one: its files.
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);

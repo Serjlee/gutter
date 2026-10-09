@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,6 +10,7 @@ import '../details/details_panel.dart' show FileRow;
 import '../diff/commit_file_preview.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import '../widgets/resizable_box.dart';
 import 'dialogs.dart';
 import 'work_in_progress.dart';
 
@@ -36,6 +39,7 @@ Future<void> showInteractiveRebase(
   // Lets callers preset actions (e.g. squash a selection); false cancels.
   if (prepare != null && !prepare(steps)) return;
   if (!context.mounted) return;
+  final settings = tab.app.settings;
   final plan = await showAppDialog<RebasePlan>(
     context: context,
     builder: (_) => InteractiveRebaseDialog(
@@ -45,6 +49,23 @@ Future<void> showInteractiveRebase(
       baseLabel: baseLabel,
       hasMerges: hasMerges,
       initialSelection: initialSelection,
+      size: Size(settings.rebaseWidth, settings.rebaseHeight),
+      onResized: (size) {
+        settings
+          ..rebaseWidth = size.width
+          ..rebaseHeight = size.height;
+        tab.app.save();
+      },
+      split: settings.rebaseSplit,
+      onSplit: (split) {
+        settings.rebaseSplit = split;
+        tab.app.save();
+      },
+      messageSplit: settings.rebaseMessageSplit,
+      onMessageSplit: (split) {
+        settings.rebaseMessageSplit = split;
+        tab.app.save();
+      },
     ),
   );
   if (plan == null || !context.mounted) return;
@@ -64,6 +85,12 @@ class InteractiveRebaseDialog extends StatefulWidget {
     required this.baseLabel,
     required this.hasMerges,
     this.initialSelection = const {},
+    this.size = const Size(960, 620),
+    this.onResized,
+    this.split = 0.6,
+    this.onSplit,
+    this.messageSplit = 1 / 3,
+    this.onMessageSplit,
   });
 
   /// Lists the highlighted commit's files (and previews them) when given.
@@ -78,6 +105,19 @@ class InteractiveRebaseDialog extends StatefulWidget {
   /// Shas selected when the dialog opens (default: the newest commit); the
   /// oldest of them is highlighted.
   final Set<String> initialSelection;
+
+  /// The size it opens at; dragging its edges resizes it.
+  final Size size;
+  final ValueChanged<Size>? onResized;
+
+  /// The commit list's share of the width; dragging the gap changes it.
+  final double split;
+  final ValueChanged<double>? onSplit;
+
+  /// The message's share of the height above the files; dragging the gap
+  /// between them changes it.
+  final double messageSplit;
+  final ValueChanged<double>? onMessageSplit;
 
   @override
   State<InteractiveRebaseDialog> createState() =>
@@ -100,6 +140,8 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   final _message = TextEditingController();
   final _listFocus = FocusNode(debugLabel: 'rebase-list');
   String? _error;
+  late double _split = widget.split;
+  late double _messageSplit = widget.messageSplit;
 
   /// Each commit's files, loaded when it's first highlighted.
   final _files = <String, Future<(Commit, List<FileChange>)>>{};
@@ -383,6 +425,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   /// The highlighted commit's changed files; a click shows one's diff.
   Widget _fileList(RebaseStep s) {
     return Container(
+      key: const ValueKey('rebase-files-pane'),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.border),
@@ -590,6 +633,118 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     );
   }
 
+  Widget _listPane() {
+    return Container(
+      key: const ValueKey('rebase-list-pane'),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _toolbar(),
+          Expanded(
+            child: Focus(
+              focusNode: _listFocus,
+              autofocus: true,
+              onKeyEvent: _onKey,
+              child: ReorderableListView.builder(
+                buildDefaultDragHandles: false,
+                itemCount: _rows.length,
+                onReorderItem: (from, to) {
+                  _commitEditor();
+                  setState(() {
+                    final s = _rows.removeAt(from);
+                    _rows.insert(to, s);
+                  });
+                },
+                itemBuilder: _row,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The highlighted commit's message and files.
+  Widget _sidePane(RebaseStep? selStep) {
+    return selStep == null
+        ? Center(
+            child: Text(
+              'Select a commit to see or edit its message',
+              style: TextStyle(color: AppColors.textDim),
+            ),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _editsMessage(selStep)
+                    ? 'New message'
+                    : 'Message (choose Reword to edit)',
+                style: TextStyle(fontSize: 12, color: AppColors.textDim),
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: _messageAndFiles(
+                  selStep,
+                  TextField(
+                    key: ObjectKey(selStep),
+                    controller: _message,
+                    readOnly: !_editsMessage(selStep),
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    style: monoStyle(size: 12.5),
+                    onChanged: (_) => _commitEditor(),
+                  ),
+                ),
+              ),
+            ],
+          );
+  }
+
+  /// The [message] editor above the commit's files, split by a gap that
+  /// drags.
+  Widget _messageAndFiles(RebaseStep s, Widget message) {
+    if (widget.tab == null) return message;
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Each part keeps room for a few lines.
+        const gap = 12.0;
+        final total = c.maxHeight - gap;
+        double fit(double h) =>
+            h.clamp(min(80.0, total / 2), max(total / 2, total - 90));
+        final height = fit(total * _messageSplit);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: height, child: message),
+            SizedBox(
+              key: const ValueKey('rebase-files-split'),
+              height: gap,
+              child: ResizeHandle(
+                vertical: true,
+                line: false,
+                onDrag: (dy) => setState(
+                  // From the current split: several moves can come in one
+                  // frame.
+                  () => _messageSplit =
+                      fit(fit(total * _messageSplit) + dy) / total,
+                ),
+                onEnd: () => widget.onMessageSplit?.call(_messageSplit),
+              ),
+            ),
+            Expanded(child: _fileList(s)),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selStep = _cursor;
@@ -600,9 +755,10 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
               _start,
           const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
         },
-        child: SizedBox(
-          width: 960,
-          height: 620,
+        child: ResizableBox(
+          size: widget.size,
+          minSize: const Size(600, 420),
+          onResized: widget.onResized,
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -633,91 +789,39 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                   ),
                 const SizedBox(height: 12),
                 Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _toolbar(),
-                              Expanded(
-                                child: Focus(
-                                  focusNode: _listFocus,
-                                  autofocus: true,
-                                  onKeyEvent: _onKey,
-                                  child: ReorderableListView.builder(
-                                    buildDefaultDragHandles: false,
-                                    itemCount: _rows.length,
-                                    onReorderItem: (from, to) {
-                                      _commitEditor();
-                                      setState(() {
-                                        final s = _rows.removeAt(from);
-                                        _rows.insert(to, s);
-                                      });
-                                    },
-                                    itemBuilder: _row,
-                                  ),
-                                ),
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      // The commit list's share; the gap between the panes
+                      // drags. Each pane keeps room for its controls.
+                      const gap = 14.0;
+                      final total = c.maxWidth - gap;
+                      double fit(double w) => w.clamp(
+                        min(300.0, total / 2),
+                        max(total / 2, total - 220),
+                      );
+                      final width = fit(total * _split);
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(width: width, child: _listPane()),
+                          SizedBox(
+                            key: const ValueKey('rebase-split'),
+                            width: gap,
+                            child: ResizeHandle(
+                              line: false,
+                              onDrag: (dx) => setState(
+                                // From the current split: several moves can
+                                // come in one frame.
+                                () => _split =
+                                    fit(fit(total * _split) + dx) / total,
                               ),
-                            ],
+                              onEnd: () => widget.onSplit?.call(_split),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        flex: 2,
-                        child: selStep == null
-                            ? Center(
-                                child: Text(
-                                  'Select a commit to see or edit its message',
-                                  style: TextStyle(color: AppColors.textDim),
-                                ),
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    _editsMessage(selStep)
-                                        ? 'New message'
-                                        : 'Message (choose Reword to edit)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textDim,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Expanded(
-                                    flex: 3,
-                                    child: TextField(
-                                      key: ObjectKey(selStep),
-                                      controller: _message,
-                                      readOnly: !_editsMessage(selStep),
-                                      maxLines: null,
-                                      expands: true,
-                                      textAlignVertical: TextAlignVertical.top,
-                                      style: monoStyle(size: 12.5),
-                                      onChanged: (_) => _commitEditor(),
-                                    ),
-                                  ),
-                                  if (widget.tab != null) ...[
-                                    const SizedBox(height: 12),
-                                    Expanded(
-                                      flex: 2,
-                                      child: _fileList(selStep),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                      ),
-                    ],
+                          Expanded(child: _sidePane(selStep)),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 if (_error != null)
