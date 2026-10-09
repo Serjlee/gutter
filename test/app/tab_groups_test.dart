@@ -92,7 +92,15 @@ void main() {
     app.nextTab(1);
     expect(app.activeTab, d);
 
+    // Moving the active tab into a collapsed group expands it.
+    app.setGroupCollapsed(g, true);
+    app.addToGroup(d, g);
+    expect(g.collapsed, isFalse);
+    expect(app.activeTab, d);
+    app.removeFromGroup(d);
+
     // Showing a tab of a collapsed group expands it.
+    app.setGroupCollapsed(g, true);
     app.activate(app.tabs.indexOf(b));
     expect(g.collapsed, isFalse);
 

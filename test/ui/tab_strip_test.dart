@@ -98,6 +98,10 @@ void main() {
     // Beside an ungrouped tab: out of the group.
     await drag(tester, find.text('beta'), find.text('gamma'), 0.95);
     expect(order(), ['delta*', 'alpha*', 'gamma', 'beta']);
+
+    // Dropped back on itself: stays put, in its group.
+    await drag(tester, find.text('delta'), find.text('delta'), 0.9);
+    expect(order(), ['delta*', 'alpha*', 'gamma', 'beta']);
   });
 
   testWidgets('a working tab shows progress on its top edge, not in its size', (

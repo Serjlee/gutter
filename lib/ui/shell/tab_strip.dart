@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_controller.dart';
 import '../../app/tab_groups.dart';
 import '../../app/theme.dart';
+import '../../git/models.dart' show RepoOperation;
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'tab_switcher.dart';
@@ -96,12 +97,16 @@ class _TabStripState extends State<TabStrip> {
     });
   }
 
-  /// The mouse wheel scrolls the strip sideways.
+  /// The mouse wheel scrolls the strip sideways. Through the resolver: the
+  /// strip's Scrollable takes sideways and Shift+wheel scrolls itself.
   void _onWheel(PointerSignalEvent e) {
-    if (e is! PointerScrollEvent || !_scroll.hasClients) return;
-    final d = e.scrollDelta.dx != 0 ? e.scrollDelta.dx : e.scrollDelta.dy;
-    final pos = _scroll.position;
-    _scroll.jumpTo((pos.pixels + d).clamp(0, pos.maxScrollExtent));
+    if (e is! PointerScrollEvent) return;
+    GestureBinding.instance.pointerSignalResolver.register(e, (e) {
+      if (e is! PointerScrollEvent || !_scroll.hasClients) return;
+      final d = e.scrollDelta.dx != 0 ? e.scrollDelta.dx : e.scrollDelta.dy;
+      final pos = _scroll.position;
+      _scroll.jumpTo((pos.pixels + d).clamp(0, pos.maxScrollExtent));
+    });
   }
 
   // ------------------------------------------------------------- drops
@@ -167,20 +172,24 @@ class _TabStripState extends State<TabStrip> {
       _GroupDrag(:final group) =>
         group != on && !(on is RepoTabController && on.group == group),
     };
+    // Takes every drag, even one it ignores: a rejected drag would fall
+    // through to the strip's target and move to the end.
     return Builder(
       builder: (context) => DragTarget<_Drag>(
-        onWillAcceptWithDetails: (d) => accepts(d.data),
         onMove: (d) {
-          if (!accepts(d.data)) return;
-          _setHint((on, _zoneAt(context, d.offset, d.data, on)));
+          _setHint(
+            accepts(d.data)
+                ? (on, _zoneAt(context, d.offset, d.data, on))
+                : null,
+          );
         },
         onLeave: (_) {
           if (_hint?.$1 == on) _setHint(null);
         },
         onAcceptWithDetails: (d) {
-          final zone = _zoneAt(context, d.offset, d.data, on);
           _setHint(null);
-          _drop(d.data, on, zone);
+          if (!accepts(d.data)) return;
+          _drop(d.data, on, _zoneAt(context, d.offset, d.data, on));
         },
         builder: (context, _, _) => child,
       ),
@@ -967,7 +976,7 @@ class _RepoTabState extends State<_RepoTab> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (tab.operation.name != 'none')
+                                if (tab.operation != RepoOperation.none)
                                   Padding(
                                     padding: EdgeInsets.only(right: 6),
                                     child: Icon(

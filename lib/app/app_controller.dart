@@ -149,21 +149,15 @@ class AppController extends ChangeNotifier {
   /// Opens [path] (any directory inside a repo) in a tab, or activates the
   /// existing tab. Returns false if it isn't a repository. A tab opened
   /// without [activate] loads when first shown.
-  Future<bool> openRepo(
-    String path, {
-    bool activate = true,
-    bool persist = true,
-  }) async {
+  Future<bool> openRepo(String path, {bool activate = true}) async {
     final (:root, :error) = await Repository.probe(path, runner: git);
     if (root == null) {
-      if (persist) {
-        notify(
-          error == null || error == 'Not a git repository'
-              ? 'Not a git repository: $path'
-              : 'Couldn\'t open $path: $error',
-          error: true,
-        );
-      }
+      notify(
+        error == null || error == 'Not a git repository'
+            ? 'Not a git repository: $path'
+            : 'Couldn\'t open $path: $error',
+        error: true,
+      );
       return false;
     }
     final existing = tabs.indexWhere((t) => t.repo.path == root);
@@ -420,6 +414,8 @@ class AppController extends ChangeNotifier {
 
   /// A change of order or groups: redraws the tab strip only.
   void _layoutChanged() {
+    // The active tab stays shown, even moved into a collapsed group.
+    if (activeTab?.group case final g? when g.collapsed) g.collapsed = false;
     _normalize();
     _persistTabs();
     tabLayout.value++;

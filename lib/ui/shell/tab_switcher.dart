@@ -36,6 +36,7 @@ class _TabSwitcherState extends State<TabSwitcher> {
   final _query = TextEditingController();
   final _scroll = ScrollController();
   static const _rowHeight = 30.0;
+  static const _listPadding = 4.0;
 
   /// The picked tab (Enter shows it).
   RepoTabController? _picked;
@@ -102,7 +103,7 @@ class _TabSwitcherState extends State<TabSwitcher> {
     if (!_scroll.hasClients || _picked == null) return;
     final i = _rows().indexWhere((r) => r.tab == _picked);
     if (i < 0) return;
-    final top = i * _rowHeight;
+    final top = _listPadding + i * _rowHeight;
     final pos = _scroll.position;
     if (top < pos.pixels) {
       _scroll.jumpTo(top);
@@ -153,7 +154,8 @@ class _TabSwitcherState extends State<TabSwitcher> {
                     isDense: true,
                     prefixIcon: const Icon(Icons.search, size: 18),
                     prefixIconConstraints: const BoxConstraints(minWidth: 32),
-                    hintText: 'Search ${app.tabs.length} tabs',
+                    hintText:
+                        'Search ${app.tabs.length} tab${app.tabs.length == 1 ? '' : 's'}',
                   ),
                   onSubmitted: (_) {
                     if (_picked != null) _show(_picked!);
@@ -175,7 +177,7 @@ class _TabSwitcherState extends State<TabSwitcher> {
                 child: ListView.builder(
                   controller: _scroll,
                   shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(vertical: _listPadding),
                   itemExtent: _rowHeight,
                   itemCount: rows.length,
                   itemBuilder: (context, i) {
