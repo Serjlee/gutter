@@ -12,6 +12,7 @@ Flutter on top of your system `git`.
 Gutter needs `git` installed.
 
 - **Linux, Flatpak**: install it from Gutter's Flatpak repository:
+
   ```sh
   flatpak install --user https://serjlee.github.io/gutter/gutter.flatpakref
   ```
@@ -67,11 +68,7 @@ Apple's command line tools). You can pick another on the home tab.
 
 - **Commit graph**: lane-colored branches, merged local/remote ref labels,
   tags, with support for stashes, search, avatars, and more.
-- **Tabs**, one per repository, restored on start; each loads when first
-  shown, and only the active one auto-fetches. Group them by dragging a
-  tab onto another (or from its right-click menu): groups get a name and a
-  color, and collapse into their chip. **All tabs** at the strip's end
-  lists and searches every tab.
+- **Tabs**, tabbed repositories with grouping support and search.
 - **Repository discovery**: every repository under a folder is found in
   the background. Open, clone or init from the home tab.
 - **Diffs**: unified, split or full file (images too), with optional
