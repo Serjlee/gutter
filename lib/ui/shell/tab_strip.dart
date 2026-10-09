@@ -564,8 +564,10 @@ class _GroupChipState extends State<_GroupChip> {
                 top: const BorderSide(color: Colors.transparent, width: 2),
               ),
             ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 80),
+            // Not animated: an AnimatedContainer interpolates between the
+            // dot's and the badge's different constraints, and swells the
+            // chip in between (a click mid-animation starts from there).
+            child: Container(
               // Unnamed and expanded: a dot.
               width: label.isEmpty ? 14 : null,
               height: label.isEmpty ? 14 : 22,

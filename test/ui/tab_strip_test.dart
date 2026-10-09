@@ -100,6 +100,33 @@ void main() {
     expect(order(), ['delta*', 'alpha*', 'gamma', 'beta']);
   });
 
+  testWidgets('a group chip keeps its size while collapsing and expanding '
+      'quickly', (tester) async {
+    await pumpStrip(tester, ['alpha', 'beta', 'gamma']);
+    final g = app.createGroup([app.tabs[0], app.tabs[1]]); // no name
+    await tester.pump();
+    final chip = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_GroupChip',
+    );
+    // A dot (28 wide with its padding) or a count badge (44), never in between:
+    // an animated container swelled it to 170 wide mid-way.
+    double width() => tester.getSize(chip).width;
+    expect(width(), 28);
+    for (var i = 0; i < 12; i++) {
+      await tester.tap(chip);
+      for (var frame = 0; frame < 6; frame++) {
+        await tester.pump(Duration(milliseconds: 10 + (i % 3) * 20));
+        expect(chip, findsOneWidget, reason: 'click ${i + 1}');
+        expect(width(), lessThanOrEqualTo(60), reason: 'click ${i + 1}');
+        expect(width(), greaterThanOrEqualTo(20), reason: 'click ${i + 1}');
+      }
+    }
+    await tester.pumpAndSettle();
+    expect(g.collapsed, isFalse); // an even number of clicks
+    expect(app.groups, [g]);
+    expect(width(), 28);
+  });
+
   testWidgets('a tab shows its path after a second, but not while dragging', (
     tester,
   ) async {
