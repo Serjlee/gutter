@@ -100,6 +100,47 @@ void main() {
     expect(order(), ['delta*', 'alpha*', 'gamma', 'beta']);
   });
 
+  testWidgets('a working tab shows progress on its top edge, not in its size', (
+    tester,
+  ) async {
+    await pumpStrip(tester, ['alpha', 'beta']);
+    final tab = app.tabs.first;
+    final bar = find.byKey(const ValueKey('tab-progress'));
+    Size size() => tester.getSize(
+      find
+          .ancestor(
+            of: find.text('alpha'),
+            matching: find.byType(GestureDetector),
+          )
+          .first,
+    );
+    final idle = size();
+    expect(bar, findsNothing);
+    // Nothing animates while no tab works.
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    tab.busy = 'Fetch'; // working
+    tab.toggleDetails(); // (tells the tab; no git involved)
+    await tester.pump();
+    expect(bar, findsOneWidget);
+    expect(size(), idle);
+    // …and it keeps moving.
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    expect(size(), idle);
+    // The other tab isn't affected.
+    expect(bar, findsOneWidget);
+
+    tab.busy = null;
+    tab.toggleDetails();
+    await tester.pump();
+    expect(bar, findsNothing);
+    expect(size(), idle);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
   testWidgets('a group chip keeps its size while collapsing and expanding '
       'quickly', (tester) async {
     await pumpStrip(tester, ['alpha', 'beta', 'gamma']);

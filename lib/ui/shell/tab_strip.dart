@@ -894,103 +894,110 @@ class _RepoTabState extends State<_RepoTab> {
               child: _tipWhenHovered(
                 hover: _hover,
                 message: tab.repo.path,
-                child: Container(
-                  height: 36,
-                  constraints: const BoxConstraints(
-                    minWidth: 120,
-                    maxWidth: 220,
-                  ),
-                  padding: const EdgeInsets.only(left: 12, right: 4),
-                  foregroundDecoration: widget.dropOnto
-                      ? BoxDecoration(
-                          border: Border.all(
-                            color: AppColors.accent,
-                            width: 1.5,
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 36,
+                      constraints: const BoxConstraints(
+                        minWidth: 120,
+                        maxWidth: 220,
+                      ),
+                      padding: const EdgeInsets.only(left: 12, right: 4),
+                      foregroundDecoration: widget.dropOnto
+                          ? BoxDecoration(
+                              border: Border.all(
+                                color: AppColors.accent,
+                                width: 1.5,
+                              ),
+                            )
+                          : null,
+                      decoration: BoxDecoration(
+                        color: widget.dropOnto
+                            ? AppColors.selection
+                            : widget.active
+                            ? AppColors.toolbar
+                            : (_hover ? AppColors.hover : null),
+                        border: Border(
+                          right: BorderSide(color: AppColors.border),
+                          // (The progress bar draws it while working.)
+                          top: BorderSide(
+                            color: widget.active && !working
+                                ? AppColors.accent
+                                : Colors.transparent,
+                            width: 2,
                           ),
-                        )
-                      : null,
-                  decoration: BoxDecoration(
-                    color: widget.dropOnto
-                        ? AppColors.selection
-                        : widget.active
-                        ? AppColors.toolbar
-                        : (_hover ? AppColors.hover : null),
-                    border: Border(
-                      right: BorderSide(color: AppColors.border),
-                      top: BorderSide(
-                        color: widget.active
-                            ? AppColors.accent
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                      bottom: BorderSide(
-                        color: widget.groupColor ?? Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  // The minimum width can exceed a short name's: keep the
-                  // close button at the right edge anyway.
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (working)
-                              const Padding(
-                                padding: EdgeInsets.only(right: 6),
-                                child: SizedBox(
-                                  width: 10,
-                                  height: 10,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
-                                  ),
-                                ),
-                              )
-                            else if (tab.operation.name != 'none')
-                              Padding(
-                                padding: EdgeInsets.only(right: 6),
-                                child: Icon(
-                                  Icons.warning_amber,
-                                  size: 13,
-                                  color: AppColors.warning,
-                                ),
-                              ),
-                            Flexible(
-                              child: Text(
-                                tab.name,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: widget.active
-                                      ? AppColors.text
-                                      : AppColors.textDim,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                          ],
+                          bottom: BorderSide(
+                            color: widget.groupColor ?? Colors.transparent,
+                            width: 2,
+                          ),
                         ),
                       ),
-                      SizedBox(
-                        width: 22,
-                        child: (_hover || widget.active)
-                            ? InkWell(
-                                onTap: widget.onClose,
-                                borderRadius: BorderRadius.circular(3),
-                                child: Icon(
-                                  Icons.close,
-                                  size: 14,
-                                  color: AppColors.textDim,
+                      // The minimum width can exceed a short name's: keep the
+                      // close button at the right edge anyway.
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (tab.operation.name != 'none')
+                                  Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: Icon(
+                                      Icons.warning_amber,
+                                      size: 13,
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                Flexible(
+                                  child: Text(
+                                    tab.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: widget.active
+                                          ? AppColors.text
+                                          : AppColors.textDim,
+                                    ),
+                                  ),
                                 ),
-                              )
-                            : null,
+                                const SizedBox(width: 4),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            width: 22,
+                            child: (_hover || widget.active)
+                                ? InkWell(
+                                    onTap: widget.onClose,
+                                    borderRadius: BorderRadius.circular(3),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: AppColors.textDim,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    // Working: the top edge is an indeterminate progress
+                    // bar, which unlike a spinner doesn't resize the tab.
+                    if (working)
+                      Positioned(
+                        left: 0,
+                        right: 1, // the tab's right border
+                        top: 0,
+                        height: 2,
+                        child: _TabProgress(
+                          key: const ValueKey('tab-progress'),
+                          active: widget.active,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -999,4 +1006,89 @@ class _RepoTabState extends State<_RepoTab> {
       },
     );
   }
+}
+
+/// An indeterminate progress bar along a tab's top edge: a segment sweeping
+/// across a faint track, over and over. Built only while the tab works, so
+/// the other tabs run no animation.
+class _TabProgress extends StatefulWidget {
+  const _TabProgress({super.key, required this.active});
+  final bool active;
+
+  @override
+  State<_TabProgress> createState() => _TabProgressState();
+}
+
+class _TabProgressState extends State<_TabProgress>
+    with SingleTickerProviderStateMixin {
+  late final _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      _sweep
+        ..stop()
+        ..value = 0.5; // a still segment, for those who asked for no motion
+    } else if (!_sweep.isAnimating) {
+      _sweep.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _TabProgressPainter(
+            _sweep,
+            AppColors.accent,
+            track: widget.active ? 0.3 : 0.12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabProgressPainter extends CustomPainter {
+  _TabProgressPainter(this.sweep, this.color, {required this.track})
+    : super(repaint: sweep);
+
+  final Animation<double> sweep;
+  final Color color;
+
+  /// The track's opacity.
+  final double track;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas
+      ..clipRect(Offset.zero & size)
+      ..drawRect(
+        Offset.zero & size,
+        Paint()..color = color.withValues(alpha: track),
+      );
+    // Enters from the left, leaves on the right, quickest in the middle.
+    final segment = size.width * 0.4;
+    final at = Curves.easeInOut.transform(sweep.value);
+    final x = -segment + (size.width + segment) * at;
+    canvas.drawRect(
+      Rect.fromLTWH(x, 0, segment, size.height),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TabProgressPainter old) =>
+      old.color != color || old.track != track || old.sweep != sweep;
 }
