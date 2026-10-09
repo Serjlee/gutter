@@ -252,7 +252,6 @@ class CommitDetailsPanel extends StatelessWidget {
                   ],
                 ),
               ),
-              _CloseDetails(tab: tab),
             ],
           ),
         ),
@@ -615,7 +614,6 @@ class WipPanel extends StatelessWidget {
                   color: AppColors.danger,
                   onPressed: () => actions.discard(unstaged),
                 ),
-              _CloseDetails(tab: tab),
             ],
           ),
         ),
@@ -1082,20 +1080,6 @@ Future<void> openExternally(RepoTabController tab, String relPath) async {
   } catch (e) {
     tab.app.notify('Could not open $relPath: $e', error: true);
   }
-}
-
-/// Closes the details panel; clicking a commit or a stash opens it again.
-class _CloseDetails extends StatelessWidget {
-  const _CloseDetails({required this.tab});
-  final RepoTabController tab;
-
-  @override
-  Widget build(BuildContext context) => SmallIconButton(
-    key: const ValueKey('close-details'),
-    icon: Icons.close,
-    tooltip: 'Close panel (Esc)',
-    onPressed: () => tab.setDetailsOpen(false),
-  );
 }
 
 /// Calls [onDoubleClick] on a double click in [child], from the raw pointer

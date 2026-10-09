@@ -24,6 +24,9 @@ class Settings {
   int maxCommits = 20000;
   String? gitPath;
   double sidebarWidth = 240;
+
+  /// Whether the repository view's left sidebar is shown.
+  bool sidebarOpen = true;
   double detailsWidth = 380;
   Map<String, double> columnWidths = {};
   bool diffSplit = false;
@@ -62,6 +65,7 @@ class Settings {
     'maxCommits': maxCommits,
     'gitPath': gitPath,
     'sidebarWidth': sidebarWidth,
+    'sidebarOpen': sidebarOpen,
     'detailsWidth': detailsWidth,
     'columnWidths': columnWidths,
     'diffSplit': diffSplit,
@@ -96,6 +100,7 @@ class Settings {
       ..maxCommits = (j['maxCommits'] as num?)?.toInt() ?? 20000
       ..gitPath = j['gitPath'] as String?
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
+      ..sidebarOpen = j['sidebarOpen'] != false
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..diffSplit = j['diffSplit'] == true
       ..diffWrap = j['diffWrap'] == true

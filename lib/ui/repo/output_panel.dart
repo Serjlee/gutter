@@ -9,7 +9,9 @@ import 'repo_tab_controller.dart';
 
 /// The git commands run for a tab, newest at the bottom, VS Code "Output"
 /// style: a header bar that toggles a resizable log. Failed commands show
-/// their first line of output; clicking a command shows all of it.
+/// their first line of output; clicking a command shows all of it. The bar
+/// also holds the buttons that hide the sidebar (at its left end) and the
+/// details panel (at its right end), out of the toolbar's way.
 class OutputPanel extends StatefulWidget {
   const OutputPanel({super.key, required this.tab});
   final RepoTabController tab;
@@ -158,6 +160,24 @@ class _OutputPanelState extends State<OutputPanel> {
       color: AppColors.panel,
       child: Row(
         children: [
+          // Under the sidebar it hides.
+          ListenableBuilder(
+            listenable: tab,
+            builder: (context, _) {
+              final shown = tab.app.settings.sidebarOpen;
+              return SmallIconButton(
+                key: const ValueKey('toggle-sidebar'),
+                icon: Icons.view_sidebar_outlined,
+                mirror: true, // (the details panel's icon, for the left side)
+                size: 15,
+                tooltip:
+                    '${shown ? 'Hide' : 'Show'} the sidebar '
+                    '(${shortcut('B')})',
+                color: shown ? AppColors.accent : null,
+                onPressed: tab.toggleSidebar,
+              );
+            },
+          ),
           Expanded(
             child: Material(
               type: MaterialType.transparency,
@@ -244,6 +264,21 @@ class _OutputPanelState extends State<OutputPanel> {
             ),
             const SizedBox(width: 4),
           ],
+          // Under the details panel it hides.
+          ListenableBuilder(
+            listenable: tab,
+            builder: (context, _) => SmallIconButton(
+              key: const ValueKey('toggle-details'),
+              icon: Icons.view_sidebar_outlined,
+              size: 15,
+              tooltip:
+                  '${tab.detailsOpen ? 'Hide' : 'Show'} the details panel '
+                  '(${shortcut('I')})',
+              color: tab.detailsOpen ? AppColors.accent : null,
+              onPressed: tab.toggleDetails,
+            ),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
     );

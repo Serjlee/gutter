@@ -190,6 +190,7 @@ class _AppShellState extends State<AppShell> {
         app.nextTab(-1);
     both(LogicalKeyboardKey.keyR, () => app.activeTab?.refresh(forceLog: true));
     both(LogicalKeyboardKey.keyI, () => app.activeTab?.toggleDetails());
+    both(LogicalKeyboardKey.keyB, () => app.activeTab?.toggleSidebar());
     map[const SingleActivator(LogicalKeyboardKey.f5)] = () =>
         app.activeTab?.refresh(forceLog: true);
     for (var i = 1; i <= 9; i++) {

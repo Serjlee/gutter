@@ -57,8 +57,8 @@ void main() {
     Finder row(String message) => find.text(message).hitTestable().first;
     expect(panel, findsOneWidget);
 
-    // The close button, then a click on a commit.
-    await tester.tap(find.byKey(const ValueKey('close-details')));
+    // The status bar's button, then a click on a commit.
+    await tester.tap(find.byKey(const ValueKey('toggle-details')));
     await tester.pump();
     expect(panel, findsNothing);
     await tester.tap(row('one'));

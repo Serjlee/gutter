@@ -195,6 +195,12 @@ class RepoTabController extends ChangeNotifier {
 
   void toggleDetails() => setDetailsOpen(!detailsOpen);
 
+  /// Shows or hides the sidebar (a setting shared by the tabs).
+  void toggleSidebar() {
+    app.toggleSidebar();
+    _notify();
+  }
+
   void setDetailsOpen(bool open) {
     if (detailsOpen == open) return;
     detailsOpen = open;

@@ -362,6 +362,7 @@ class SmallIconButton extends StatelessWidget {
     required this.onPressed,
     this.color,
     this.size = 16,
+    this.mirror = false,
   });
 
   final IconData icon;
@@ -369,6 +370,9 @@ class SmallIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color? color;
   final double size;
+
+  /// Flips the icon sideways (a right panel's icon becomes a left one's).
+  final bool mirror;
 
   @override
   Widget build(BuildContext context) {
@@ -382,12 +386,15 @@ class SmallIconButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: Padding(
             padding: const EdgeInsets.all(4),
-            child: Icon(
-              icon,
-              size: size,
-              color: onPressed == null
-                  ? AppColors.textFaint
-                  : (color ?? AppColors.textDim),
+            child: Transform.flip(
+              flipX: mirror,
+              child: Icon(
+                icon,
+                size: size,
+                color: onPressed == null
+                    ? AppColors.textFaint
+                    : (color ?? AppColors.textDim),
+              ),
             ),
           ),
         ),

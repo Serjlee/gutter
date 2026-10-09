@@ -83,6 +83,14 @@ class AppController extends ChangeNotifier {
 
   void save() => store?.save(settings);
 
+  /// Shows or hides the repository views' sidebar (for every tab). Doesn't
+  /// notify: the view that asks redraws itself, as rebuilding the whole app
+  /// for it would cost more than a frame with a big repository open.
+  void toggleSidebar() {
+    settings.sidebarOpen = !settings.sidebarOpen;
+    save();
+  }
+
   void notify(String text, {bool error = false, bool warning = false}) =>
       _messages.add(AppMessage(text, error: error, warning: warning));
 

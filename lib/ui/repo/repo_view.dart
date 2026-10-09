@@ -147,17 +147,19 @@ class _RepoViewState extends State<RepoView> {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            SizedBox(
-                              width: sideW,
-                              child: Sidebar(tab: tab),
-                            ),
-                            ResizeHandle(
-                              onDrag: (dx) => setState(
-                                () => settings.sidebarWidth = (sideW + dx)
-                                    .clamp(minSide, maxSide),
+                            if (settings.sidebarOpen) ...[
+                              SizedBox(
+                                width: sideW,
+                                child: Sidebar(tab: tab),
                               ),
-                              onEnd: tab.app.save,
-                            ),
+                              ResizeHandle(
+                                onDrag: (dx) => setState(
+                                  () => settings.sidebarWidth = (sideW + dx)
+                                      .clamp(minSide, maxSide),
+                                ),
+                                onEnd: tab.app.save,
+                              ),
+                            ],
                             Expanded(
                               child: tab.diffTarget != null
                                   ? DiffView(tab: tab)
@@ -390,15 +392,6 @@ class RepoToolbar extends StatelessWidget {
               icon: Icons.refresh,
               tooltip: 'Refresh (F5)',
               onPressed: () => tab.refresh(forceLog: true),
-            ),
-            SmallIconButton(
-              key: const ValueKey('toggle-details'),
-              icon: Icons.view_sidebar_outlined,
-              tooltip:
-                  '${tab.detailsOpen ? 'Hide' : 'Show'} the details panel '
-                  '(${shortcut('I')})',
-              color: tab.detailsOpen ? AppColors.accent : null,
-              onPressed: tab.toggleDetails,
             ),
           ],
         ),
