@@ -297,6 +297,11 @@ class Repository {
     return parseCommitDetails(out);
   }
 
+  /// The commit [rev] names.
+  Future<Commit> commitOf(String rev) async => parseLogString(
+    await _out(['log', '-1', '--no-walk', '-z', '--format=$logFormat', rev]),
+  ).single;
+
   /// Files changed by a commit (compared to its first parent).
   Future<List<FileChange>> commitFiles(Commit commit) async {
     if (commit.parents.isEmpty) {

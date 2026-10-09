@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
+import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
+import '../details/details_panel.dart' show FileRow;
+import '../diff/commit_file_preview.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'dialogs.dart';
@@ -36,6 +39,7 @@ Future<void> showInteractiveRebase(
   final plan = await showAppDialog<RebasePlan>(
     context: context,
     builder: (_) => InteractiveRebaseDialog(
+      tab: tab,
       steps: steps,
       branch: tab.currentBranch ?? 'HEAD',
       baseLabel: baseLabel,
@@ -54,12 +58,16 @@ Future<void> showInteractiveRebase(
 class InteractiveRebaseDialog extends StatefulWidget {
   const InteractiveRebaseDialog({
     super.key,
+    this.tab,
     required this.steps,
     required this.branch,
     required this.baseLabel,
     required this.hasMerges,
     this.initialSelection = const {},
   });
+
+  /// Lists the highlighted commit's files (and previews them) when given.
+  final RepoTabController? tab;
 
   /// Oldest first.
   final List<RebaseStep> steps;
@@ -92,6 +100,9 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   final _message = TextEditingController();
   final _listFocus = FocusNode(debugLabel: 'rebase-list');
   String? _error;
+
+  /// Each commit's files, loaded when it's first highlighted.
+  final _files = <String, Future<(Commit, List<FileChange>)>>{};
 
   static final _keys = {
     LogicalKeyboardKey.keyP: RebaseAction.pick,
@@ -345,6 +356,18 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     Navigator.pop(context, plan);
   }
 
+  Future<(Commit, List<FileChange>)> _filesOf(RebaseStep s) =>
+      _files[s.sha] ??= () async {
+        final repo = widget.tab!.repo;
+        final commit = await repo.commitOf(s.sha);
+        return (commit, await repo.commitFiles(commit));
+      }();
+
+  Future<void> _preview(Commit commit, FileChange file) async {
+    await showCommitFilePreview(context, widget.tab!, commit, file);
+    _listFocus.requestFocus(); // keep keys working
+  }
+
   static Color actionColor(RebaseAction a) => switch (a) {
     RebaseAction.pick => AppColors.text,
     RebaseAction.reword => AppColors.accent,
@@ -356,6 +379,58 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   static String _keyOf(RebaseAction a) => a.label[0];
 
   // ------------------------------------------------------------------ UI
+
+  /// The highlighted commit's changed files; a click shows one's diff.
+  Widget _fileList(RebaseStep s) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      // Keeps the previous commit's files until the next one's are read,
+      // so moving through the list doesn't flicker.
+      child: FutureBuilder<(Commit, List<FileChange>)>(
+        future: _filesOf(s),
+        builder: (context, snap) {
+          final loading = snap.connectionState != ConnectionState.done;
+          final data = snap.data;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SectionHeader(title: 'Changed files', count: data?.$2.length),
+              if (loading) const LinearProgressIndicator(minHeight: 2),
+              Expanded(
+                child: snap.hasError && !loading
+                    ? Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Text(
+                          '${snap.error}',
+                          style: TextStyle(color: AppColors.danger),
+                        ),
+                      )
+                    : ListView(
+                        key: const ValueKey('rebase-files'),
+                        children: [
+                          if (data != null)
+                            for (final f in data.$2)
+                              FileRow(
+                                key: ValueKey('rebase-file-${f.path}'),
+                                kind: f.kind,
+                                path: f.path,
+                                oldPath: f.oldPath,
+                                selected: false,
+                                onTap: () => _preview(data.$1, f),
+                              ),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   Widget _toolbar() {
     final n = _selection.length;
@@ -620,6 +695,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                                   ),
                                   const SizedBox(height: 6),
                                   Expanded(
+                                    flex: 3,
                                     child: TextField(
                                       key: ObjectKey(selStep),
                                       controller: _message,
@@ -631,6 +707,13 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                                       onChanged: (_) => _commitEditor(),
                                     ),
                                   ),
+                                  if (widget.tab != null) ...[
+                                    const SizedBox(height: 12),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _fileList(selStep),
+                                    ),
+                                  ],
                                 ],
                               ),
                       ),

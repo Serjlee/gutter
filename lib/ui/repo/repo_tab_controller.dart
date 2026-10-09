@@ -136,8 +136,23 @@ class WorkingFileTarget extends DiffTarget {
   String get path => entry.path;
 }
 
+/// What a diff view shows: the tab's open file, or one opened elsewhere.
+abstract interface class DiffSource implements Listenable {
+  DiffTarget? get diffTarget;
+  FileDiff? get diff;
+  bool get diffLoading;
+  String? get diffError;
+  void closeDiff();
+
+  /// The file as it is after the change, for the preview.
+  Future<Uint8List?> previewBytes();
+
+  /// The whole file before and after the change shown in [target].
+  Future<(String?, String?)> diffFileTexts(DiffTarget target);
+}
+
 /// State of one repository tab.
-class RepoTabController extends ChangeNotifier {
+class RepoTabController extends ChangeNotifier implements DiffSource {
   RepoTabController(this.repo, this.app);
 
   final Repository repo;
@@ -228,9 +243,13 @@ class RepoTabController extends ChangeNotifier {
   Commit? detailsCommit;
   bool detailsLoading = false;
 
+  @override
   DiffTarget? diffTarget;
+  @override
   FileDiff? diff;
+  @override
   bool diffLoading = false;
+  @override
   String? diffError;
 
   // Commit composer.
@@ -959,6 +978,7 @@ class RepoTabController extends ChangeNotifier {
     }
   }
 
+  @override
   void closeDiff({bool notify = true}) {
     diffTarget = null;
     diff = null;
@@ -1011,9 +1031,12 @@ class RepoTabController extends ChangeNotifier {
     }
   }
 
-  /// File bytes for the preview: at the commit, or the working tree file.
-  Future<Uint8List?> previewBytes() async {
-    final t = diffTarget;
+  @override
+  Future<Uint8List?> previewBytes() => targetBytes(diffTarget);
+
+  /// File bytes for the preview of [t]: at the commit, or the working tree
+  /// file.
+  Future<Uint8List?> targetBytes(DiffTarget? t) async {
     switch (t) {
       case CommitFileTarget(:final commit, :final file):
         if (file.kind == ChangeKind.deleted) {
@@ -1038,6 +1061,7 @@ class RepoTabController extends ChangeNotifier {
   /// for a side that doesn't exist or can't be read as text): the diff is
   /// highlighted from them, so every line gets the colors it has in its
   /// file.
+  @override
   Future<(String?, String?)> diffFileTexts(DiffTarget target) async {
     Future<String?> text(String? rev, String? path) async {
       if (path == null) return null;
