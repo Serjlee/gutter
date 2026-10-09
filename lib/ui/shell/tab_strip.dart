@@ -535,6 +535,57 @@ class _GroupChipState extends State<_GroupChip> {
     final color = AppColors.group(g.color);
     final named = g.name.isNotEmpty;
     final label = [if (named) g.name, if (g.collapsed) '${widget.count}'];
+    // The strip's color, as the thin gap between a collapsed group's cards.
+    final gap = BoxShadow(color: AppColors.background, spreadRadius: 1.5);
+    // A collapsed group is a stack of cards, the tabs it holds: two more
+    // peek out behind the chip, each set apart by a gap.
+    Widget card(double dx, double alpha) => Positioned(
+      left: dx,
+      right: -dx,
+      top: 0,
+      bottom: 0,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: alpha),
+          borderRadius: BorderRadius.circular(11),
+          boxShadow: [gap],
+        ),
+      ),
+    );
+    final pill = Container(
+      // Unnamed and expanded: a dot.
+      width: label.isEmpty ? 14 : null,
+      height: label.isEmpty ? 14 : 22,
+      constraints: label.isEmpty
+          ? null
+          : const BoxConstraints(minWidth: 22, maxWidth: 160),
+      padding: EdgeInsets.symmetric(horizontal: label.isEmpty ? 0 : 9),
+      decoration: BoxDecoration(
+        color: _hover || widget.dropOnto
+            ? Color.lerp(color, AppColors.text, 0.15)
+            : color,
+        borderRadius: BorderRadius.circular(11),
+        boxShadow: g.collapsed ? [gap] : null,
+        border: widget.dropOnto
+            ? Border.all(color: AppColors.text, width: 1.5)
+            : null,
+      ),
+      child: label.isEmpty
+          ? null
+          : Center(
+              widthFactor: 1,
+              child: Text(
+                label.join('  '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.groupText,
+                ),
+              ),
+            ),
+    );
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
@@ -552,7 +603,8 @@ class _GroupChipState extends State<_GroupChip> {
               : (_) => widget.onEdit!(context),
           child: Container(
             height: 36,
-            padding: const EdgeInsets.only(left: 8, right: 6),
+            // Room for the cards behind a collapsed group.
+            padding: EdgeInsets.only(left: 8, right: g.collapsed ? 14 : 6),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               // Joins the underline of the group's tabs.
@@ -567,39 +619,12 @@ class _GroupChipState extends State<_GroupChip> {
             // Not animated: an AnimatedContainer interpolates between the
             // dot's and the badge's different constraints, and swells the
             // chip in between (a click mid-animation starts from there).
-            child: Container(
-              // Unnamed and expanded: a dot.
-              width: label.isEmpty ? 14 : null,
-              height: label.isEmpty ? 14 : 22,
-              constraints: label.isEmpty
-                  ? null
-                  : const BoxConstraints(minWidth: 22, maxWidth: 160),
-              padding: EdgeInsets.symmetric(horizontal: label.isEmpty ? 0 : 9),
-              decoration: BoxDecoration(
-                color: _hover || widget.dropOnto
-                    ? Color.lerp(color, AppColors.text, 0.15)
-                    : color,
-                borderRadius: BorderRadius.circular(11),
-                border: widget.dropOnto
-                    ? Border.all(color: AppColors.text, width: 1.5)
-                    : null,
-              ),
-              child: label.isEmpty
-                  ? null
-                  : Center(
-                      widthFactor: 1,
-                      child: Text(
-                        label.join('  '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.groupText,
-                        ),
-                      ),
-                    ),
-            ),
+            child: g.collapsed
+                ? Stack(
+                    clipBehavior: Clip.none,
+                    children: [card(9, 0.32), card(4.5, 0.6), pill],
+                  )
+                : pill,
           ),
         ),
       ),
