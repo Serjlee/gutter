@@ -60,8 +60,9 @@ class _RepoViewState extends State<RepoView> {
   void _offerForceTagFetch() {
     if (widget.tab.movedTags.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Not over another dialog.
-      if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+      // Not over another dialog (asked, not subscribed to: depending on the
+      // route would rebuild this view whenever a dialog opens).
+      if (!mounted || (Navigator.maybeOf(context)?.canPop() ?? false)) return;
       if (widget.tab.takeMovedTagsPrompt()) {
         showMovedTags(context, widget.tab);
       }

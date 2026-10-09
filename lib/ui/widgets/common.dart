@@ -515,7 +515,9 @@ final String modKey = Platform.isMacOS ? '⌘' : 'Ctrl';
 
 /// A shortcut label for [key] with the main modifier: "⌘F" on macOS,
 /// "Ctrl+F" elsewhere.
-String shortcut(String key) => Platform.isMacOS ? '⌘$key' : 'Ctrl+$key';
+String shortcut(String key, {bool shift = false}) => Platform.isMacOS
+    ? '${shift ? '⇧' : ''}⌘$key'
+    : 'Ctrl+${shift ? 'Shift+' : ''}$key';
 
 /// A shortcut label for [key] with Alt: "⌥↑" on macOS, "Alt+↑" elsewhere.
 String altShortcut(String key) => Platform.isMacOS ? '⌥$key' : 'Alt+$key';

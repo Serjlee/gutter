@@ -11,6 +11,7 @@ import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
 import 'settings_store.dart';
+import 'tab_groups.dart';
 import 'theme.dart';
 import 'update_checker.dart';
 import 'updater.dart';
@@ -50,7 +51,19 @@ class AppController extends ChangeNotifier {
   final Settings settings;
   late GitRunner git;
 
+  /// Open repositories, in tab strip order. A group's tabs are always
+  /// next to each other.
   final tabs = <RepoTabController>[];
+
+  /// The groups of [tabs]; a group without tabs is dropped.
+  final groups = <TabGroup>[];
+
+  /// Counts changes of the tabs' order and groups (and groups' names,
+  /// colors, collapsed state). Only the tab strip shows those: it listens
+  /// to this, and the rest of the app isn't rebuilt for them (which, with
+  /// a big repository open, takes longer than a frame). Opening, closing
+  /// and showing tabs notify the controller itself, as before.
+  final tabLayout = ValueNotifier<int>(0);
 
   /// Index into [tabs], or -1 for the home tab.
   int activeIndex = -1;
@@ -88,22 +101,46 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  /// Reopens the tabs from the last session.
+  /// Reopens the tabs (and their groups) from the last session. Only the
+  /// active one loads now; the others when first shown.
   Future<void> restoreSession() async {
     final paths = List<String>.from(settings.openTabs);
-    final active = settings.activeTab;
-    for (final path in paths) {
-      await openRepo(path, activate: false, persist: false);
+    final groupIds = settings.openTabGroups;
+    final saved = {for (final g in settings.tabGroups) g.id: g};
+    final activePath =
+        settings.activeTab >= 0 && settings.activeTab < paths.length
+        ? paths[settings.activeTab]
+        : null;
+    // Checking that they're still repositories: a few at a time.
+    final roots = <String?>[];
+    for (var i = 0; i < paths.length; i += 8) {
+      roots.addAll(
+        await Future.wait([
+          for (final path in paths.skip(i).take(8))
+            Repository.probe(path, runner: git).then((r) => r.root),
+        ]),
+      );
     }
-    if (active >= 0 && active < tabs.length) {
-      activate(active);
-    } else {
-      activate(-1);
+    RepoTabController? active;
+    for (var i = 0; i < paths.length; i++) {
+      final root = roots[i];
+      if (root == null || tabs.any((t) => t.repo.path == root)) continue;
+      final tab = RepoTabController(Repository(root, runner: git), this);
+      tabs.add(tab);
+      final group = i < groupIds.length ? saved[groupIds[i]] : null;
+      if (group != null) {
+        if (!groups.contains(group)) groups.add(group);
+        tab.group = group;
+      }
+      if (paths[i] == activePath) active = tab;
     }
+    _normalize();
+    activate(active == null ? -1 : tabs.indexOf(active));
   }
 
   /// Opens [path] (any directory inside a repo) in a tab, or activates the
-  /// existing tab. Returns false if it isn't a repository.
+  /// existing tab. Returns false if it isn't a repository. A tab opened
+  /// without [activate] loads when first shown.
   Future<bool> openRepo(
     String path, {
     bool activate = true,
@@ -138,7 +175,6 @@ class AppController extends ChangeNotifier {
       _persistTabs();
       notifyListeners();
     }
-    unawaited(tab.load());
     return true;
   }
 
@@ -151,47 +187,240 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Shows tab [index] (-1: home), loading it if it hasn't yet, and
+  /// expanding its group if collapsed.
   void activate(int index) {
     if (index >= tabs.length) index = tabs.length - 1;
     activeIndex = index;
+    final active = activeTab;
+    if (active?.group case final g? when g.collapsed) g.collapsed = false;
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].setActive(i == index);
     }
+    if (active != null) unawaited(active.ensureLoaded());
     _persistTabs();
     notifyListeners();
   }
 
   void closeTab(int index) {
     if (index < 0 || index >= tabs.length) return;
-    final tab = tabs.removeAt(index);
-    tab.dispose();
-    if (activeIndex == index) {
-      activate(tabs.isEmpty ? -1 : (index > 0 ? index - 1 : 0));
-    } else {
-      if (activeIndex > index) activeIndex--;
-      _persistTabs();
+    closeTabs([tabs[index]]);
+  }
+
+  /// Closes [closing]. If the active tab is among them, the nearest
+  /// remaining shown tab takes over (to the left first), else home.
+  void closeTabs(Iterable<RepoTabController> closing) {
+    final set = closing.toSet();
+    if (set.isEmpty) return;
+    var next = activeTab;
+    if (next != null && set.contains(next)) {
+      next = _nearestShown(activeIndex, (t) => !set.contains(t));
+    }
+    tabs.removeWhere(set.contains);
+    for (final t in set) {
+      t.dispose();
+    }
+    _normalize();
+    if (next == activeTab && next != null) {
+      activeIndex = tabs.indexOf(next);
+      _layoutChanged();
       notifyListeners();
+    } else {
+      activate(next == null ? -1 : tabs.indexOf(next));
     }
   }
 
-  void moveTab(int from, int to) {
-    if (from == to) return;
-    final active = activeTab;
-    final tab = tabs.removeAt(from);
-    tabs.insert(to.clamp(0, tabs.length), tab);
-    activeIndex = active == null ? -1 : tabs.indexOf(active);
-    _persistTabs();
-    notifyListeners();
+  /// The tab nearest to [index] that [ok] accepts and isn't hidden in a
+  /// collapsed group: to the left first.
+  RepoTabController? _nearestShown(
+    int index,
+    bool Function(RepoTabController) ok,
+  ) {
+    bool fits(RepoTabController t) => ok(t) && !isHidden(t);
+    for (var i = index - 1; i >= 0; i--) {
+      if (fits(tabs[i])) return tabs[i];
+    }
+    for (var i = index + 1; i < tabs.length; i++) {
+      if (fits(tabs[i])) return tabs[i];
+    }
+    return null;
   }
 
+  /// Whether [tab] is folded away in a collapsed group.
+  bool isHidden(RepoTabController tab) => tab.group?.collapsed ?? false;
+
+  /// The tabs of [group], in order.
+  List<RepoTabController> tabsIn(TabGroup group) =>
+      tabs.where((t) => t.group == group).toList();
+
+  /// Moves [tab] to [index] (counted before the move) and into [group]
+  /// (none: out of groups). Dropped inside another group's tabs without
+  /// joining it, it lands after them.
+  void placeTab(RepoTabController tab, int index, {TabGroup? group}) {
+    final from = tabs.indexOf(tab);
+    if (from < 0) return;
+    final active = activeTab;
+    tabs.removeAt(from);
+    if (from < index) index--;
+    tabs.insert(index.clamp(0, tabs.length), tab);
+    activeIndex = active == null ? -1 : tabs.indexOf(active);
+    tab.group = group;
+    _layoutChanged();
+  }
+
+  /// Moves [group]'s tabs together to [index] (counted before the move).
+  void moveGroup(TabGroup group, int index) {
+    final members = tabsIn(group);
+    if (members.isEmpty) return;
+    final before = tabs
+        .take(index.clamp(0, tabs.length))
+        .where(members.contains);
+    final at = index - before.length;
+    final active = activeTab;
+    tabs.removeWhere(members.contains);
+    tabs.insertAll(at.clamp(0, tabs.length), members);
+    activeIndex = active == null ? -1 : tabs.indexOf(active);
+    _layoutChanged();
+  }
+
+  /// Puts [members] in a new group, gathered where the first of them is.
+  TabGroup createGroup(List<RepoTabController> members, {String name = ''}) {
+    final used = {for (final g in groups) g.color};
+    var color = 0;
+    while (used.contains(color) && color < groupColorNames.length - 1) {
+      color++;
+    }
+    if (used.contains(color)) color = groups.length % groupColorNames.length;
+    final group = TabGroup(id: _newGroupId(), name: name, color: color);
+    groups.add(group);
+    final ordered = tabs.where(members.contains).toList();
+    final first = ordered.first;
+    final rest = <RepoTabController>[];
+    for (final t in tabs) {
+      if (t == first) {
+        rest.addAll(ordered);
+      } else if (!ordered.contains(t)) {
+        rest.add(t);
+      }
+    }
+    final active = activeTab;
+    tabs
+      ..clear()
+      ..addAll(rest);
+    activeIndex = active == null ? -1 : tabs.indexOf(active);
+    for (final t in ordered) {
+      t.group = group;
+    }
+    _layoutChanged();
+    return group;
+  }
+
+  var _groupSerial = 0;
+  String _newGroupId() =>
+      '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+      '-${_groupSerial++}';
+
+  /// Moves [tab] to the end of [group].
+  void addToGroup(RepoTabController tab, TabGroup group) {
+    final last = tabs.lastIndexWhere((t) => t.group == group && t != tab);
+    placeTab(tab, last < 0 ? tabs.length : last + 1, group: group);
+  }
+
+  /// Takes [tab] out of its group, placing it right after the group.
+  void removeFromGroup(RepoTabController tab) {
+    final group = tab.group;
+    if (group == null) return;
+    final last = tabs.lastIndexWhere((t) => t.group == group);
+    placeTab(tab, last + 1);
+  }
+
+  /// Leaves [group]'s tabs where they are, ungrouped.
+  void ungroup(TabGroup group) {
+    for (final t in tabsIn(group)) {
+      t.group = null;
+    }
+    _layoutChanged();
+  }
+
+  void closeGroup(TabGroup group) => closeTabs(tabsIn(group));
+
+  void renameGroup(TabGroup group, String name) {
+    group.name = name.trim();
+    _layoutChanged();
+  }
+
+  void setGroupColor(TabGroup group, int color) {
+    group.color = color;
+    _layoutChanged();
+  }
+
+  /// Collapses or expands [group]. Collapsing the active tab's group shows
+  /// the nearest tab outside it (to the right first), else home.
+  void setGroupCollapsed(TabGroup group, bool collapsed) {
+    group.collapsed = collapsed;
+    final active = activeTab;
+    if (collapsed && active?.group == group) {
+      final last = tabs.lastIndexWhere((t) => t.group == group);
+      RepoTabController? next;
+      for (var i = last + 1; i < tabs.length && next == null; i++) {
+        if (!isHidden(tabs[i])) next = tabs[i];
+      }
+      next ??= _nearestShown(last, (t) => t.group != group);
+      activate(next == null ? -1 : tabs.indexOf(next));
+      return;
+    }
+    _layoutChanged();
+  }
+
+  /// Ctrl+Tab: the next shown tab (home included), skipping collapsed
+  /// groups.
   void nextTab(int delta) {
-    final count = tabs.length + 1; // + home
-    final cur = activeIndex + 1;
-    activate(((cur + delta) % count + count) % count - 1);
+    final order = [
+      -1,
+      for (var i = 0; i < tabs.length; i++)
+        if (!isHidden(tabs[i])) i,
+    ];
+    var cur = order.indexOf(activeIndex);
+    if (cur < 0) cur = 0;
+    final n = order.length;
+    activate(order[((cur + delta) % n + n) % n]);
+  }
+
+  /// Gathers each group's tabs where its first tab is, and drops groups
+  /// without tabs.
+  void _normalize() {
+    final active = activeTab;
+    final seen = <TabGroup>{};
+    final out = <RepoTabController>[];
+    for (final t in tabs) {
+      final g = t.group;
+      if (g == null) {
+        out.add(t);
+      } else if (seen.add(g)) {
+        out.addAll(tabs.where((x) => x.group == g));
+      }
+    }
+    tabs
+      ..clear()
+      ..addAll(out);
+    activeIndex = active == null ? -1 : tabs.indexOf(active);
+    groups.removeWhere((g) => !seen.contains(g));
+    for (final g in seen) {
+      if (!groups.contains(g)) groups.add(g);
+    }
+  }
+
+  /// A change of order or groups: redraws the tab strip only.
+  void _layoutChanged() {
+    _normalize();
+    _persistTabs();
+    tabLayout.value++;
   }
 
   void _persistTabs() {
     settings.openTabs = tabs.map((t) => t.repo.path).toList();
+    settings.openTabGroups = tabs.map((t) => t.group?.id ?? '').toList();
+    settings.tabGroups = List.of(groups);
     settings.activeTab = activeIndex;
     save();
   }
@@ -384,6 +613,7 @@ class AppController extends ChangeNotifier {
     updates.dispose();
     updater.dispose();
     avatars.dispose();
+    tabLayout.dispose();
     _messages.close();
     super.dispose();
   }

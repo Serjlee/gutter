@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 
 import '../../app/app_controller.dart';
 import '../../app/avatars.dart';
+import '../../app/tab_groups.dart';
 import '../../git/git_errors.dart';
 import '../../git/conflict.dart';
 import '../../git/git_runner.dart';
@@ -21,6 +22,7 @@ import '../../git/parsers/log_parser.dart';
 import '../../git/patch_builder.dart';
 import '../../git/repository.dart';
 import '../../graph/graph_layout.dart';
+import '../widgets/common.dart' show relativeTime;
 import 'auto_fetch.dart';
 
 enum PushOutcome {
@@ -165,8 +167,14 @@ class RepoTabController extends ChangeNotifier {
   String? _preparedMessage;
   String? headSha;
 
+  /// Whether the repository is loading. A tab restored from the last
+  /// session waits to be shown first ([started]).
   bool loading = true;
+  bool started = false;
   String? loadError;
+
+  /// The tab group it's in, if any (managed by [AppController]).
+  TabGroup? group;
   bool loadingLog = false;
   int maxCommits = 0;
 
@@ -265,6 +273,10 @@ class RepoTabController extends ChangeNotifier {
   Timer? _watchDebounce;
   final _watchers = <StreamSubscription<FileSystemEvent>>[];
   String _refsSignature = '';
+
+  /// What the last refresh found ([_refreshFingerprint]): a refresh that
+  /// finds the same has nothing new to show, and doesn't rebuild the view.
+  String? _refreshState;
   Future<void>? _refreshing;
   bool _refreshQueued = false;
   int _selectToken = 0;
@@ -314,7 +326,13 @@ class RepoTabController extends ChangeNotifier {
 
   // --------------------------------------------------------------- loading
 
+  /// Loads the repository unless that has started already.
+  Future<void> ensureLoaded() async {
+    if (!started) await load();
+  }
+
   Future<void> load() async {
+    started = true;
     maxCommits = app.settings.maxCommits;
     loading = true;
     _notify();
@@ -450,6 +468,15 @@ class RepoTabController extends ChangeNotifier {
     final signature = sig.toString();
     final refsChanged = signature != _refsSignature;
     final dirtyChanged = newStatus.isClean == graph.hasWip;
+    final fingerprint = _refreshFingerprint(newRefs, newStatus, newStashes);
+    // Whether this refresh changes what's shown (the rest is decided below).
+    var changed =
+        forceLog ||
+        refsChanged ||
+        dirtyChanged ||
+        stashesChanged ||
+        fingerprint != _refreshState;
+    _refreshState = fingerprint;
 
     refs = newRefs;
     status = newStatus;
@@ -470,11 +497,14 @@ class RepoTabController extends ChangeNotifier {
 
     if (multiSelection.isNotEmpty) {
       final kept = multiSelection.where((s) => graph.rowOf(s) != null).toSet();
-      multiSelection = kept.length > 1 ? kept : const {};
+      final now = kept.length > 1 ? kept : const <String>{};
+      if (now.length != multiSelection.length) changed = true;
+      multiSelection = now;
     }
     // Keep the WIP selection / diff in sync with the working tree.
     if (selectedSha == wipSha && !graph.hasWip && diffTarget == null) {
       selectedSha = null;
+      changed = true;
     }
     final t = diffTarget;
     if (t is WorkingFileTarget) {
@@ -487,9 +517,12 @@ class RepoTabController extends ChangeNotifier {
         // next conflict.
         diffTarget = WorkingFileTarget(status.conflicted.first, staged: false);
         unawaited(_loadDiff(quiet: true));
+        changed = true;
       } else if (!stillThere) {
         closeDiff(notify: false);
+        changed = true;
       } else {
+        // Its diff tells the view when its lines changed.
         diffTarget = WorkingFileTarget(e, staged: t.staged);
         unawaited(_loadDiff(quiet: true));
       }
@@ -500,6 +533,7 @@ class RepoTabController extends ChangeNotifier {
       selectedSha = null;
       details = null;
       commitFiles = const [];
+      changed = true;
     }
     // Nothing selected and nothing to commit (just opened, or just
     // committed): show the checked-out commit rather than an empty panel;
@@ -510,6 +544,7 @@ class RepoTabController extends ChangeNotifier {
       details = null;
       detailsCommit = null;
       commitFiles = const [];
+      changed = true;
     }
     final head = headSha;
     if (selectedSha == null &&
@@ -519,9 +554,72 @@ class RepoTabController extends ChangeNotifier {
         graph.rowOf(head) != null) {
       unawaited(select(head));
       _autoSelected = true;
+      changed = true;
     }
     _updateSearchHits();
-    _notify();
+    if (changed) _notify();
+  }
+
+  /// Everything a refresh shows, as text: the refs, the working tree, the
+  /// stashes, the operation in progress and its conflicts. The poll runs
+  /// every few seconds, and rebuilding a big repository's view for nothing
+  /// costs more than a frame.
+  String _refreshFingerprint(
+    List<GitRef> refs,
+    WorkingTreeStatus status,
+    List<StashEntry> stashes,
+  ) {
+    const sep = '\u0000';
+    final b = StringBuffer()
+      ..writeAll([
+        headSha,
+        operation.index,
+        rebaseProgress,
+        conflictTotal,
+        conflictSides?.current,
+        conflictSides?.incoming,
+        conflictSides?.incomingDetail,
+        conflictSides?.description,
+        // The fetch button's tooltip says how long ago.
+        lastFetch == null ? '' : relativeTime(lastFetch!),
+      ], sep)
+      ..write('\n');
+    final br = status.branch;
+    b
+      ..writeAll([br.head, br.oid, br.upstream, br.ahead, br.behind], sep)
+      ..write('\n');
+    for (final e in status.entries) {
+      b
+        ..writeAll([
+          e.path,
+          e.oldPath,
+          e.index?.index,
+          e.worktree?.index,
+          e.conflicted,
+          e.conflictCode,
+        ], sep)
+        ..write('\n');
+    }
+    for (final r in refs) {
+      b
+        ..writeAll([
+          r.fullName,
+          r.sha,
+          r.upstream,
+          r.ahead,
+          r.behind,
+          r.upstreamGone,
+          r.isHead,
+          r.subject,
+        ], sep)
+        ..write('\n');
+    }
+    for (final st in stashes) {
+      b
+        ..writeAll([st.index, st.sha, st.message, st.time], sep)
+        ..write('\n');
+    }
+    return b.toString();
   }
 
   Future<void> _reloadLog() async {
@@ -868,6 +966,7 @@ class RepoTabController extends ChangeNotifier {
     final target = diffTarget;
     if (target == null) return;
     final token = ++_diffToken;
+    var changed = false;
     if (!quiet) {
       diffLoading = true;
       diff = null;
@@ -885,15 +984,23 @@ class RepoTabController extends ChangeNotifier {
       if (token != _diffToken) return;
       // Keep the same object when nothing changed so line selections in
       // the view survive background refreshes.
-      if (!quiet || _diffSignature(d) != _diffSignature(diff)) diff = d;
+      if (!quiet || _diffSignature(d) != _diffSignature(diff)) {
+        diff = d;
+        changed = true;
+      }
+      if (diffError != null) changed = true;
       diffError = null;
     } catch (e) {
       if (token != _diffToken) return;
-      diffError = e is GitException ? e.message : e.toString();
+      final message = e is GitException ? e.message : e.toString();
+      changed = changed || message != diffError;
+      diffError = message;
     } finally {
       if (token == _diffToken) {
+        if (diffLoading) changed = true;
         diffLoading = false;
-        _notify();
+        // A background reload that finds the same diff has nothing to show.
+        if (changed || !quiet) _notify();
       }
     }
   }

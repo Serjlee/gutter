@@ -12,6 +12,7 @@ Flutter on top of your system `git`.
 Gutter needs `git` installed.
 
 - **Linux, Flatpak**: install it from Gutter's Flatpak repository:
+
   ```sh
   flatpak install --user https://serjlee.github.io/gutter/gutter.flatpakref
   ```
@@ -67,8 +68,7 @@ Apple's command line tools). You can pick another on the home tab.
 
 - **Commit graph**: lane-colored branches, merged local/remote ref labels,
   tags, with support for stashes, search, avatars, and more.
-- **Tabs**, one per repository, restored on start. Only the active tab
-  auto-fetches.
+- **Tabs**, tabbed repositories with grouping support and search.
 - **Repository discovery**: every repository under a folder is found in
   the background. Open, clone or init from the home tab.
 - **Diffs**: unified, split or full file (images too), with optional
@@ -87,6 +87,7 @@ Apple's command line tools). You can pick another on the home tab.
 <summary>Screenshots</summary>
 
 ![Home tab](docs/dashboard.png)
+![Tab groups](docs/tab-groups.png)
 ![Line staging](docs/line-staging.png)
 ![Diff with syntax highlighting](docs/diff-highlight.png)
 ![Interactive rebase](docs/interactive-rebase.png)
@@ -104,6 +105,7 @@ Apple's command line tools). You can pick another on the home tab.
 | `Ctrl/Cmd W` | Close tab |
 | `Ctrl Tab` / `Ctrl Shift Tab` | Next / previous tab |
 | `Ctrl/Cmd 1…9` | Go to tab |
+| `Ctrl/Cmd Shift A` | All tabs (search) |
 | `Ctrl/Cmd R`, `F5` | Refresh |
 | `Ctrl/Cmd F` | Search commits (`Enter` / `Shift Enter` to step) |
 | `↑ ↓ PgUp PgDn Home End` | Move through the graph |

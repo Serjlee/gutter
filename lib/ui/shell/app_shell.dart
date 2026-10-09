@@ -11,6 +11,7 @@ import '../dialogs/update_dialog.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
 import 'tab_strip.dart';
+import 'tab_switcher.dart';
 
 /// Top-level layout: tab strip + active tab content, global shortcuts and
 /// message snackbars.
@@ -48,28 +49,24 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  ModalRoute<Object?>? _route;
+  /// Whether a dialog or menu is open over the app. Asked when needed, not
+  /// subscribed to (as `ModalRoute.of` would be): that rebuilds the whole
+  /// app, graph included, each time one opens or closes.
+  bool get _overlayOpen => Navigator.maybeOf(context)?.canPop() ?? false;
 
   /// Pops up the update dialog when a newer release shows up.
   void _offerUpdate() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Not over another dialog: next check, then.
-      if (!mounted || _route?.isCurrent == false) return;
+      if (!mounted || _overlayOpen) return;
       if (app.takeUpdateOffer()) showUpdateDialog(context, app);
     });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _route = ModalRoute.of(context);
   }
 
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
     // Leave keys alone while a dialog or menu is open.
-    final route = _route;
-    if (route != null && !route.isCurrent) return false;
+    if (!mounted || _overlayOpen) return false;
     for (final entry in _bindings.entries) {
       if (entry.key.accepts(event, HardwareKeyboard.instance)) {
         entry.value();
@@ -175,6 +172,11 @@ class _AppShellState extends State<AppShell> {
     both(LogicalKeyboardKey.numpad0, app.zoomReset);
     both(LogicalKeyboardKey.keyT, () => app.activate(-1));
     both(LogicalKeyboardKey.keyO, _openRepoDialog);
+    both(
+      LogicalKeyboardKey.keyA,
+      () => showTabSwitcher(context, app),
+      shift: true,
+    );
     both(LogicalKeyboardKey.keyW, () {
       if (app.activeIndex >= 0) app.closeTab(app.activeIndex);
     });

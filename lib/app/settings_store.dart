@@ -4,10 +4,16 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'tab_groups.dart';
+
 /// Persistent app settings and session state, stored as JSON.
 class Settings {
   List<String> openTabs = [];
   int activeTab = -1; // -1: home tab
+
+  /// The group of each of [openTabs] (a [TabGroup.id], '' for none).
+  List<String> openTabGroups = [];
+  List<TabGroup> tabGroups = [];
   List<String> scanRoots = [];
   List<String> knownRepos = [];
   List<String> recentRepos = [];
@@ -46,6 +52,8 @@ class Settings {
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
+    'openTabGroups': openTabGroups,
+    'tabGroups': [for (final g in tabGroups) g.toJson()],
     'scanRoots': scanRoots,
     'knownRepos': knownRepos,
     'recentRepos': recentRepos,
@@ -75,6 +83,11 @@ class Settings {
     final s = Settings()
       ..openTabs = strings(j['openTabs'])
       ..activeTab = (j['activeTab'] as num?)?.toInt() ?? -1
+      ..openTabGroups = strings(j['openTabGroups'])
+      ..tabGroups = [
+        if (j['tabGroups'] case final List l)
+          for (final g in l) ?TabGroup.fromJson(g),
+      ]
       ..scanRoots = strings(j['scanRoots'])
       ..knownRepos = strings(j['knownRepos'])
       ..recentRepos = strings(j['recentRepos'])
