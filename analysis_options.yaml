@@ -5,6 +5,7 @@ analyzer:
     - build/**
     - macos/**
     - linux/**
+    - windows/**
   language:
     strict-casts: true
 

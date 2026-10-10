@@ -65,6 +65,13 @@ class AppController extends ChangeNotifier {
   /// and showing tabs notify the controller itself, as before.
   final tabLayout = ValueNotifier<int>(0);
 
+  /// `git --version`, once git ran ([checkGit]).
+  String? gitVersion;
+
+  /// Why git doesn't run (missing, or macOS's stub without the command line
+  /// tools), once checked; null while it's fine or unknown.
+  String? gitProblem;
+
   /// Index into [tabs], or -1 for the home tab.
   int activeIndex = -1;
 
@@ -454,7 +461,35 @@ class AppController extends ChangeNotifier {
       for (final t in tabs) {
         t.onAppFocused();
       }
+      // Back from installing it, perhaps.
+      if (gitProblem != null) unawaited(checkGit());
     }
+  }
+
+  /// Whether git runs: [gitVersion], or [gitProblem]. Unless its path is
+  /// set, git is looked for again first (it may have been installed since).
+  Future<void> checkGit() async {
+    if (settings.gitPath == null) git.gitPath = GitRunner.resolveGitPath();
+    try {
+      final r = await git.run(
+        ['--version'],
+        cwd: Directory.systemTemp.path,
+        allowFailure: true,
+      );
+      if (r.ok && r.stdout.startsWith('git version')) {
+        gitVersion = r.stdout.trim();
+        gitProblem = null;
+      } else {
+        gitVersion = null;
+        gitProblem = explainGitFailure(r.stderr, gitPath: git.gitPath);
+      }
+    } on ProcessException {
+      gitVersion = null;
+      gitProblem = settings.gitPath == null
+          ? 'Gutter can\'t find git.'
+          : 'Gutter can\'t run ${git.gitPath}, the git set in the settings.';
+    }
+    notifyListeners();
   }
 
   // ------------------------------------------------------------- settings
@@ -547,6 +582,7 @@ class AppController extends ChangeNotifier {
     git.gitPath = settings.gitPath ?? GitRunner.resolveGitPath();
     save();
     notifyListeners();
+    unawaited(checkGit());
   }
 
   // --------------------------------------------------------------- scanning

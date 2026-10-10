@@ -111,8 +111,11 @@ void main() {
   });
 
   group('error summaries', () {
-    String summary(String stderr, {String stdout = ''}) =>
-        summarizeGitError(GitException(['fetch'], 128, stderr, stdout: stdout));
+    String summary(String stderr, {String stdout = '', bool windows = false}) =>
+        summarizeGitError(
+          GitException(['fetch'], 128, stderr, stdout: stdout),
+          windows: windows,
+        );
 
     test('explain the usual suspects', () {
       expect(
@@ -153,6 +156,23 @@ void main() {
         ),
         contains('Pull first'),
       );
+    });
+
+    test('on Windows, point at what Git for Windows offers', () {
+      expect(
+        summary(
+          "fatal: could not read Username for 'https://github.com': "
+          'terminal prompts disabled',
+          windows: true,
+        ),
+        contains('Git Credential Manager'),
+      );
+      final ssh = summary(
+        'git@github.com: Permission denied (publickey).',
+        windows: true,
+      );
+      expect(ssh, contains('OpenSSH Authentication Agent'));
+      expect(ssh, contains('core.sshCommand'));
     });
 
     test('otherwise show git\'s own message, without the prefix', () {

@@ -20,6 +20,10 @@ enum InstallKind {
   /// `flatpak update` on the host (as a software center would).
   flatpak,
 
+  /// Installed on Windows with the installer (it left its uninstaller next
+  /// to gutter.exe): the new installer runs silently once Gutter quits.
+  windows,
+
   /// Can't update itself; see [Installation.reason].
   unsupported,
 }
@@ -31,26 +35,25 @@ class Installation {
   final InstallKind kind;
 
   /// The .app bundle (macOS) or the folder holding the `gutter` executable
-  /// (Linux).
+  /// (Linux, Windows).
   final String path;
 
   /// Why it can't update itself, when it can't.
   final String? reason;
 
-  bool get canSelfUpdate =>
-      kind == InstallKind.macApp ||
-      kind == InstallKind.linuxBundle ||
-      kind == InstallKind.flatpak;
+  bool get canSelfUpdate => kind != InstallKind.unsupported;
 
   static final _macZip = RegExp(r'^Gutter-macos-.*\.zip$');
   static final _linuxTarball = RegExp(r'^gutter-linux-x64-.*\.tar\.gz$');
   static final _flatpak = RegExp(r'^gutter-linux-x64-.*\.flatpak$');
+  static final _windowsSetup = RegExp(r'^Gutter-windows-x64-.*-setup\.exe$');
 
   /// The file of [release] for this installation.
   ReleaseAsset? assetIn(ReleaseInfo release) => switch (kind) {
     InstallKind.macApp => release.asset(_macZip.hasMatch),
     InstallKind.linuxBundle => release.asset(_linuxTarball.hasMatch),
     InstallKind.flatpak => release.asset(_flatpak.hasMatch),
+    InstallKind.windows => release.asset(_windowsSetup.hasMatch),
     InstallKind.unsupported => null,
   };
 
@@ -60,6 +63,7 @@ class Installation {
     bool? macOS,
     bool? linux,
     bool? flatpak,
+    bool? windows,
   }) {
     final exe = executable ?? Platform.resolvedExecutable;
     if (flatpak ?? (Platform.isLinux && File('/.flatpak-info').existsSync())) {
@@ -86,6 +90,18 @@ class Installation {
         );
       }
       return _writable(app, InstallKind.macApp);
+    }
+    if (windows ?? Platform.isWindows) {
+      final dir = p.dirname(exe);
+      if (!File(p.join(dir, 'unins000.exe')).existsSync()) {
+        return const Installation(
+          InstallKind.unsupported,
+          reason:
+              'Gutter wasn\'t installed with its installer: install it with '
+              'Gutter-windows-x64-<version>-setup.exe to get updates.',
+        );
+      }
+      return Installation(InstallKind.windows, path: dir);
     }
     if (linux ?? Platform.isLinux) {
       final dir = p.dirname(exe);
@@ -135,6 +151,12 @@ typedef HostRunner = Future<ProcessResult> Function(List<String> command);
 /// Starts a command on the host that outlives Gutter.
 typedef HostStarter = Future<void> Function(List<String> command);
 
+/// Starts a process that outlives Gutter (the install helper).
+typedef DetachedStarter = Future<void> Function(
+  String executable,
+  List<String> arguments,
+);
+
 /// Downloads a release, checks it against the release's SHA256SUMS, unpacks
 /// it next to the installed copy, and swaps it in once Gutter quits. A
 /// Flatpak updates with flatpak instead.
@@ -144,17 +166,23 @@ class Updater extends ChangeNotifier {
     HttpClient Function()? httpClient,
     HostRunner? runOnHost,
     HostStarter? startOnHost,
+    DetachedStarter? startDetached,
     String? flatpakInfo,
   }) : _httpClient = httpClient ?? _defaultClient,
        _runOnHost = runOnHost ?? _defaultRunOnHost,
        _startOnHost = startOnHost ?? _defaultStartOnHost,
+       _startDetached = startDetached ?? _defaultStartDetached,
        _flatpakInfo = flatpakInfo ?? '/.flatpak-info';
 
   final Installation? _installation;
   final HttpClient Function() _httpClient;
   final HostRunner _runOnHost;
   final HostStarter _startOnHost;
+  final DetachedStarter _startDetached;
   final String _flatpakInfo;
+
+  static Future<void> _defaultStartDetached(String exe, List<String> args) =>
+      Process.start(exe, args, mode: ProcessStartMode.detached);
 
   static const flatpakApp = 'dev.gutter.gutter';
 
@@ -204,7 +232,11 @@ class Updater extends ChangeNotifier {
     error = null;
     progress = null;
     _set(UpdateStage.downloading);
-    final work = p.join(p.dirname(installation.path), '.gutter-update');
+    // Next to the installed copy (so the swap is a rename), except for the
+    // installer, which puts Gutter in place itself.
+    final work = installation.kind == InstallKind.windows
+        ? p.join(Directory.systemTemp.path, 'gutter-update')
+        : p.join(p.dirname(installation.path), '.gutter-update');
     try {
       if (!installation.canSelfUpdate) {
         throw UpdateException(installation.reason ?? 'Can\'t update.');
@@ -238,6 +270,11 @@ class Updater extends ChangeNotifier {
         );
       }
 
+      if (installation.kind == InstallKind.windows) {
+        _staged = file.path; // the new installer
+        _set(UpdateStage.ready);
+        return;
+      }
       _set(UpdateStage.unpacking);
       final out = Directory(p.join(work, 'new'))..createSync();
       _staged = await _unpack(file, out);
@@ -354,16 +391,38 @@ class Updater extends ChangeNotifier {
       _set(UpdateStage.scheduled);
       return;
     }
+    final gutterPid = '${waitFor ?? pid}';
+    final again = relaunch ? '1' : '0';
+    if (installation.kind == InstallKind.windows) {
+      final script = File(p.join(_work!, 'install.ps1'))
+        ..writeAsStringSync(windowsSetupScript);
+      await _startDetached('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-File',
+        script.path,
+        gutterPid,
+        _staged!,
+        again,
+        p.join(installation.path, 'gutter.exe'),
+        _work!,
+      ]);
+      _set(UpdateStage.scheduled);
+      return;
+    }
     final script = File(p.join(_work!, 'install.sh'))
       ..writeAsStringSync(installScript);
-    await Process.start('/bin/sh', [
+    await _startDetached('/bin/sh', [
       script.path,
-      '${waitFor ?? pid}',
+      gutterPid,
       installation.path,
       _staged!,
-      relaunch ? '1' : '0',
+      again,
       _work!,
-    ], mode: ProcessStartMode.detached);
+    ]);
     _set(UpdateStage.scheduled);
   }
 
@@ -482,4 +541,22 @@ if [ "$relaunch" = 1 ]; then
   fi
 fi
 rm -rf "$work"
+''';
+
+/// Windows: waits for Gutter (pid GutterPid) to quit, runs the new
+/// installer (Setup) silently, and with Relaunch = 1 starts Gutter (Exe)
+/// again. Work, holding the installer, is removed at the end.
+@visibleForTesting
+const windowsSetupScript = r'''
+param([int]$GutterPid, [string]$Setup, [string]$Relaunch, [string]$Exe,
+  [string]$Work)
+while (Get-Process -Id $GutterPid -ErrorAction SilentlyContinue) {
+  Start-Sleep -Milliseconds 200
+}
+Start-Process -FilePath $Setup -Wait `
+  -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+if ($Relaunch -eq '1') {
+  Start-Process -FilePath $Exe
+}
+Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
 ''';

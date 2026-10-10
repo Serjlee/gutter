@@ -46,6 +46,20 @@ Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
   await tester.pump();
 }
 
+/// Switches the open diff to [mode]: with the segmented buttons, or the
+/// dropdown that replaces them in a narrow pane (Windows CI's small screen).
+Future<void> diffMode(WidgetTester tester, String mode) async {
+  final menu = find.byKey(const ValueKey('diff-mode'));
+  if (menu.evaluate().isNotEmpty) {
+    await tester.tap(menu);
+    await tester.pump();
+    await tester.tap(find.text(mode).last);
+  } else {
+    await tester.tap(find.text(mode));
+  }
+  await tester.pump();
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -176,8 +190,7 @@ void main() {
     // Split view with syntax highlighting, then zoomed in so the pane is
     // narrow: nothing may overflow (layout errors fail the test).
     expectNoErrors(tester, 'unified diff');
-    await tester.tap(find.text('Split'));
-    await tester.pump();
+    await diffMode(tester, 'Split');
     expectNoErrors(tester, 'split view');
     expect(app.settings.syntaxHighlight, isTrue); // the default
     expect(find.textContaining('print(s);', findRichText: true), findsWidgets);
@@ -188,7 +201,7 @@ void main() {
       expectNoErrors(tester, 'split view at zoom $zoom');
     }
     // The file view loads the blob asynchronously.
-    await tester.tap(find.text('File'));
+    await diffMode(tester, 'File');
     await pumpUntil(
       tester,
       () => find
@@ -197,7 +210,7 @@ void main() {
           .isNotEmpty,
     );
     expectNoErrors(tester, 'file view');
-    await tester.tap(find.text('Unified'));
+    await diffMode(tester, 'Unified');
     await tester.pump(const Duration(seconds: 2));
 
     app.closeTab(0);

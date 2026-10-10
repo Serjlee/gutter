@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the macOS and Linux apps and publishes
+# Pushing a tag like v0.1.0 builds the macOS, Linux and Windows apps and publishes
 # them as a GitHub Release, and the Flatpak repository on GitHub Pages.
 # Running the workflow manually only builds and uploads the artifacts (as
 # dev builds).
@@ -122,6 +122,66 @@ jobs:
           name: linux
           path: gutter-linux-x64-*.tar.gz
 
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build
+        shell: bash
+        env:
+          BUILD_ARGS: ${{ needs.version.outputs.build_args }}
+        run: |
+          # shellcheck disable=SC2086 # BUILD_ARGS is a list of flags
+          flutter build windows --release $BUILD_ARGS
+
+      - name: Check the embedded version
+        shell: bash
+        env:
+          GUTTER_VERSION: ${{ needs.version.outputs.version }}
+          GUTTER_COMMIT: ${{ needs.version.outputs.commit }}
+        run: tool/check_version.sh build/windows/x64/runner/Release/data/app.so "$GUTTER_VERSION" "$GUTTER_COMMIT"
+
+      - name: Installer
+        shell: pwsh
+        env:
+          LABEL: ${{ needs.version.outputs.label }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc /Q "/DAppVersion=$env:LABEL" `
+            "/DSourceDir=$PWD\build\windows\x64\runner\Release" `
+            "/O$PWD" windows\installer\gutter.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          # Installs silently (for this user), starts, and uninstalls.
+          $setup = (Get-Item Gutter-windows-x64-*-setup.exe).FullName
+          $dir = "$env:RUNNER_TEMP\GutterTest"
+          Start-Process $setup -Wait `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/DIR=$dir"
+          foreach ($f in 'gutter.exe', 'unins000.exe', 'data\flutter_assets') {
+            if (-not (Test-Path "$dir\$f")) { throw "The install has no $f" }
+          }
+          $gutter = Start-Process "$dir\gutter.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($gutter.HasExited) { throw "Gutter quit (exit code $($gutter.ExitCode))" }
+          Stop-Process -Id $gutter.Id
+          Start-Process "$dir\unins000.exe" -Wait -ArgumentList '/VERYSILENT'
+          if (Test-Path "$dir\gutter.exe") { throw 'The uninstaller left gutter.exe' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: Gutter-windows-x64-*-setup.exe
+
   flatpak:
     needs: [version, linux]
     runs-on: ubuntu-latest
@@ -224,7 +284,7 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [macos, linux, flatpak]
+    needs: [macos, linux, flatpak, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -268,9 +328,14 @@ jobs:
             Or install `gutter-linux-x64-*.flatpak` from here (`flatpak install --user <file>`): it adds the repository too. It runs your system's git.
           - Tarball (`gutter-linux-x64-*.tar.gz`): extract and run `./gutter`. Needs GTK 3. It updates itself.
 
+          **Windows** (`Gutter-windows-x64-*-setup.exe`): installs for your user, no admin rights needed. It isn't code-signed: if SmartScreen stops it, click **More info** → **Run anyway**. Gutter then updates itself.
+
+          Gutter offers to install Git for Windows if it's missing.
+
           Requires `git` on the `PATH`.
           NOTES
-          assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz gutter-linux-x64-*.flatpak)
+          assets=(Gutter-macos-*.zip gutter-linux-x64-*.tar.gz gutter-linux-x64-*.flatpak \
+            Gutter-windows-x64-*-setup.exe)
           # The in-app updater checks its download against this.
           sha256sum "${assets[@]}" > SHA256SUMS
           assets+=(SHA256SUMS)
