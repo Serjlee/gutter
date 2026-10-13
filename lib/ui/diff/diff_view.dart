@@ -39,6 +39,7 @@ class _DiffViewState extends State<DiffView> {
       : _Mode.unified;
   final _selection = <int, Set<int>>{};
   (int, int)? _anchor; // (hunk, line) for shift-click ranges
+  (int, int)? _rowAnchor; // (hunk, split row) for shift-click ranges
   FileDiff? _selectionFor;
   bool _showHuge = false;
   final _vScroll = ScrollController();
@@ -192,6 +193,36 @@ class _DiffViewState extends State<DiffView> {
     });
   }
 
+  /// Split view: a click selects a row, both sides of a replaced line
+  /// together (staging just one of them is rarely what's meant). Shift
+  /// extends from the last clicked row, as the rows are shown.
+  void _toggleRow(List<_SplitRow> rows, int row, {required bool shift}) {
+    if (!_canSelect) return;
+    final h = rows[row].$1;
+    final lines = source.diff!.hunks[h].lines;
+    List<int> changes(int r) => [
+      for (final i in [rows[r].$2, rows[r].$3])
+        if (i != null && i >= 0 && lines[i].isChange) i,
+    ];
+    final clicked = changes(row);
+    if (clicked.isEmpty) return;
+    setState(() {
+      final set = _selection.putIfAbsent(h, () => <int>{});
+      if (shift && _rowAnchor != null && _rowAnchor!.$1 == h) {
+        final a = min(_rowAnchor!.$2, row), b = max(_rowAnchor!.$2, row);
+        for (var r = a; r <= b; r++) {
+          set.addAll(changes(r));
+        }
+      } else if (clicked.every(set.contains)) {
+        set.removeAll(clicked);
+      } else {
+        set.addAll(clicked);
+      }
+      if (set.isEmpty) _selection.remove(h);
+      _rowAnchor = (h, row);
+    });
+  }
+
   int get _selectedCount => _selection.values.fold(0, (a, s) => a + s.length);
 
   Future<void> _applyLines({bool discard = false}) async {
@@ -252,6 +283,7 @@ class _DiffViewState extends State<DiffView> {
     if (!identical(diff, _selectionFor)) {
       _selection.clear();
       _anchor = null;
+      _rowAnchor = null;
       _selectionFor = diff;
       _showHuge = false;
     }
@@ -658,7 +690,7 @@ class _DiffViewState extends State<DiffView> {
 
   Widget _splitBody(FileDiff diff) {
     // Each row: (hunk, leftLine?, rightLine?) ; header rows have both -1.
-    final rows = <(int, int?, int?)>[];
+    final rows = <_SplitRow>[];
     for (var h = 0; h < diff.hunks.length; h++) {
       rows.add((h, -1, -1));
       final lines = diff.hunks[h].lines;
@@ -718,7 +750,7 @@ class _DiffViewState extends State<DiffView> {
               number: isLeft ? line.oldNo : line.newNo,
               selected: _selection[h]?.contains(idx) ?? false,
               selectable: _canSelect && line.isChange,
-              onToggle: (shift) => _toggleLine(h, idx, shift: shift),
+              onToggle: (shift) => _toggleRow(rows, i, shift: shift),
             );
           }
 
@@ -737,6 +769,10 @@ class _DiffViewState extends State<DiffView> {
     );
   }
 }
+
+/// A row of the split view: (hunk, left line, right line), both -1 for the
+/// hunk's header.
+typedef _SplitRow = (int, int?, int?);
 
 double get _charWidth => _measureChar();
 double? _cachedCharWidth;
@@ -817,17 +853,16 @@ class _UnifiedLine extends StatelessWidget {
                     style: numStyle,
                   ),
                 ),
+                // The +/- marker selects the line too.
+                SizedBox(
+                  width: 20,
+                  child: Text(
+                    line.marker == ' ' ? '' : line.marker,
+                    textAlign: TextAlign.center,
+                    style: monoStyle(size: 12.5, color: fg),
+                  ),
+                ),
               ],
-            ),
-          ),
-          SelectionContainer.disabled(
-            child: SizedBox(
-              width: 20,
-              child: Text(
-                line.marker == ' ' ? '' : line.marker,
-                textAlign: TextAlign.center,
-                style: monoStyle(size: 12.5, color: fg),
-              ),
             ),
           ),
           Expanded(
