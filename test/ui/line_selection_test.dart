@@ -76,6 +76,15 @@ void main() {
     await tester.tap(find.text('Split'));
     await tester.pump();
 
+    // The markers show here too, and select.
+    expect(find.text('+'), findsNWidgets(2)); // B, d
+    await tester.tap(find.text('-')); // b, with B
+    await tester.pump();
+    expect(selected(2), findsOneWidget);
+    await tester.tap(find.text('-'));
+    await tester.pump();
+    expect(find.text('Stage lines'), findsNothing);
+
     /// The line number [n] on the left or the right side.
     Finder number(String n, {required bool right}) {
       final all = find.text(n).evaluate().toList()

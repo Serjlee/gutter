@@ -912,17 +912,32 @@ class _SplitLine extends StatelessWidget {
             selectable: selectable,
             selected: selected,
             onToggle: onToggle,
-            child: Container(
-              width: 48,
-              alignment: Alignment.topRight,
+            child: Padding(
               padding: const EdgeInsets.only(top: 1),
-              child: Text(
-                number?.toString() ?? '',
-                style: monoStyle(size: 12, color: AppColors.textFaint),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      number?.toString() ?? '',
+                      textAlign: TextAlign.right,
+                      style: monoStyle(size: 12, color: AppColors.textFaint),
+                    ),
+                  ),
+                  // The +/- marker selects the line too.
+                  SizedBox(
+                    width: 20,
+                    child: Text(
+                      line.marker == ' ' ? '' : line.marker,
+                      textAlign: TextAlign.center,
+                      style: monoStyle(size: 12.5, color: fg),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 10),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 1),
