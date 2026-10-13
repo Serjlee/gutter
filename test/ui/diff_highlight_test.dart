@@ -147,4 +147,56 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
   });
+
+  testWidgets('a hunk ending in a TypeScript tag shows', (tester) async {
+    // The highlighter dropped lines of it, and the diff then failed to build
+    // (a blank view).
+    late TempRepo t;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('one', {'a.tsx': '  return (\n    <div>\n'});
+      t.commit('two', {'a.tsx': '  return (\n    <div>\n      <Button'});
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+      final commit = tab.graph.commits.first;
+      await tab.select(commit.sha);
+      tab.openCommitFile(commit, tab.commitFiles.single);
+      for (var i = 0; i < 100 && tab.diff == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+    });
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(body: DiffView(tab: tab)),
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 15)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(tester.takeException(), isNull);
+    for (final line in ['  return (', '    <div>', '      <Button']) {
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is RichText && w.text.toPlainText() == line,
+        ),
+        findsOneWidget,
+        reason: line,
+      );
+    }
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+  });
 }

@@ -36,4 +36,14 @@ void main() {
     expect(highlightLines('', 'dart'), [<TextSpan>[]]);
     expect(highlightLines('x' * (maxHighlightChars + 1), 'dart'), isNull);
   });
+
+  test('text the highlighter drops is never lost', () {
+    // A TypeScript tag at the very end trips the highlighter, which then
+    // left out the lines before it too.
+    const code = '  return (\n    <div>\n      <Button';
+    final lines = highlightLines(code, 'typescript')!;
+    expect(lines.map(plain).toList(), code.split('\n'));
+    final styled = lines.expand((l) => l).where((s) => s.style?.color != null);
+    expect(styled, isNotEmpty);
+  });
 }

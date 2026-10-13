@@ -186,8 +186,34 @@ Map<String, TextStyle> get _theme =>
 /// highlighting fails.
 List<List<TextSpan>>? highlightLines(String text, String language) {
   if (text.length > maxHighlightChars) return null;
+  final lines = _highlightLines(text, language);
+  if (lines != null && _covers(lines, text)) return lines;
+  // The highlighter can fail near the end of the text (TypeScript's `<x` as
+  // the very last thing) and then leaves out what it hadn't written yet: the
+  // same text with one more line usually goes through.
+  final more = _highlightLines('$text\n', language);
+  if (more != null && _covers(more, '$text\n')) {
+    return more..removeLast();
+  }
+  return null;
+}
+
+/// Whether [lines] hold all of [text].
+bool _covers(List<List<TextSpan>> lines, String text) {
+  final buf = StringBuffer();
+  for (var i = 0; i < lines.length; i++) {
+    if (i > 0) buf.write('\n');
+    for (final s in lines[i]) {
+      buf.write(s.text);
+    }
+  }
+  return buf.toString() == text;
+}
+
+List<List<TextSpan>>? _highlightLines(String text, String language) {
   try {
     final result = _highlight.highlight(code: text, language: language);
+    if (result.errorRaised != null) return null;
     final renderer = TextSpanRenderer(null, _theme);
     result.render(renderer);
     final root = renderer.span;
