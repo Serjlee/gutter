@@ -171,7 +171,7 @@ class _DiffViewState extends State<DiffView> {
 
   bool get _canSelect {
     final t = source.diffTarget;
-    return t is WorkingFileTarget && !t.entry.conflicted;
+    return t is WorkingFileTarget && !t.entry.conflicted && !tab.locked;
   }
 
   void _toggleLine(int hunk, int line, {required bool shift}) {
@@ -362,6 +362,7 @@ class _DiffViewState extends State<DiffView> {
                 ),
               if (target is WorkingFileTarget &&
                   !target.entry.conflicted &&
+                  !tab.locked &&
                   compact) ...[
                 if (target.staged)
                   SmallIconButton(
@@ -387,6 +388,7 @@ class _DiffViewState extends State<DiffView> {
               ],
               if (target is WorkingFileTarget &&
                   !target.entry.conflicted &&
+                  !tab.locked &&
                   !compact) ...[
                 if (target.staged)
                   TextButton.icon(
@@ -647,7 +649,8 @@ class _DiffViewState extends State<DiffView> {
   Widget _hunkHeader(FileDiff diff, int h) {
     final hunk = diff.hunks[h];
     final t = source.diffTarget;
-    final working = t is WorkingFileTarget && !t.entry.conflicted;
+    final working =
+        t is WorkingFileTarget && !t.entry.conflicted && !tab.locked;
     final staged = t is WorkingFileTarget && t.staged;
     Widget btn(String label, VoidCallback onTap, {Color? color}) => InkWell(
       onTap: onTap,

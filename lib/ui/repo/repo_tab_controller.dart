@@ -20,6 +20,7 @@ import '../../git/models.dart';
 import '../../git/parsers/diff_parser.dart';
 import '../../git/parsers/log_parser.dart';
 import '../../git/patch_builder.dart';
+import '../../git/rebase_plan.dart';
 import '../../git/repository.dart';
 import '../../graph/graph_layout.dart';
 import '../widgets/common.dart' show relativeTime;
@@ -151,6 +152,36 @@ abstract interface class DiffSource implements Listenable {
   Future<(String?, String?)> diffFileTexts(DiffTarget target);
 }
 
+/// An interactive rebase being prepared: its editor floats over the tab,
+/// which is read-only until the rebase is started or cancelled.
+class RebaseSession {
+  RebaseSession({
+    required this.base,
+    required this.baseLabel,
+    required this.branch,
+    required this.head,
+    required this.steps,
+    required this.hasMerges,
+    this.initialSelection = const {},
+  });
+
+  /// What the commits are rebased onto (null: the root).
+  final String? base;
+  final String baseLabel;
+  final String branch;
+
+  /// HEAD when the editor opened: the plan is for the commits up to it.
+  final String? head;
+
+  /// Oldest first.
+  final List<RebaseStep> steps;
+  final bool hasMerges;
+  final Set<String> initialSelection;
+
+  /// Starting: what's in the way (uncommitted changes) may be dealt with.
+  bool starting = false;
+}
+
 /// State of one repository tab.
 class RepoTabController extends ChangeNotifier implements DiffSource {
   RepoTabController(this.repo, this.app);
@@ -242,6 +273,23 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
   /// The commit (or stash) [details] describes.
   Commit? detailsCommit;
   bool detailsLoading = false;
+
+  /// The interactive rebase being prepared, if any: the tab can't be changed
+  /// meanwhile (browsing and fetching still work).
+  final rebaseSession = ValueNotifier<RebaseSession?>(null);
+
+  /// Changes are refused: an interactive rebase is being prepared.
+  bool get locked => rebaseSession.value?.starting == false;
+
+  void openRebase(RebaseSession session) {
+    rebaseSession.value = session;
+    _notify();
+  }
+
+  void closeRebase() {
+    rebaseSession.value = null;
+    _notify();
+  }
 
   @override
   DiffTarget? diffTarget;
@@ -780,6 +828,7 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
   @override
   void dispose() {
     _disposed = true;
+    rebaseSession.dispose();
     _pollTimer?.cancel();
     _fetchTimer?.cancel();
     _watchDebounce?.cancel();
@@ -1195,6 +1244,14 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
     String? success,
     bool Function(Object error)? onError,
   }) async {
+    if (locked) {
+      app.notify(
+        'Start or cancel the interactive rebase first: '
+        '${rebaseSession.value!.branch} is read-only meanwhile.',
+        warning: true,
+      );
+      return false;
+    }
     busy = label;
     _notify();
     var ok = true;

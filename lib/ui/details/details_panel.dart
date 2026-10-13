@@ -97,14 +97,18 @@ class MultiCommitPanel extends StatelessWidget {
             children: [
               FilledButton.icon(
                 key: const ValueKey('multi-cherry-pick'),
-                onPressed: tab.busy == null ? actions.cherryPickSelected : null,
+                onPressed: tab.busy == null && !tab.locked
+                    ? actions.cherryPickSelected
+                    : null,
                 icon: const Icon(Icons.content_copy, size: 16),
                 label: Text('Cherry-pick $n commits'),
               ),
               OutlinedButton.icon(
                 key: const ValueKey('multi-squash'),
                 onPressed:
-                    tab.busy == null && tab.operation == RepoOperation.none
+                    tab.busy == null &&
+                        !tab.locked &&
+                        tab.operation == RepoOperation.none
                     ? actions.squashSelected
                     : null,
                 icon: const Icon(Icons.merge, size: 16),
@@ -258,7 +262,7 @@ class CommitDetailsPanel extends StatelessWidget {
         // A double click on the message rewords it (not a stash's).
         _OnDoubleClick(
           key: const ValueKey('commit-message'),
-          onDoubleClick: stash != null || commit == null
+          onDoubleClick: stash != null || commit == null || tab.locked
               ? null
               : () => RepoActions(context, tab).reword(commit),
           child: Column(
@@ -614,7 +618,9 @@ class WipPanel extends StatelessWidget {
                   icon: Icons.delete_sweep_outlined,
                   tooltip: 'Discard all changes',
                   color: AppColors.danger,
-                  onPressed: () => actions.discard(unstaged),
+                  onPressed: tab.locked
+                      ? null
+                      : () => actions.discard(unstaged),
                 ),
             ],
           ),
@@ -669,7 +675,7 @@ class WipPanel extends StatelessWidget {
           count: unstaged.length,
           actions: [
             TextButton(
-              onPressed: unstaged.isEmpty
+              onPressed: unstaged.isEmpty || tab.locked
                   ? null
                   : () => tab.stageEntries(unstaged),
               child: const Text('Stage all', style: TextStyle(fontSize: 12)),
@@ -682,7 +688,7 @@ class WipPanel extends StatelessWidget {
           count: staged.length,
           actions: [
             TextButton(
-              onPressed: staged.isEmpty
+              onPressed: staged.isEmpty || tab.locked
                   ? null
                   : () => tab.run('Unstage', tab.repo.unstageAll),
               child: const Text('Unstage all', style: TextStyle(fontSize: 12)),
@@ -722,13 +728,13 @@ class WipPanel extends StatelessWidget {
             icon: Icons.delete_outline,
             tooltip: 'Discard folder',
             color: AppColors.danger,
-            onPressed: () => actions.discard(inside()),
+            onPressed: tab.locked ? null : () => actions.discard(inside()),
           ),
           SmallIconButton(
             icon: Icons.add_circle_outline,
             tooltip: 'Stage folder',
             color: AppColors.success,
-            onPressed: () => tab.stageEntries(inside()),
+            onPressed: tab.locked ? null : () => tab.stageEntries(inside()),
           ),
         ],
         _WipSection.staged => [
@@ -736,7 +742,7 @@ class WipPanel extends StatelessWidget {
             icon: Icons.remove_circle_outline,
             tooltip: 'Unstage folder',
             color: AppColors.warning,
-            onPressed: () => tab.unstageEntries(inside()),
+            onPressed: tab.locked ? null : () => tab.unstageEntries(inside()),
           ),
         ],
         _WipSection.conflicts => const [],
@@ -777,13 +783,20 @@ class WipPanel extends StatelessWidget {
               "Take $current's version",
               takeCurrent,
               icon: Icons.person,
+              enabled: !tab.locked,
             ),
             menuItem(
               "Take $incoming's version",
               takeIncoming,
               icon: Icons.person_outline,
+              enabled: !tab.locked,
             ),
-            menuItem('Mark resolved', markResolved, icon: Icons.check),
+            menuItem(
+              'Mark resolved',
+              markResolved,
+              icon: Icons.check,
+              enabled: !tab.locked,
+            ),
             const PopupMenuDivider(),
             menuItem(
               'Open in external editor',
@@ -801,19 +814,19 @@ class WipPanel extends StatelessWidget {
               icon: Icons.person,
               tooltip: "Take $current's version",
               color: ConflictView.currentColor,
-              onPressed: takeCurrent,
+              onPressed: tab.locked ? null : takeCurrent,
             ),
             SmallIconButton(
               icon: Icons.person_outline,
               tooltip: "Take $incoming's version",
               color: ConflictView.incomingColor,
-              onPressed: takeIncoming,
+              onPressed: tab.locked ? null : takeIncoming,
             ),
             SmallIconButton(
               icon: Icons.check,
               tooltip: 'Mark resolved (stage the file as it is)',
               color: AppColors.success,
-              onPressed: markResolved,
+              onPressed: tab.locked ? null : markResolved,
             ),
             SmallIconButton(
               icon: Icons.open_in_new,
@@ -831,12 +844,18 @@ class WipPanel extends StatelessWidget {
           selected: _isSelected(e, false),
           onTap: () => tab.openWorkingFile(e, staged: false),
           onSecondaryTap: (pos) => showContextMenu(context, pos, [
-            menuItem('Stage', () => tab.stageEntries([e]), icon: Icons.add),
+            menuItem(
+              'Stage',
+              () => tab.stageEntries([e]),
+              icon: Icons.add,
+              enabled: !tab.locked,
+            ),
             menuItem(
               'Discard changes',
               () => actions.discard([e]),
               icon: Icons.delete_outline,
               danger: true,
+              enabled: !tab.locked,
             ),
             menuItem(
               'Open in external editor',
@@ -854,13 +873,13 @@ class WipPanel extends StatelessWidget {
               icon: Icons.delete_outline,
               tooltip: 'Discard',
               color: AppColors.danger,
-              onPressed: () => actions.discard([e]),
+              onPressed: tab.locked ? null : () => actions.discard([e]),
             ),
             SmallIconButton(
               icon: Icons.add_circle_outline,
               tooltip: 'Stage file',
               color: AppColors.success,
-              onPressed: () => tab.stageEntries([e]),
+              onPressed: tab.locked ? null : () => tab.stageEntries([e]),
             ),
           ],
         );
@@ -878,6 +897,7 @@ class WipPanel extends StatelessWidget {
               'Unstage',
               () => tab.unstageEntries([e]),
               icon: Icons.remove,
+              enabled: !tab.locked,
             ),
             menuItem(
               'Copy path',
@@ -890,7 +910,7 @@ class WipPanel extends StatelessWidget {
               icon: Icons.remove_circle_outline,
               tooltip: 'Unstage file',
               color: AppColors.warning,
-              onPressed: () => tab.unstageEntries([e]),
+              onPressed: tab.locked ? null : () => tab.unstageEntries([e]),
             ),
           ],
         );
@@ -997,7 +1017,8 @@ class _CommitComposer extends StatelessWidget {
     final canCommit =
         conflicts == 0 &&
         (stagedCount > 0 || tab.amend || finishes || rebasing) &&
-        tab.busy == null;
+        tab.busy == null &&
+        !tab.locked;
     final label = conflicts > 0
         ? 'Resolve conflicts to commit'
         : rebasing

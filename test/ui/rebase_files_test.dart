@@ -37,12 +37,14 @@ void main() {
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: InteractiveRebaseDialog(
+          body: InteractiveRebaseEditor(
             tab: tab,
             steps: steps,
             branch: 'main',
             baseLabel: 'base',
             hasMerges: false,
+            onStart: (_) {},
+            onCancel: () {},
             onMessageSplit: (s) => messageSplit = s,
           ),
         ),

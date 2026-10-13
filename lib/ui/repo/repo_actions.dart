@@ -9,6 +9,7 @@ import '../dialogs/dialogs.dart';
 import '../dialogs/interactive_rebase_dialog.dart';
 import '../dialogs/work_in_progress.dart';
 import '../widgets/common.dart';
+import '../widgets/common.dart' as common show menuItem;
 import 'repo_tab_controller.dart';
 
 /// Commands that need user interaction (dialogs, confirmations) shared by
@@ -22,6 +23,23 @@ class RepoActions {
   Repository get repo => tab.repo;
 
   String _short(String sha) => sha.length > 7 ? sha.substring(0, 7) : sha;
+
+  /// A menu entry, disabled while the tab is read-only (an interactive
+  /// rebase is being prepared) unless it changes nothing.
+  PopupMenuItem<VoidCallback> menuItem(
+    String label,
+    VoidCallback onTap, {
+    IconData? icon,
+    bool enabled = true,
+    bool danger = false,
+    bool readOnly = false,
+  }) => common.menuItem(
+    label,
+    onTap,
+    icon: icon,
+    enabled: enabled && (readOnly || !tab.locked),
+    danger: danger,
+  );
 
   // ------------------------------------------------------------ branches
 
@@ -411,11 +429,13 @@ class RepoActions {
           label: '${commits.length} SHAs',
         ),
         icon: Icons.tag,
+        readOnly: true,
       ),
       menuItem(
         'Clear selection',
         tab.clearMultiSelection,
         icon: Icons.deselect,
+        readOnly: true,
       ),
     ];
   }
@@ -748,11 +768,13 @@ class RepoActions {
           label: 'SHA ${c.sha.substring(0, 7)}',
         ),
         icon: Icons.tag,
+        readOnly: true,
       ),
       menuItem(
         'Copy commit message',
         () => copyToClipboard(tab.app, c.subject, label: 'the commit message'),
         icon: Icons.notes,
+        readOnly: true,
       ),
     ];
   }
@@ -823,6 +845,7 @@ class RepoActions {
             'Copy branch name',
             () => copyToClipboard(tab.app, ref.name),
             icon: Icons.copy,
+            readOnly: true,
           ),
         ];
       case RefType.remoteBranch:
@@ -858,6 +881,7 @@ class RepoActions {
             'Copy branch name',
             () => copyToClipboard(tab.app, ref.name),
             icon: Icons.copy,
+            readOnly: true,
           ),
         ];
       case RefType.tag:

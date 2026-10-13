@@ -10,11 +10,12 @@ import '../details/details_panel.dart' show FileRow;
 import '../diff/commit_file_preview.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
-import '../widgets/resizable_box.dart';
-import 'dialogs.dart';
+import '../widgets/floating_panel.dart';
 import 'work_in_progress.dart';
 
-/// Opens the interactive rebase editor for `base..HEAD` (null base: root).
+/// Opens the interactive rebase editor for `base..HEAD` (null base: root):
+/// a panel floating over the tab, which is read-only until the rebase is
+/// started or cancelled.
 Future<void> showInteractiveRebase(
   BuildContext context,
   RepoTabController tab,
@@ -23,11 +24,17 @@ Future<void> showInteractiveRebase(
   bool Function(List<RebaseStep> steps)? prepare,
   Set<String> initialSelection = const {},
 }) async {
+  if (tab.rebaseSession.value != null) {
+    tab.app.notify('An interactive rebase is already being prepared');
+    return;
+  }
   List<RebaseStep> steps;
   bool hasMerges;
+  String? head;
   try {
     steps = await tab.repo.rebaseCandidates(base);
     hasMerges = await tab.repo.rangeHasMerges(base);
+    head = await tab.repo.headSha();
   } catch (e) {
     tab.app.notifyError(e);
     return;
@@ -38,46 +45,99 @@ Future<void> showInteractiveRebase(
   }
   // Lets callers preset actions (e.g. squash a selection); false cancels.
   if (prepare != null && !prepare(steps)) return;
-  if (!context.mounted) return;
-  final settings = tab.app.settings;
-  final plan = await showAppDialog<RebasePlan>(
-    context: context,
-    builder: (_) => InteractiveRebaseDialog(
-      tab: tab,
-      steps: steps,
-      branch: tab.currentBranch ?? 'HEAD',
+  tab.openRebase(
+    RebaseSession(
+      base: base,
       baseLabel: baseLabel,
+      branch: tab.currentBranch ?? 'HEAD',
+      head: head,
+      steps: steps,
       hasMerges: hasMerges,
       initialSelection: initialSelection,
+    ),
+  );
+}
+
+/// Runs the prepared rebase with [plan], once uncommitted changes are dealt
+/// with; if that's cancelled, the editor stays open.
+Future<void> startInteractiveRebase(
+  BuildContext context,
+  RepoTabController tab,
+  RebasePlan plan,
+) async {
+  final session = tab.rebaseSession.value;
+  if (session == null) return;
+  session.starting = true;
+  try {
+    if (await tab.repo.headSha() != session.head) {
+      tab.app.notify(
+        '${session.branch} changed since the editor opened: '
+        'open it again to rebase what it has now.',
+        error: true,
+      );
+      tab.closeRebase();
+      return;
+    }
+    if (!context.mounted ||
+        !await resolveWorkInProgress(context, tab, action: 'rebase')) {
+      return;
+    }
+  } finally {
+    session.starting = false;
+  }
+  if (tab.rebaseSession.value != session) return;
+  tab.closeRebase();
+  await tab.run(
+    'Interactive rebase',
+    () => tab.repo.rebaseInteractive(session.base, plan),
+  );
+}
+
+/// The editor of [tab]'s prepared rebase, in a panel floating over the tab.
+class RebasePanel extends StatelessWidget {
+  const RebasePanel({super.key, required this.tab, required this.session});
+  final RepoTabController tab;
+  final RebaseSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = tab.app.settings;
+    void save() => tab.app.save();
+    return FloatingPanel(
       size: Size(settings.rebaseWidth, settings.rebaseHeight),
       onResized: (size) {
         settings
           ..rebaseWidth = size.width
           ..rebaseHeight = size.height;
-        tab.app.save();
+        save();
       },
-      split: settings.rebaseSplit,
-      onSplit: (split) {
-        settings.rebaseSplit = split;
-        tab.app.save();
-      },
-      messageSplit: settings.rebaseMessageSplit,
-      onMessageSplit: (split) {
-        settings.rebaseMessageSplit = split;
-        tab.app.save();
-      },
-    ),
-  );
-  if (plan == null || !context.mounted) return;
-  if (!await resolveWorkInProgress(context, tab, action: 'rebase')) return;
-  await tab.run(
-    'Interactive rebase',
-    () => tab.repo.rebaseInteractive(base, plan),
-  );
+      builder: (context, moveHandle) => InteractiveRebaseEditor(
+        tab: tab,
+        steps: session.steps,
+        branch: session.branch,
+        baseLabel: session.baseLabel,
+        hasMerges: session.hasMerges,
+        initialSelection: session.initialSelection,
+        moveHandle: moveHandle,
+        onStart: (plan) => startInteractiveRebase(context, tab, plan),
+        onCancel: tab.closeRebase,
+        split: settings.rebaseSplit,
+        onSplit: (split) {
+          settings.rebaseSplit = split;
+          save();
+        },
+        messageSplit: settings.rebaseMessageSplit,
+        onMessageSplit: (split) {
+          settings.rebaseMessageSplit = split;
+          save();
+        },
+      ),
+    );
+  }
 }
 
-class InteractiveRebaseDialog extends StatefulWidget {
-  const InteractiveRebaseDialog({
+class InteractiveRebaseEditor extends StatefulWidget {
+  const InteractiveRebaseEditor({
     super.key,
     this.tab,
     required this.steps,
@@ -85,8 +145,9 @@ class InteractiveRebaseDialog extends StatefulWidget {
     required this.baseLabel,
     required this.hasMerges,
     this.initialSelection = const {},
-    this.size = const Size(960, 620),
-    this.onResized,
+    required this.onStart,
+    required this.onCancel,
+    this.moveHandle,
     this.split = 0.6,
     this.onSplit,
     this.messageSplit = 1 / 3,
@@ -106,9 +167,12 @@ class InteractiveRebaseDialog extends StatefulWidget {
   /// oldest of them is highlighted.
   final Set<String> initialSelection;
 
-  /// The size it opens at; dragging its edges resizes it.
-  final Size size;
-  final ValueChanged<Size>? onResized;
+  /// Called with a valid plan to run it.
+  final ValueChanged<RebasePlan> onStart;
+  final VoidCallback onCancel;
+
+  /// Moves the window it's in, by its title.
+  final MoveHandle? moveHandle;
 
   /// The commit list's share of the width; dragging the gap changes it.
   final double split;
@@ -120,11 +184,11 @@ class InteractiveRebaseDialog extends StatefulWidget {
   final ValueChanged<double>? onMessageSplit;
 
   @override
-  State<InteractiveRebaseDialog> createState() =>
-      _InteractiveRebaseDialogState();
+  State<InteractiveRebaseEditor> createState() =>
+      _InteractiveRebaseEditorState();
 }
 
-class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
+class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
   // Displayed newest first like the graph; the plan is built oldest first.
   late final List<RebaseStep> _rows = widget.steps.reversed.toList();
 
@@ -173,6 +237,10 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     } else if (_rows.isNotEmpty) {
       _selectOnly(_rows.first);
     }
+    // Opened over the tab (not a dialog): take the keys from the graph.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _listFocus.requestFocus();
+    });
   }
 
   @override
@@ -395,7 +463,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
       setState(() => _error = 'At least one commit must be kept.');
       return;
     }
-    Navigator.pop(context, plan);
+    widget.onStart(plan);
   }
 
   Future<(Commit, List<FileChange>)> _filesOf(RebaseStep s) =>
@@ -748,108 +816,114 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   @override
   Widget build(BuildContext context) {
     final selStep = _cursor;
-    return Dialog(
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              _start,
-          const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
-        },
-        child: ResizableBox(
-          size: widget.size,
-          minSize: const Size(600, 420),
-          onResized: widget.onResized,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    final move = widget.moveHandle ?? (Widget w) => w;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): _start,
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The title moves the panel.
+            Row(
               children: [
-                Text(
-                  'Interactive rebase: ${widget.branch} onto ${widget.baseLabel}',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Newest on top. Drag or ${altShortcut('↑↓')} to reorder; Shift/$modKey-click '
-                  'to select several. Keys: P pick, R reword, E edit, '
-                  'S squash, F fixup, D drop. Squash/Fixup fold commits into '
-                  'the one below them.',
-                  style: TextStyle(color: AppColors.textDim, fontSize: 12),
-                ),
-                if (widget.hasMerges)
-                  Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text(
-                      'This range contains merge commits; they will be flattened.',
-                      style: TextStyle(color: AppColors.warning, fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 12),
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      // The commit list's share; the gap between the panes
-                      // drags. Each pane keeps room for its controls.
-                      const gap = 14.0;
-                      final total = c.maxWidth - gap;
-                      double fit(double w) => w.clamp(
-                        min(300.0, total / 2),
-                        max(total / 2, total - 220),
-                      );
-                      final width = fit(total * _split);
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(width: width, child: _listPane()),
-                          SizedBox(
-                            key: const ValueKey('rebase-split'),
-                            width: gap,
-                            child: ResizeHandle(
-                              line: false,
-                              onDrag: (dx) => setState(
-                                // From the current split: several moves can
-                                // come in one frame.
-                                () => _split =
-                                    fit(fit(total * _split) + dx) / total,
-                              ),
-                              onEnd: () => widget.onSplit?.call(_split),
-                            ),
-                          ),
-                          Expanded(child: _sidePane(selStep)),
-                        ],
-                      );
-                    },
+                  child: move(
+                    Text(
+                      'Interactive rebase: ${widget.branch} onto ${widget.baseLabel}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: AppColors.danger),
-                    ),
-                  ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _start,
-                      child: const Text('Start rebase'),
-                    ),
-                  ],
+                SmallIconButton(
+                  key: const ValueKey('rebase-close'),
+                  icon: Icons.close,
+                  tooltip: 'Cancel the rebase',
+                  onPressed: widget.onCancel,
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              'Newest on top. Drag or ${altShortcut('↑↓')} to reorder; Shift/$modKey-click '
+              'to select several. Keys: P pick, R reword, E edit, '
+              'S squash, F fixup, D drop. Squash/Fixup fold commits into '
+              'the one below them.',
+              style: TextStyle(color: AppColors.textDim, fontSize: 12),
+            ),
+            if (widget.hasMerges)
+              Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'This range contains merge commits; they will be flattened.',
+                  style: TextStyle(color: AppColors.warning, fontSize: 12),
+                ),
+              ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  // The commit list's share; the gap between the panes
+                  // drags. Each pane keeps room for its controls.
+                  const gap = 14.0;
+                  final total = c.maxWidth - gap;
+                  double fit(double w) => w.clamp(
+                    min(300.0, total / 2),
+                    max(total / 2, total - 220),
+                  );
+                  final width = fit(total * _split);
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(width: width, child: _listPane()),
+                      SizedBox(
+                        key: const ValueKey('rebase-split'),
+                        width: gap,
+                        child: ResizeHandle(
+                          line: false,
+                          onDrag: (dx) => setState(
+                            // From the current split: several moves can
+                            // come in one frame.
+                            () =>
+                                _split = fit(fit(total * _split) + dx) / total,
+                          ),
+                          onEnd: () => widget.onSplit?.call(_split),
+                        ),
+                      ),
+                      Expanded(child: _sidePane(selStep)),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(_error!, style: TextStyle(color: AppColors.danger)),
+              ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _start,
+                  child: const Text('Start rebase'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

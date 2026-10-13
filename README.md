@@ -87,7 +87,8 @@ folders. You can pick another on the home tab.
 - **Diffs**: unified, split or full file (images too), with optional
   syntax highlighting.
 - **Interactive rebase** without a text editor, with keyboard shortcuts
-  and actions on several commits at once.
+  and actions on several commits at once. The editor floats over the
+  repository, which you can still browse while you plan.
 - **Conflicts** resolved in the app: current, incoming or both for each
   conflict, or a whole side per file, for merges, rebases, cherry-picks
   and stashes.

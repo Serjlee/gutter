@@ -6,7 +6,6 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/git/rebase_plan.dart';
 import 'package:gutter/ui/dialogs/interactive_rebase_dialog.dart';
-import 'package:gutter/ui/widgets/resizable_box.dart';
 
 void main() {
   // Oldest first, as the dialog receives them; shown newest (e) on top.
@@ -35,11 +34,13 @@ void main() {
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: InteractiveRebaseDialog(
+          body: InteractiveRebaseEditor(
             steps: steps,
             branch: 'main',
             baseLabel: 'base',
             hasMerges: false,
+            onStart: (_) {},
+            onCancel: () {},
             initialSelection: initialSelection,
           ),
         ),
@@ -186,70 +187,29 @@ void main() {
     );
   });
 
-  testWidgets('the edges resize it, the gap between the panes moves', (
-    tester,
-  ) async {
+  testWidgets('the gap between the panes moves', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    Size? resized;
     double? split;
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: InteractiveRebaseDialog(
+          body: InteractiveRebaseEditor(
             steps: steps,
             branch: 'main',
             baseLabel: 'base',
             hasMerges: false,
-            onResized: (s) => resized = s,
+            onStart: (_) {},
+            onCancel: () {},
             onSplit: (s) => split = s,
           ),
         ),
       ),
     );
     await tester.pump();
-    final box = find.byType(ResizableBox);
-    expect(tester.getSize(box), const Size(960, 620));
 
-    // Centered: the dragged edge follows the pointer, the other one mirrors.
-    final right = tester.getRect(box).right;
-    await tester.drag(
-      find.byKey(const ValueKey('resize-right')),
-      const Offset(50, 0),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).width, closeTo(1060, 1));
-    expect(tester.getRect(box).right, closeTo(right + 50, 1));
-    expect(resized!.width, closeTo(1060, 1));
-
-    // A corner moves both; never past the window, nor below the minimum.
-    await tester.drag(
-      find.byKey(const ValueKey('resize-corner')),
-      const Offset(-400, -400),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box), const Size(600, 420));
-    await tester.drag(
-      find.byKey(const ValueKey('resize-bottom')),
-      const Offset(0, 800),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).height, 900 - 48); // the dialog's insets
-    expect(resized, tester.getSize(box));
-    await tester.drag(
-      find.byKey(const ValueKey('resize-right')),
-      const Offset(400, 0),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).width, 1200 - 80);
-
-    // The gap between the commits and the message.
     double listWidth() =>
         tester.getSize(find.byKey(const ValueKey('rebase-list-pane'))).width;
     final before = listWidth();
@@ -275,12 +235,10 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
-    final pane = tester.getSize(find.byKey(const ValueKey('rebase-split')));
-    expect(pane.width, 14);
     expect(
-      tester.getRect(find.byType(ResizableBox)).right -
+      tester.getRect(find.byType(InteractiveRebaseEditor)).right -
           tester.getRect(find.byKey(const ValueKey('rebase-split'))).right,
-      closeTo(220 + 20, 1), // the side pane and the dialog's padding
+      closeTo(220 + 20, 1), // the side pane and the editor's padding
     );
   });
 

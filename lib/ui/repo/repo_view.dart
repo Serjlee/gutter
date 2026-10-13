@@ -125,6 +125,8 @@ class _RepoViewState extends State<RepoView> {
               child: Column(
                 children: [
                   RepoToolbar(tab: tab, searchFocus: searchFocus),
+                  if (tab.rebaseSession.value case final session?)
+                    RebaseEditorBanner(tab: tab, session: session),
                   if (tab.operation != RepoOperation.none ||
                       tab.stashConflict != null ||
                       tab.status.conflicted.isNotEmpty)
@@ -211,7 +213,8 @@ class RepoToolbar extends StatelessWidget {
     final branch = tab.currentBranch;
     final head = tab.headRef;
     final busy = tab.busy;
-    final idle = busy == null;
+    // Read-only while an interactive rebase is prepared (Fetch still works).
+    final idle = busy == null && !tab.locked;
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -679,6 +682,59 @@ class _SearchBoxState extends State<_SearchBox> {
 /// Shown while a merge / rebase / cherry-pick / revert is in progress, or
 /// while a stash applied with conflicts: what's being combined, how many
 /// files still have conflicts, and the ways forward.
+/// Says the tab is read-only while an interactive rebase is prepared.
+class RebaseEditorBanner extends StatelessWidget {
+  const RebaseEditorBanner({
+    super.key,
+    required this.tab,
+    required this.session,
+  });
+  final RepoTabController tab;
+  final RebaseSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('rebase-editor-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      color: AppColors.accent.withValues(alpha: 0.14),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note, size: 18, color: AppColors.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text:
+                        'Preparing an interactive rebase of ${session.branch} '
+                        'onto ${session.baseLabel}. ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const TextSpan(
+                    text:
+                        'Nothing can be changed here until it is started or '
+                        'cancelled; browsing commits and branches still works.',
+                  ),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('banner-cancel-rebase'),
+            onPressed: tab.closeRebase,
+            child: const Text('Cancel rebase'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class OperationBanner extends StatelessWidget {
   const OperationBanner({super.key, required this.tab});
   final RepoTabController tab;
