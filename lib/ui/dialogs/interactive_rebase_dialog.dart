@@ -811,58 +811,73 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
               height: 36,
               child: Row(
                 children: [
-                  Icon(Icons.edit_note, size: 18, color: AppColors.accent),
-                  const SizedBox(width: 8),
-                  // The title shrinks last.
-                  Flexible(
-                    flex: 3,
-                    child: Text(
-                      'Interactive rebase: ${_session.branch} onto '
-                      '${_session.baseLabel}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Tooltip(
-                    message:
-                        'Newest on top. Drag or ${altShortcut('↑↓')} to '
-                        'reorder; Shift/$modKey-click to select several.\n'
-                        'Keys: P pick, R reword, E edit, S squash, F fixup, '
-                        'D drop.\nSquash/Fixup fold commits into the one '
-                        'below them. $modKey+Enter starts.',
-                    child: Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: AppColors.textFaint,
-                    ),
-                  ),
-                  if (_session.hasMerges) ...[
-                    const SizedBox(width: 10),
-                    Tooltip(
-                      message:
-                          'This range contains merge commits; they will be '
-                          'flattened.',
-                      child: Text(
-                        'Merges will be flattened',
-                        style: TextStyle(
-                          color: AppColors.warning,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 12),
+                  // What it is and what's wrong take what's left; the
+                  // actions stay at the right edge.
                   Expanded(
-                    child: Text(
-                      _error ?? '',
-                      key: const ValueKey('rebase-error'),
-                      textAlign: TextAlign.right,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.danger, fontSize: 12.5),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.edit_note,
+                          size: 18,
+                          color: AppColors.accent,
+                        ),
+                        const SizedBox(width: 8),
+                        // The title shrinks last.
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            'Interactive rebase: ${_session.branch} onto '
+                            '${_session.baseLabel}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message:
+                              'Newest on top. Drag or ${altShortcut('↑↓')} to '
+                              'reorder; Shift/$modKey-click to select several.\n'
+                              'Keys: P pick, R reword, E edit, S squash, F fixup, '
+                              'D drop.\nSquash/Fixup fold commits into the one '
+                              'below them. $modKey+Enter starts.',
+                          child: Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: AppColors.textFaint,
+                          ),
+                        ),
+                        if (_session.hasMerges) ...[
+                          const SizedBox(width: 10),
+                          Tooltip(
+                            message:
+                                'This range contains merge commits; they will be '
+                                'flattened.',
+                            child: Text(
+                              'Merges will be flattened',
+                              style: TextStyle(
+                                color: AppColors.warning,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _error ?? '',
+                            key: const ValueKey('rebase-error'),
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),

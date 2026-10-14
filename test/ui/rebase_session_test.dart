@@ -74,6 +74,11 @@ void main() {
     await open();
     expect(panel, findsOneWidget);
     expect(banner, findsOneWidget);
+    // Its actions sit at the right edge, as on the folded bar.
+    expect(
+      tester.getRect(find.byKey(const ValueKey('rebase-collapse'))).right,
+      closeTo(tester.getRect(panel).right - 12, 1),
+    );
     expect(tab.locked, isTrue);
     // The graph behind it still shows (and can be browsed); changes can't
     // be made.
