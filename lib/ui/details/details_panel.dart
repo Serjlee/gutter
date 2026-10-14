@@ -349,7 +349,7 @@ class CommitDetailsPanel extends StatelessWidget {
         if (tab.detailsLoading) const LinearProgressIndicator(minHeight: 2),
         if (commit != null)
           for (final f in files)
-            FileRow(
+            _FileRow(
               kind: f.kind,
               path: f.path,
               oldPath: f.oldPath,
@@ -409,10 +409,8 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// A changed file: its kind and path; actions show on hover.
-class FileRow extends StatefulWidget {
-  const FileRow({
-    super.key,
+class _FileRow extends StatefulWidget {
+  const _FileRow({
     required this.kind,
     required this.path,
     this.oldPath,
@@ -441,10 +439,10 @@ class FileRow extends StatefulWidget {
   final String? note;
 
   @override
-  State<FileRow> createState() => _FileRowState();
+  State<_FileRow> createState() => _FileRowState();
 }
 
-class _FileRowState extends State<FileRow> {
+class _FileRowState extends State<_FileRow> {
   bool _hover = false;
 
   @override
@@ -766,7 +764,7 @@ class WipPanel extends StatelessWidget {
         void takeCurrent() => takeConflictSide(tab, e.path, current: true);
         void takeIncoming() => takeConflictSide(tab, e.path, current: false);
         void markResolved() => markConflictResolved(context, tab, e.path);
-        return FileRow(
+        return _FileRow(
           depth: depth,
           nameOnly: nameOnly,
           kind: ChangeKind.conflicted,
@@ -836,7 +834,7 @@ class WipPanel extends StatelessWidget {
           ],
         );
       case _WipSection.unstaged:
-        return FileRow(
+        return _FileRow(
           depth: depth,
           nameOnly: nameOnly,
           kind: e.worktree ?? ChangeKind.modified,
@@ -884,7 +882,7 @@ class WipPanel extends StatelessWidget {
           ],
         );
       case _WipSection.staged:
-        return FileRow(
+        return _FileRow(
           depth: depth,
           nameOnly: nameOnly,
           kind: e.index ?? ChangeKind.modified,

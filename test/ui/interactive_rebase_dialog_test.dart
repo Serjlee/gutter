@@ -122,7 +122,9 @@ void main() {
     expect(step('c').action, RebaseAction.drop);
     expect(step('d').action, RebaseAction.pick);
     // Keys still work after clicking a toolbar button, even when the
-    // message box had focus before.
+    // message box (a reword's) had focus before.
+    await tester.tap(find.byKey(const ValueKey('rebase-action-reword')));
+    await tester.pump();
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('rebase-action-drop')));
@@ -185,7 +187,7 @@ void main() {
     expect(find.text('3 selected'), findsOneWidget);
     // The highlighted row is b, the head of the squash group, so the
     // message box shows the combined message.
-    expect(find.text('New message'), findsOneWidget);
+    expect(find.text('Message of the squashed commits'), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'b\n\nc\n\nd',
@@ -218,6 +220,8 @@ void main() {
       ),
     );
     await tester.pump();
+    // The gap is there with a message to write beside the commits.
+    await key(tester, LogicalKeyboardKey.keyR);
 
     double listWidth() =>
         tester.getSize(find.byKey(const ValueKey('rebase-list-pane'))).width;
@@ -251,14 +255,33 @@ void main() {
     );
   });
 
+  testWidgets('a message box shows only for a message to write', (
+    tester,
+  ) async {
+    await pumpDialog(tester);
+    final box = find.byKey(const ValueKey('rebase-message'));
+    // Picked: just the commits.
+    expect(box, findsNothing);
+    // Reworded: its new message.
+    await key(tester, LogicalKeyboardKey.keyR);
+    expect(box, findsOneWidget);
+    expect(find.text('New message'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.keyP);
+    expect(box, findsNothing);
+    // Squashed into the one below: that one's combined message.
+    await key(tester, LogicalKeyboardKey.keyS);
+    expect(box, findsNothing); // the squashed commit has none of its own
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    expect(box, findsOneWidget);
+    expect(find.text('Message of the squashed commits'), findsOneWidget);
+  });
+
   test('the size and split are saved', () {
     final s = Settings()
       ..rebaseDockHeight = 500
-      ..rebaseSplit = 0.45
-      ..rebaseMessageSplit = 0.5;
-    (double, double, double) saved(Settings s) =>
-        (s.rebaseDockHeight, s.rebaseSplit, s.rebaseMessageSplit);
-    expect(saved(Settings.fromJson(s.toJson())), (500, 0.45, 0.5));
-    expect(saved(Settings.fromJson({})), (380, 0.6, 1 / 3));
+      ..rebaseSplit = 0.45;
+    (double, double) saved(Settings s) => (s.rebaseDockHeight, s.rebaseSplit);
+    expect(saved(Settings.fromJson(s.toJson())), (500, 0.45));
+    expect(saved(Settings.fromJson({})), (380, 0.6));
   });
 }

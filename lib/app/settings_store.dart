@@ -35,9 +35,6 @@ class Settings {
 
   /// The share of its width the commit list takes.
   double rebaseSplit = 0.6;
-
-  /// The share of the height the message takes above the changed files.
-  double rebaseMessageSplit = 1 / 3;
   bool diffSplit = false;
 
   /// Wrap long lines in the unified diff (the split one always wraps).
@@ -79,7 +76,6 @@ class Settings {
     'columnWidths': columnWidths,
     'rebaseDockHeight': rebaseDockHeight,
     'rebaseSplit': rebaseSplit,
-    'rebaseMessageSplit': rebaseMessageSplit,
     'diffSplit': diffSplit,
     'diffWrap': diffWrap,
     'fileTree': fileTree,
@@ -116,7 +112,6 @@ class Settings {
       ..detailsWidth = num_(j['detailsWidth'], 380)
       ..rebaseDockHeight = num_(j['rebaseDockHeight'], 380)
       ..rebaseSplit = num_(j['rebaseSplit'], 0.6)
-      ..rebaseMessageSplit = num_(j['rebaseMessageSplit'], 1 / 3)
       ..diffSplit = j['diffSplit'] == true
       ..diffWrap = j['diffWrap'] == true
       ..fileTree = j['fileTree'] == true

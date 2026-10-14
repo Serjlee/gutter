@@ -133,23 +133,7 @@ class _RepoViewState extends State<RepoView> {
                       tab.stashConflict != null ||
                       tab.status.conflicted.isNotEmpty)
                     OperationBanner(tab: tab),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, outer) => Column(
-                        children: [
-                          Expanded(child: _main(tab, settings)),
-                          // A rebase being prepared: its editor, under the
-                          // graph it's checked against.
-                          if (tab.rebaseSession.value case final session?)
-                            RebaseDock(
-                              tab: tab,
-                              session: session,
-                              maxHeight: max(0, outer.maxHeight - 160),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  Expanded(child: _main(tab, settings)),
                   OutputPanel(tab: tab),
                 ],
               ),
@@ -160,7 +144,8 @@ class _RepoViewState extends State<RepoView> {
     );
   }
 
-  /// Sidebar, graph (or diff) and details, side by side.
+  /// Sidebar, graph (or diff) and details, side by side; a rebase being
+  /// prepared has its editor under the sidebar and the graph.
   Widget _main(RepoTabController tab, Settings settings) {
     return LayoutBuilder(
       builder: (context, c) {
@@ -173,28 +158,50 @@ class _RepoViewState extends State<RepoView> {
           maxSide * 0.8,
         ).clamp(minSide, maxSide);
         final detailsW = settings.detailsWidth.clamp(minDetails, maxSide);
+        final session = tab.rebaseSession.value;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (settings.sidebarOpen) ...[
-              SizedBox(
-                width: sideW,
-                child: Sidebar(tab: tab),
-              ),
-              ResizeHandle(
-                onDrag: (dx) => setState(
-                  () => settings.sidebarWidth = (sideW + dx).clamp(
-                    minSide,
-                    maxSide,
-                  ),
-                ),
-                onEnd: tab.app.save,
-              ),
-            ],
             Expanded(
-              child: tab.diffTarget != null
-                  ? DiffView(tab: tab)
-                  : CommitGraphView(tab: tab),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (settings.sidebarOpen) ...[
+                          SizedBox(
+                            width: sideW,
+                            child: Sidebar(tab: tab),
+                          ),
+                          ResizeHandle(
+                            onDrag: (dx) => setState(
+                              () => settings.sidebarWidth = (sideW + dx).clamp(
+                                minSide,
+                                maxSide,
+                              ),
+                            ),
+                            onEnd: tab.app.save,
+                          ),
+                        ],
+                        Expanded(
+                          child: tab.diffTarget != null
+                              ? DiffView(tab: tab)
+                              : CommitGraphView(tab: tab),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (session != null)
+                    RebaseDock(
+                      tab: tab,
+                      session: session,
+                      // The graph keeps some room.
+                      maxHeight: max(0, c.maxHeight - 160),
+                    ),
+                ],
+              ),
             ),
             if (tab.detailsOpen) ...[
               ResizeHandle(

@@ -5,10 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
-import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
-import '../details/details_panel.dart' show FileRow;
-import '../diff/commit_file_preview.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'work_in_progress.dart';
@@ -175,11 +172,6 @@ class RebaseDock extends StatelessWidget {
                 settings.rebaseSplit = split;
                 save();
               },
-              messageSplit: settings.rebaseMessageSplit,
-              onMessageSplit: (split) {
-                settings.rebaseMessageSplit = split;
-                save();
-              },
             ),
           ),
         ),
@@ -254,8 +246,6 @@ class InteractiveRebaseEditor extends StatefulWidget {
     this.onCollapse,
     this.split = 0.6,
     this.onSplit,
-    this.messageSplit = 1 / 3,
-    this.onMessageSplit,
   });
 
   /// Lists the highlighted commit's files (and previews them) when given.
@@ -275,11 +265,6 @@ class InteractiveRebaseEditor extends StatefulWidget {
   /// The commit list's share of the width; dragging the gap changes it.
   final double split;
   final ValueChanged<double>? onSplit;
-
-  /// The message's share of the height above the files; dragging the gap
-  /// between them changes it.
-  final double messageSplit;
-  final ValueChanged<double>? onMessageSplit;
 
   @override
   State<InteractiveRebaseEditor> createState() =>
@@ -315,10 +300,6 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
   final _message = TextEditingController();
   final _listFocus = FocusNode(debugLabel: 'rebase-list');
   late double _split = widget.split;
-  late double _messageSplit = widget.messageSplit;
-
-  /// Each commit's files, loaded when it's first highlighted.
-  Map<String, Future<(Commit, List<FileChange>)>> get _files => _session.files;
 
   static final _keys = {
     LogicalKeyboardKey.keyP: RebaseAction.pick,
@@ -584,76 +565,11 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
     widget.onStart(_session.plan);
   }
 
-  Future<(Commit, List<FileChange>)> _filesOf(RebaseStep s) =>
-      _files[s.sha] ??= () async {
-        final repo = widget.tab!.repo;
-        final commit = await repo.commitOf(s.sha);
-        return (commit, await repo.commitFiles(commit));
-      }();
-
-  Future<void> _preview(Commit commit, FileChange file) async {
-    await showCommitFilePreview(context, widget.tab!, commit, file);
-    _listFocus.requestFocus(); // keep keys working
-  }
-
   static Color actionColor(RebaseAction a) => rebaseActionColor(a);
 
   static String _keyOf(RebaseAction a) => a.label[0];
 
   // ------------------------------------------------------------------ UI
-
-  /// The highlighted commit's changed files; a click shows one's diff.
-  Widget _fileList(RebaseStep s) {
-    return Container(
-      key: const ValueKey('rebase-files-pane'),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      // Keeps the previous commit's files until the next one's are read,
-      // so moving through the list doesn't flicker.
-      child: FutureBuilder<(Commit, List<FileChange>)>(
-        future: _filesOf(s),
-        builder: (context, snap) {
-          final loading = snap.connectionState != ConnectionState.done;
-          final data = snap.data;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SectionHeader(title: 'Changed files', count: data?.$2.length),
-              if (loading) const LinearProgressIndicator(minHeight: 2),
-              Expanded(
-                child: snap.hasError && !loading
-                    ? Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Text(
-                          '${snap.error}',
-                          style: TextStyle(color: AppColors.danger),
-                        ),
-                      )
-                    : ListView(
-                        key: const ValueKey('rebase-files'),
-                        children: [
-                          if (data != null)
-                            for (final f in data.$2)
-                              FileRow(
-                                key: ValueKey('rebase-file-${f.path}'),
-                                kind: f.kind,
-                                path: f.path,
-                                oldPath: f.oldPath,
-                                selected: false,
-                                onTap: () => _preview(data.$1, f),
-                              ),
-                        ],
-                      ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
   Widget _toolbar() {
     final n = _selection.length;
@@ -849,79 +765,31 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
     );
   }
 
-  /// The highlighted commit's message and files.
-  Widget _sidePane(RebaseStep? selStep) {
-    return selStep == null
-        ? Center(
-            child: Text(
-              'Select a commit to see or edit its message',
-              style: TextStyle(color: AppColors.textDim),
-            ),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _editsMessage(selStep)
-                    ? 'New message'
-                    : 'Message (choose Reword to edit)',
-                style: TextStyle(fontSize: 12, color: AppColors.textDim),
-              ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: _messageAndFiles(
-                  selStep,
-                  TextField(
-                    key: ObjectKey(selStep),
-                    controller: _message,
-                    readOnly: !_editsMessage(selStep),
-                    maxLines: null,
-                    expands: true,
-                    textAlignVertical: TextAlignVertical.top,
-                    style: monoStyle(size: 12.5),
-                    onChanged: (_) => _commitEditor(),
-                  ),
-                ),
-              ),
-            ],
-          );
-  }
-
-  /// The [message] editor above the commit's files, split by a gap that
-  /// drags.
-  Widget _messageAndFiles(RebaseStep s, Widget message) {
-    if (widget.tab == null) return message;
-    return LayoutBuilder(
-      builder: (context, c) {
-        // Each part keeps room for a few lines.
-        const gap = 12.0;
-        final total = c.maxHeight - gap;
-        double fit(double h) =>
-            h.clamp(min(80.0, total / 2), max(total / 2, total - 90));
-        final height = fit(total * _messageSplit);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: height, child: message),
-            SizedBox(
-              key: const ValueKey('rebase-files-split'),
-              height: gap,
-              child: ResizeHandle(
-                vertical: true,
-                line: false,
-                onDrag: (dy) => _update(
-                  // From the current split: several moves can come in one
-                  // frame.
-                  () => _messageSplit =
-                      fit(fit(total * _messageSplit) + dy) / total,
-                ),
-                onEnd: () => widget.onMessageSplit?.call(_messageSplit),
-              ),
-            ),
-            Expanded(child: _fileList(s)),
-          ],
-        );
-      },
+  /// The new message of [s] (reworded, or heading squashed commits).
+  Widget _messagePane(RebaseStep s) {
+    return Column(
+      key: const ValueKey('rebase-message'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          s.action == RebaseAction.reword
+              ? 'New message'
+              : 'Message of the squashed commits',
+          style: TextStyle(fontSize: 12, color: AppColors.textDim),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: TextField(
+            key: ObjectKey(s),
+            controller: _message,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            style: monoStyle(size: 12.5),
+            onChanged: (_) => _commitEditor(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -945,7 +813,9 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
                 children: [
                   Icon(Icons.edit_note, size: 18, color: AppColors.accent),
                   const SizedBox(width: 8),
+                  // The title shrinks last.
                   Flexible(
+                    flex: 3,
                     child: Text(
                       'Interactive rebase: ${_session.branch} onto '
                       '${_session.baseLabel}',
@@ -1019,40 +889,44 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  // The commit list's share; the gap between the panes
-                  // drags. Each pane keeps room for its controls.
-                  const gap = 14.0;
-                  final total = c.maxWidth - gap;
-                  double fit(double w) => w.clamp(
-                    min(300.0, total / 2),
-                    max(total / 2, total - 220),
-                  );
-                  final width = fit(total * _split);
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: width, child: _listPane()),
-                      SizedBox(
-                        key: const ValueKey('rebase-split'),
-                        width: gap,
-                        child: ResizeHandle(
-                          line: false,
-                          onDrag: (dx) => _update(
-                            // From the current split: several moves can
-                            // come in one frame.
-                            () =>
-                                _split = fit(fit(total * _split) + dx) / total,
-                          ),
-                          onEnd: () => widget.onSplit?.call(_split),
-                        ),
-                      ),
-                      Expanded(child: _sidePane(selStep)),
-                    ],
-                  );
-                },
-              ),
+              // The commits; beside them, a message to write when the
+              // highlighted one gets a new one.
+              child: selStep == null || !_editsMessage(selStep)
+                  ? _listPane()
+                  : LayoutBuilder(
+                      builder: (context, c) {
+                        // The commit list's share; the gap between the panes
+                        // drags. Each pane keeps room for its controls.
+                        const gap = 14.0;
+                        final total = c.maxWidth - gap;
+                        double fit(double w) => w.clamp(
+                          min(300.0, total / 2),
+                          max(total / 2, total - 220),
+                        );
+                        final width = fit(total * _split);
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(width: width, child: _listPane()),
+                            SizedBox(
+                              key: const ValueKey('rebase-split'),
+                              width: gap,
+                              child: ResizeHandle(
+                                line: false,
+                                onDrag: (dx) => _update(
+                                  // From the current split: several moves can
+                                  // come in one frame.
+                                  () => _split =
+                                      fit(fit(total * _split) + dx) / total,
+                                ),
+                                onEnd: () => widget.onSplit?.call(_split),
+                              ),
+                            ),
+                            Expanded(child: _messagePane(selStep)),
+                          ],
+                        );
+                      },
+                    ),
             ),
           ],
         ),
