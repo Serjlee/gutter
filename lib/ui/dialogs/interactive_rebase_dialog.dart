@@ -115,7 +115,7 @@ void _startSession(
 }
 
 /// [tab]'s prepared rebase, docked under the graph: the editor, resized
-/// from its top edge, or folded into a one-line summary.
+/// from its top edge, or collapsed into a one-line summary.
 class RebaseDock extends StatelessWidget {
   const RebaseDock({
     super.key,
@@ -227,7 +227,7 @@ class RebaseDock extends StatelessWidget {
           const SizedBox(width: 4),
           SmallIconButton(
             icon: Icons.expand_less,
-            tooltip: 'Show the editor',
+            tooltip: 'Show panel',
             onPressed: () => tab.setRebaseCollapsed(false),
           ),
         ],
@@ -259,7 +259,7 @@ class InteractiveRebaseEditor extends StatefulWidget {
   final ValueChanged<RebasePlan> onStart;
   final VoidCallback onCancel;
 
-  /// Folds the editor into a summary, when it can be.
+  /// Collapses the panel into a summary, when it can be.
   final VoidCallback? onCollapse;
 
   /// The commit list's share of the width; dragging the gap changes it.
@@ -895,7 +895,7 @@ class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
                     SmallIconButton(
                       key: const ValueKey('rebase-collapse'),
                       icon: Icons.expand_more,
-                      tooltip: 'Fold into a summary',
+                      tooltip: 'Collapse panel',
                       onPressed: widget.onCollapse,
                     ),
                   ],
