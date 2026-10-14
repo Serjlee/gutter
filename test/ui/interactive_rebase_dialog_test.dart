@@ -6,7 +6,7 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/git/rebase_plan.dart';
 import 'package:gutter/ui/dialogs/interactive_rebase_dialog.dart';
-import 'package:gutter/ui/widgets/resizable_box.dart';
+import 'package:gutter/ui/repo/repo_tab_controller.dart';
 
 void main() {
   // Oldest first, as the dialog receives them; shown newest (e) on top.
@@ -35,12 +35,18 @@ void main() {
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: InteractiveRebaseDialog(
-            steps: steps,
-            branch: 'main',
-            baseLabel: 'base',
-            hasMerges: false,
-            initialSelection: initialSelection,
+          body: InteractiveRebaseEditor(
+            session: RebaseSession(
+              base: null,
+              baseLabel: 'base',
+              branch: 'main',
+              head: null,
+              steps: steps,
+              hasMerges: false,
+              initialSelection: initialSelection,
+            ),
+            onStart: (_) {},
+            onCancel: () {},
           ),
         ),
       ),
@@ -116,7 +122,9 @@ void main() {
     expect(step('c').action, RebaseAction.drop);
     expect(step('d').action, RebaseAction.pick);
     // Keys still work after clicking a toolbar button, even when the
-    // message box had focus before.
+    // message box (a reword's) had focus before.
+    await tester.tap(find.byKey(const ValueKey('rebase-action-reword')));
+    await tester.pump();
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('rebase-action-drop')));
@@ -179,77 +187,42 @@ void main() {
     expect(find.text('3 selected'), findsOneWidget);
     // The highlighted row is b, the head of the squash group, so the
     // message box shows the combined message.
-    expect(find.text('New message'), findsOneWidget);
+    expect(find.text('Message of the squashed commits'), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'b\n\nc\n\nd',
     );
   });
 
-  testWidgets('the edges resize it, the gap between the panes moves', (
-    tester,
-  ) async {
+  testWidgets('the gap between the panes moves', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    Size? resized;
     double? split;
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: InteractiveRebaseDialog(
-            steps: steps,
-            branch: 'main',
-            baseLabel: 'base',
-            hasMerges: false,
-            onResized: (s) => resized = s,
+          body: InteractiveRebaseEditor(
+            session: RebaseSession(
+              base: null,
+              baseLabel: 'base',
+              branch: 'main',
+              head: null,
+              steps: steps,
+              hasMerges: false,
+            ),
+            onStart: (_) {},
+            onCancel: () {},
             onSplit: (s) => split = s,
           ),
         ),
       ),
     );
     await tester.pump();
-    final box = find.byType(ResizableBox);
-    expect(tester.getSize(box), const Size(960, 620));
+    // The gap is there with a message to write beside the commits.
+    await key(tester, LogicalKeyboardKey.keyR);
 
-    // Centered: the dragged edge follows the pointer, the other one mirrors.
-    final right = tester.getRect(box).right;
-    await tester.drag(
-      find.byKey(const ValueKey('resize-right')),
-      const Offset(50, 0),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).width, closeTo(1060, 1));
-    expect(tester.getRect(box).right, closeTo(right + 50, 1));
-    expect(resized!.width, closeTo(1060, 1));
-
-    // A corner moves both; never past the window, nor below the minimum.
-    await tester.drag(
-      find.byKey(const ValueKey('resize-corner')),
-      const Offset(-400, -400),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box), const Size(600, 420));
-    await tester.drag(
-      find.byKey(const ValueKey('resize-bottom')),
-      const Offset(0, 800),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).height, 900 - 48); // the dialog's insets
-    expect(resized, tester.getSize(box));
-    await tester.drag(
-      find.byKey(const ValueKey('resize-right')),
-      const Offset(400, 0),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    expect(tester.getSize(box).width, 1200 - 80);
-
-    // The gap between the commits and the message.
     double listWidth() =>
         tester.getSize(find.byKey(const ValueKey('rebase-list-pane'))).width;
     final before = listWidth();
@@ -275,24 +248,40 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
-    final pane = tester.getSize(find.byKey(const ValueKey('rebase-split')));
-    expect(pane.width, 14);
     expect(
-      tester.getRect(find.byType(ResizableBox)).right -
+      tester.getRect(find.byType(InteractiveRebaseEditor)).right -
           tester.getRect(find.byKey(const ValueKey('rebase-split'))).right,
-      closeTo(220 + 20, 1), // the side pane and the dialog's padding
+      closeTo(220 + 12, 1), // the side pane and the editor's padding
     );
+  });
+
+  testWidgets('a message box shows only for a message to write', (
+    tester,
+  ) async {
+    await pumpDialog(tester);
+    final box = find.byKey(const ValueKey('rebase-message'));
+    // Picked: just the commits.
+    expect(box, findsNothing);
+    // Reworded: its new message.
+    await key(tester, LogicalKeyboardKey.keyR);
+    expect(box, findsOneWidget);
+    expect(find.text('New message'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.keyP);
+    expect(box, findsNothing);
+    // Squashed into the one below: that one's combined message.
+    await key(tester, LogicalKeyboardKey.keyS);
+    expect(box, findsNothing); // the squashed commit has none of its own
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    expect(box, findsOneWidget);
+    expect(find.text('Message of the squashed commits'), findsOneWidget);
   });
 
   test('the size and split are saved', () {
     final s = Settings()
-      ..rebaseWidth = 1100
-      ..rebaseHeight = 700
-      ..rebaseSplit = 0.45
-      ..rebaseMessageSplit = 0.5;
-    (double, double, double, double) saved(Settings s) =>
-        (s.rebaseWidth, s.rebaseHeight, s.rebaseSplit, s.rebaseMessageSplit);
-    expect(saved(Settings.fromJson(s.toJson())), (1100, 700, 0.45, 0.5));
-    expect(saved(Settings.fromJson({})), (960, 620, 0.6, 1 / 3));
+      ..rebaseDockHeight = 500
+      ..rebaseSplit = 0.45;
+    (double, double) saved(Settings s) => (s.rebaseDockHeight, s.rebaseSplit);
+    expect(saved(Settings.fromJson(s.toJson())), (500, 0.45));
+    expect(saved(Settings.fromJson({})), (380, 0.6));
   });
 }

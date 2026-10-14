@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
@@ -20,6 +21,7 @@ import '../../git/models.dart';
 import '../../git/parsers/diff_parser.dart';
 import '../../git/parsers/log_parser.dart';
 import '../../git/patch_builder.dart';
+import '../../git/rebase_plan.dart';
 import '../../git/repository.dart';
 import '../../graph/graph_layout.dart';
 import '../widgets/common.dart' show relativeTime;
@@ -136,23 +138,108 @@ class WorkingFileTarget extends DiffTarget {
   String get path => entry.path;
 }
 
-/// What a diff view shows: the tab's open file, or one opened elsewhere.
-abstract interface class DiffSource implements Listenable {
-  DiffTarget? get diffTarget;
-  FileDiff? get diff;
-  bool get diffLoading;
-  String? get diffError;
-  void closeDiff();
+/// An interactive rebase being prepared: its editor is docked under the
+/// graph, and the tab is read-only until the rebase is started or
+/// cancelled. Notifies when the plan changes (the graph shows it).
+class RebaseSession extends ChangeNotifier {
+  RebaseSession({
+    required this.base,
+    required this.baseLabel,
+    required this.branch,
+    required this.head,
+    required this.steps,
+    required this.hasMerges,
+    this.initialSelection = const {},
+  });
 
-  /// The file as it is after the change, for the preview.
-  Future<Uint8List?> previewBytes();
+  /// What the commits are rebased onto (null: the root).
+  final String? base;
+  final String baseLabel;
+  final String branch;
 
-  /// The whole file before and after the change shown in [target].
-  Future<(String?, String?)> diffFileTexts(DiffTarget target);
+  /// HEAD when the editor opened: the plan is for the commits up to it.
+  final String? head;
+
+  /// Oldest first.
+  final List<RebaseStep> steps;
+  final bool hasMerges;
+  final Set<String> initialSelection;
+
+  /// Starting: what's in the way (uncommitted changes) may be dealt with.
+  bool starting = false;
+
+  // The editor's state, kept while it's collapsed or the tab isn't shown.
+
+  /// The steps newest first, as the editor shows them (and reorders them).
+  late final List<RebaseStep> rows = steps.reversed.toList();
+
+  /// Rows the actions apply to.
+  final selection = <RebaseStep>{};
+
+  /// The highlighted row (its message is shown), and where a Shift range
+  /// starts.
+  RebaseStep? cursor;
+  RebaseStep? anchor;
+
+  /// Why the plan can't run, shown until it changes.
+  String? error;
+
+  /// The editor is folded into a one-line summary.
+  bool collapsed = false;
+
+  /// The editor has set its initial selection.
+  bool shown = false;
+
+  late final _bySha = {for (final s in steps) s.sha: s};
+
+  /// The step of commit [sha], if it's being rebased.
+  RebaseStep? stepOf(String sha) => _bySha[sha];
+
+  /// Tells who shows the plan that it changed.
+  void changed() => notifyListeners();
+
+  /// The plan as arranged (oldest first).
+  RebasePlan get plan => RebasePlan(rows.reversed.toList());
+
+  /// Why [plan] can't run, or null.
+  String? check() {
+    try {
+      plan.validate();
+    } on RebasePlanError catch (e) {
+      return e.message;
+    }
+    if (rows.every((s) => s.action == RebaseAction.drop)) {
+      return 'At least one commit must be kept.';
+    }
+    return null;
+  }
+
+  /// "9 commits: 2 squashed, 1 dropped".
+  String get summary {
+    int count(bool Function(RebaseAction) test) =>
+        rows.where((s) => test(s.action)).length;
+    final changes = [
+      for (final (n, what) in [
+        (count((a) => a.folds), 'squashed'),
+        (count((a) => a == RebaseAction.reword), 'reworded'),
+        (count((a) => a == RebaseAction.edit), 'to edit'),
+        (count((a) => a == RebaseAction.drop), 'dropped'),
+      ])
+        if (n > 0) '$n $what',
+    ];
+    final moved = !listEquals(
+      [for (final r in rows) r.sha],
+      [for (final s in steps.reversed) s.sha],
+    );
+    final all = [...changes, if (moved) 'reordered'];
+    final n = rows.length;
+    return '$n commit${n == 1 ? '' : 's'}'
+        '${all.isEmpty ? ', unchanged' : ': ${all.join(', ')}'}';
+  }
 }
 
 /// State of one repository tab.
-class RepoTabController extends ChangeNotifier implements DiffSource {
+class RepoTabController extends ChangeNotifier {
   RepoTabController(this.repo, this.app);
 
   final Repository repo;
@@ -243,13 +330,34 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
   Commit? detailsCommit;
   bool detailsLoading = false;
 
-  @override
+  /// The interactive rebase being prepared, if any: the tab can't be changed
+  /// meanwhile (browsing and fetching still work).
+  final rebaseSession = ValueNotifier<RebaseSession?>(null);
+
+  /// Changes are refused: an interactive rebase is being prepared.
+  bool get locked => rebaseSession.value?.starting == false;
+
+  void openRebase(RebaseSession session) {
+    rebaseSession.value = session;
+    _notify();
+  }
+
+  void closeRebase() {
+    rebaseSession.value = null;
+    _notify();
+  }
+
+  /// Folds the rebase editor into a summary, or shows it again.
+  void setRebaseCollapsed(bool collapsed) {
+    final session = rebaseSession.value;
+    if (session == null) return;
+    session.collapsed = collapsed;
+    _notify();
+  }
+
   DiffTarget? diffTarget;
-  @override
   FileDiff? diff;
-  @override
   bool diffLoading = false;
-  @override
   String? diffError;
 
   // Commit composer.
@@ -780,6 +888,7 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
   @override
   void dispose() {
     _disposed = true;
+    rebaseSession.dispose();
     _pollTimer?.cancel();
     _fetchTimer?.cancel();
     _watchDebounce?.cancel();
@@ -978,7 +1087,6 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
     }
   }
 
-  @override
   void closeDiff({bool notify = true}) {
     diffTarget = null;
     diff = null;
@@ -1031,12 +1139,9 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
     }
   }
 
-  @override
-  Future<Uint8List?> previewBytes() => targetBytes(diffTarget);
-
-  /// File bytes for the preview of [t]: at the commit, or the working tree
-  /// file.
-  Future<Uint8List?> targetBytes(DiffTarget? t) async {
+  /// File bytes for the preview: at the commit, or the working tree file.
+  Future<Uint8List?> previewBytes() async {
+    final t = diffTarget;
     switch (t) {
       case CommitFileTarget(:final commit, :final file):
         if (file.kind == ChangeKind.deleted) {
@@ -1061,7 +1166,6 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
   /// for a side that doesn't exist or can't be read as text): the diff is
   /// highlighted from them, so every line gets the colors it has in its
   /// file.
-  @override
   Future<(String?, String?)> diffFileTexts(DiffTarget target) async {
     Future<String?> text(String? rev, String? path) async {
       if (path == null) return null;
@@ -1195,6 +1299,14 @@ class RepoTabController extends ChangeNotifier implements DiffSource {
     String? success,
     bool Function(Object error)? onError,
   }) async {
+    if (locked) {
+      app.notify(
+        'Start or cancel the interactive rebase first: '
+        '${rebaseSession.value!.branch} is read-only meanwhile.',
+        warning: true,
+      );
+      return false;
+    }
     busy = label;
     _notify();
     var ok = true;
