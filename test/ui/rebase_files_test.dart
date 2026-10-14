@@ -39,10 +39,14 @@ void main() {
         home: Scaffold(
           body: InteractiveRebaseEditor(
             tab: tab,
-            steps: steps,
-            branch: 'main',
-            baseLabel: 'base',
-            hasMerges: false,
+            session: RebaseSession(
+              base: null,
+              baseLabel: 'base',
+              branch: 'main',
+              head: null,
+              steps: steps,
+              hasMerges: false,
+            ),
             onStart: (_) {},
             onCancel: () {},
             onMessageSplit: (s) => messageSplit = s,

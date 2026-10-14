@@ -6,6 +6,7 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/git/rebase_plan.dart';
 import 'package:gutter/ui/dialogs/interactive_rebase_dialog.dart';
+import 'package:gutter/ui/repo/repo_tab_controller.dart';
 
 void main() {
   // Oldest first, as the dialog receives them; shown newest (e) on top.
@@ -35,13 +36,17 @@ void main() {
         theme: buildTheme(),
         home: Scaffold(
           body: InteractiveRebaseEditor(
-            steps: steps,
-            branch: 'main',
-            baseLabel: 'base',
-            hasMerges: false,
+            session: RebaseSession(
+              base: null,
+              baseLabel: 'base',
+              branch: 'main',
+              head: null,
+              steps: steps,
+              hasMerges: false,
+              initialSelection: initialSelection,
+            ),
             onStart: (_) {},
             onCancel: () {},
-            initialSelection: initialSelection,
           ),
         ),
       ),
@@ -197,10 +202,14 @@ void main() {
         theme: buildTheme(),
         home: Scaffold(
           body: InteractiveRebaseEditor(
-            steps: steps,
-            branch: 'main',
-            baseLabel: 'base',
-            hasMerges: false,
+            session: RebaseSession(
+              base: null,
+              baseLabel: 'base',
+              branch: 'main',
+              head: null,
+              steps: steps,
+              hasMerges: false,
+            ),
             onStart: (_) {},
             onCancel: () {},
             onSplit: (s) => split = s,
@@ -238,19 +247,18 @@ void main() {
     expect(
       tester.getRect(find.byType(InteractiveRebaseEditor)).right -
           tester.getRect(find.byKey(const ValueKey('rebase-split'))).right,
-      closeTo(220 + 20, 1), // the side pane and the editor's padding
+      closeTo(220 + 12, 1), // the side pane and the editor's padding
     );
   });
 
   test('the size and split are saved', () {
     final s = Settings()
-      ..rebaseWidth = 1100
-      ..rebaseHeight = 700
+      ..rebaseDockHeight = 500
       ..rebaseSplit = 0.45
       ..rebaseMessageSplit = 0.5;
-    (double, double, double, double) saved(Settings s) =>
-        (s.rebaseWidth, s.rebaseHeight, s.rebaseSplit, s.rebaseMessageSplit);
-    expect(saved(Settings.fromJson(s.toJson())), (1100, 700, 0.45, 0.5));
-    expect(saved(Settings.fromJson({})), (960, 620, 0.6, 1 / 3));
+    (double, double, double) saved(Settings s) =>
+        (s.rebaseDockHeight, s.rebaseSplit, s.rebaseMessageSplit);
+    expect(saved(Settings.fromJson(s.toJson())), (500, 0.45, 0.5));
+    expect(saved(Settings.fromJson({})), (380, 0.6, 1 / 3));
   });
 }

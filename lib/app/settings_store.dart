@@ -30,9 +30,8 @@ class Settings {
   double detailsWidth = 380;
   Map<String, double> columnWidths = {};
 
-  /// The interactive rebase editor's size, as last resized.
-  double rebaseWidth = 960;
-  double rebaseHeight = 620;
+  /// The interactive rebase editor's height, docked under the graph.
+  double rebaseDockHeight = 380;
 
   /// The share of its width the commit list takes.
   double rebaseSplit = 0.6;
@@ -78,8 +77,7 @@ class Settings {
     'sidebarOpen': sidebarOpen,
     'detailsWidth': detailsWidth,
     'columnWidths': columnWidths,
-    'rebaseWidth': rebaseWidth,
-    'rebaseHeight': rebaseHeight,
+    'rebaseDockHeight': rebaseDockHeight,
     'rebaseSplit': rebaseSplit,
     'rebaseMessageSplit': rebaseMessageSplit,
     'diffSplit': diffSplit,
@@ -116,8 +114,7 @@ class Settings {
       ..sidebarWidth = num_(j['sidebarWidth'], 240)
       ..sidebarOpen = j['sidebarOpen'] != false
       ..detailsWidth = num_(j['detailsWidth'], 380)
-      ..rebaseWidth = num_(j['rebaseWidth'], 960)
-      ..rebaseHeight = num_(j['rebaseHeight'], 620)
+      ..rebaseDockHeight = num_(j['rebaseDockHeight'], 380)
       ..rebaseSplit = num_(j['rebaseSplit'], 0.6)
       ..rebaseMessageSplit = num_(j['rebaseMessageSplit'], 1 / 3)
       ..diffSplit = j['diffSplit'] == true

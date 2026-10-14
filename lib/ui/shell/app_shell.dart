@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../dialogs/dialogs.dart';
-import '../dialogs/interactive_rebase_dialog.dart';
 import '../dialogs/update_dialog.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
@@ -219,34 +218,9 @@ class _AppShellState extends State<AppShell> {
                 TabStrip(app: app),
                 const Divider(),
                 Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: tab == null
-                            ? HomeTab(app: app)
-                            : RepoView(key: ObjectKey(tab), tab: tab),
-                      ),
-                      // Rebase editors float over their tab; another tab's
-                      // keeps its state, hidden.
-                      for (final t in app.tabs)
-                        Positioned.fill(
-                          key: ObjectKey(t),
-                          child: ValueListenableBuilder(
-                            valueListenable: t.rebaseSession,
-                            builder: (context, session, _) => session == null
-                                ? const SizedBox.shrink()
-                                : Offstage(
-                                    offstage: t != tab,
-                                    child: RebasePanel(
-                                      key: ObjectKey(session),
-                                      tab: t,
-                                      session: session,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  child: tab == null
+                      ? HomeTab(app: app)
+                      : RepoView(key: ObjectKey(tab), tab: tab),
                 ),
               ],
             );

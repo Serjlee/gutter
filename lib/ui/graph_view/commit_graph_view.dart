@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
 import '../../git/models.dart';
+import '../../git/rebase_plan.dart';
 import '../../graph/graph_painter.dart';
+import '../dialogs/interactive_rebase_dialog.dart' show rebaseActionColor;
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
@@ -254,16 +256,26 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                                           ),
                                   );
                                 }
-                                return _GraphRow(
-                                  key: ValueKey(
-                                    graph.commitAt(row)?.sha ?? wipSha,
-                                  ),
+                                final key = ValueKey(
+                                  graph.commitAt(row)?.sha ?? wipSha,
+                                );
+                                Widget build() => _GraphRow(
                                   tab: tab,
                                   row: row,
                                   cols: fitted,
                                   actions: actions,
                                   onFocus: () => _focus.requestFocus(),
                                 );
+                                // A rebase being planned: rows show its
+                                // changes as they're made.
+                                final session = tab.rebaseSession.value;
+                                return session == null
+                                    ? KeyedSubtree(key: key, child: build())
+                                    : ListenableBuilder(
+                                        key: key,
+                                        listenable: session,
+                                        builder: (_, _) => build(),
+                                      );
                               },
                             ),
                           ),
@@ -381,9 +393,29 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// What a rebase being planned does to a commit ("squash", "drop"), or
+/// "onto" on the one it goes onto.
+class _RebaseBadge extends StatelessWidget {
+  const _RebaseBadge(this.label, this.color);
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 11, color: color)),
+    );
+  }
+}
+
 class _GraphRow extends StatefulWidget {
   const _GraphRow({
-    super.key,
     required this.tab,
     required this.row,
     required this.cols,
@@ -419,6 +451,11 @@ class _GraphRowState extends State<_GraphRow> {
 
     final isCommit = commit != null && stash == null;
     final headRow = isCommit && sha == tab.headSha;
+    // A rebase being planned: its commits, and the one they go onto.
+    final session = tab.rebaseSession.value;
+    final step = isCommit ? session?.stepOf(sha) : null;
+    final rebaseBase = isCommit && session != null && sha == session.base;
+    final dropped = step?.action == RebaseAction.drop;
     final trunkRow =
         isCommit && (tab.refsBySha[sha] ?? const <GitRef>[]).any(isTrunkRef);
 
@@ -434,6 +471,8 @@ class _GraphRowState extends State<_GraphRow> {
       bg = AppColors.hover;
     } else if (isHit) {
       bg = AppColors.warning.withValues(alpha: 0.10);
+    } else if (step != null) {
+      bg = AppColors.accent.withValues(alpha: 0.07);
     }
 
     final refs = commit == null || stash != null
@@ -538,16 +577,37 @@ class _GraphRowState extends State<_GraphRow> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: commit == null
                       ? _WipSummary(tab: tab)
-                      : Text(
-                          commit.subject,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: stash != null ? dimColor : msgColor,
-                            fontStyle: stash != null ? FontStyle.italic : null,
-                            fontWeight: headRow ? FontWeight.w700 : null,
-                          ),
+                      : Row(
+                          children: [
+                            if (step != null &&
+                                step.action != RebaseAction.pick)
+                              _RebaseBadge(
+                                step.action.label.toLowerCase(),
+                                rebaseActionColor(step.action),
+                              ),
+                            if (rebaseBase)
+                              _RebaseBadge('onto', AppColors.accent),
+                            Expanded(
+                              child: Text(
+                                commit.subject,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: stash != null || dropped
+                                      ? dimColor
+                                      : msgColor,
+                                  fontStyle: stash != null
+                                      ? FontStyle.italic
+                                      : null,
+                                  fontWeight: headRow ? FontWeight.w700 : null,
+                                  decoration: dropped
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ),

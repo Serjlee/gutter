@@ -5,11 +5,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/settings_store.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/repository.dart';
 import '../details/details_panel.dart';
 import '../dialogs/dialogs.dart';
+import '../dialogs/interactive_rebase_dialog.dart';
 import '../diff/diff_view.dart';
 import '../graph_view/commit_graph_view.dart';
 import '../sidebar/sidebar.dart';
@@ -133,56 +135,19 @@ class _RepoViewState extends State<RepoView> {
                     OperationBanner(tab: tab),
                   Expanded(
                     child: LayoutBuilder(
-                      builder: (context, c) {
-                        // Keep side panels from squeezing the graph out.
-                        final maxSide = max(200.0, c.maxWidth * 0.3);
-                        final minSide = min(120.0, maxSide);
-                        final minDetails = min(220.0, maxSide);
-                        final sideW = min(
-                          settings.sidebarWidth,
-                          maxSide * 0.8,
-                        ).clamp(minSide, maxSide);
-                        final detailsW = settings.detailsWidth.clamp(
-                          minDetails,
-                          maxSide,
-                        );
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (settings.sidebarOpen) ...[
-                              SizedBox(
-                                width: sideW,
-                                child: Sidebar(tab: tab),
-                              ),
-                              ResizeHandle(
-                                onDrag: (dx) => setState(
-                                  () => settings.sidebarWidth = (sideW + dx)
-                                      .clamp(minSide, maxSide),
-                                ),
-                                onEnd: tab.app.save,
-                              ),
-                            ],
-                            Expanded(
-                              child: tab.diffTarget != null
-                                  ? DiffView(tab: tab)
-                                  : CommitGraphView(tab: tab),
+                      builder: (context, outer) => Column(
+                        children: [
+                          Expanded(child: _main(tab, settings)),
+                          // A rebase being prepared: its editor, under the
+                          // graph it's checked against.
+                          if (tab.rebaseSession.value case final session?)
+                            RebaseDock(
+                              tab: tab,
+                              session: session,
+                              maxHeight: max(0, outer.maxHeight - 160),
                             ),
-                            if (tab.detailsOpen) ...[
-                              ResizeHandle(
-                                onDrag: (dx) => setState(
-                                  () => settings.detailsWidth = (detailsW - dx)
-                                      .clamp(220.0, maxSide),
-                                ),
-                                onEnd: tab.app.save,
-                              ),
-                              SizedBox(
-                                width: detailsW,
-                                child: DetailsPanel(tab: tab),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
+                        ],
+                      ),
                     ),
                   ),
                   OutputPanel(tab: tab),
@@ -192,6 +157,63 @@ class _RepoViewState extends State<RepoView> {
           },
         ),
       ),
+    );
+  }
+
+  /// Sidebar, graph (or diff) and details, side by side.
+  Widget _main(RepoTabController tab, Settings settings) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Keep side panels from squeezing the graph out.
+        final maxSide = max(200.0, c.maxWidth * 0.3);
+        final minSide = min(120.0, maxSide);
+        final minDetails = min(220.0, maxSide);
+        final sideW = min(
+          settings.sidebarWidth,
+          maxSide * 0.8,
+        ).clamp(minSide, maxSide);
+        final detailsW = settings.detailsWidth.clamp(minDetails, maxSide);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (settings.sidebarOpen) ...[
+              SizedBox(
+                width: sideW,
+                child: Sidebar(tab: tab),
+              ),
+              ResizeHandle(
+                onDrag: (dx) => setState(
+                  () => settings.sidebarWidth = (sideW + dx).clamp(
+                    minSide,
+                    maxSide,
+                  ),
+                ),
+                onEnd: tab.app.save,
+              ),
+            ],
+            Expanded(
+              child: tab.diffTarget != null
+                  ? DiffView(tab: tab)
+                  : CommitGraphView(tab: tab),
+            ),
+            if (tab.detailsOpen) ...[
+              ResizeHandle(
+                onDrag: (dx) => setState(
+                  () => settings.detailsWidth = (detailsW - dx).clamp(
+                    220.0,
+                    maxSide,
+                  ),
+                ),
+                onEnd: tab.app.save,
+              ),
+              SizedBox(
+                width: detailsW,
+                child: DetailsPanel(tab: tab),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 

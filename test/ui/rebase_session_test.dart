@@ -8,13 +8,12 @@ import 'package:gutter/git/rebase_plan.dart';
 import 'package:gutter/ui/dialogs/interactive_rebase_dialog.dart';
 import 'package:gutter/ui/shell/app_shell.dart';
 import 'package:gutter/ui/widgets/common.dart';
-import 'package:gutter/ui/widgets/floating_panel.dart';
 
 import '../support/temp_repo.dart';
 
 void main() {
-  testWidgets('the rebase editor floats over a read-only tab until started '
-      'or cancelled', (tester) async {
+  testWidgets('the rebase editor is docked under a read-only tab until '
+      'started or cancelled', (tester) async {
     late TempRepo t;
     late String base;
     final app = AppController(null, Settings());
@@ -64,7 +63,8 @@ void main() {
       await tester.pump();
     }
 
-    final panel = find.byType(FloatingPanel);
+    final panel = find.byKey(const ValueKey('rebase-dock'));
+    final summary = find.byKey(const ValueKey('rebase-summary'));
     final banner = find.byKey(const ValueKey('rebase-editor-banner'));
     VoidCallback? pull() => tester
         .widget<ToolbarButton>(find.widgetWithText(ToolbarButton, 'Pull'))
@@ -89,6 +89,23 @@ void main() {
     final three = tab.rebaseSession.value!.steps.last;
     expect(three.subject, 'three');
     expect(three.action, RebaseAction.drop);
+
+    // The graph shows the plan: what happens to each commit, and the base.
+    await tester.pump();
+    expect(find.text('drop'), findsOneWidget);
+    expect(find.text('onto'), findsOneWidget);
+
+    // Folded into a summary, and back.
+    await tester.tap(find.byKey(const ValueKey('rebase-collapse')));
+    await tester.pump();
+    expect(panel, findsNothing);
+    expect(summary, findsOneWidget);
+    expect(find.textContaining('2 commits: 1 dropped'), findsOneWidget);
+    expect(find.text('drop'), findsOneWidget); // still in the graph
+    await tester.tap(find.byKey(const ValueKey('rebase-expand')));
+    await tester.pump();
+    expect(panel, findsOneWidget);
+    expect(find.text('Drop'), findsWidgets); // as it was
 
     // Another tab (home) hides it; coming back, it's as it was.
     app.activate(-1);
