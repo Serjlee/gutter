@@ -580,6 +580,25 @@ class Repository {
         : RemoteCheckout.diverged;
   });
 
+  /// How many commits [of] has that [base] doesn't (`base..of`).
+  Future<int> countAhead(String base, String of) async =>
+      int.parse((await _out(['rev-list', '--count', '$base..$of'])).trim());
+
+  /// Points the current branch (and the working tree) at [sha], like a
+  /// hard reset, but stashes uncommitted changes (untracked files too) as
+  /// [stashMessage] first. Returns whether anything was stashed.
+  Future<bool> resetHardStashingWork(
+    String sha, {
+    required String stashMessage,
+  }) => _mutate(() async {
+    final dirty = (await _out(['status', '--porcelain'])).trim().isNotEmpty;
+    if (dirty) {
+      await _run(['stash', 'push', '--include-untracked', '-m', stashMessage]);
+    }
+    await _run(['reset', '--hard', sha]);
+    return dirty;
+  });
+
   Future<bool> _isAncestor(String ancestor, String of) async {
     final res = await _run([
       'merge-base',
