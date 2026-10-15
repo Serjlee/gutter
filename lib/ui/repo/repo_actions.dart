@@ -56,9 +56,7 @@ class RepoActions {
         case RemoteCheckout.fastForwarded:
           tab.app.notify('Updated $local to ${ref.name}');
         case RemoteCheckout.diverged:
-          tab.app.notify(
-            '$local and ${ref.name} have diverged: pull to merge or rebase',
-          );
+          await _offerResetToRemote(local, ref);
         case RemoteCheckout.ahead:
           tab.app.notify('$local is ahead of ${ref.name}');
         case RemoteCheckout.created || RemoteCheckout.upToDate || null:
@@ -68,6 +66,46 @@ class RepoActions {
       await tab.run('Checkout', () => repo.checkout(ref.name));
     } else {
       await checkoutDetached(ref.sha);
+    }
+  }
+
+  /// [local] (now checked out) and [remote] have diverged, say after a
+  /// force push: offers to reset [local] to [remote], stashing uncommitted
+  /// changes first. Kept, it can still be pulled (merged or rebased).
+  Future<void> _offerResetToRemote(String local, GitRef remote) async {
+    int? mine, theirs;
+    try {
+      mine = await repo.countAhead(remote.sha, local);
+      theirs = await repo.countAhead(local, remote.sha);
+    } catch (_) {}
+    if (!context.mounted) return;
+    String commits(int? n) =>
+        n == null ? 'commits' : '$n commit${n == 1 ? '' : 's'}';
+    final reset = await confirm(
+      context,
+      title: '$local and ${remote.name} have diverged',
+      message:
+          '$local has ${commits(mine)} that ${remote.name} doesn\'t, and '
+          '${remote.name} has ${commits(theirs)} that $local doesn\'t.\n\n'
+          'Reset $local to ${remote.name}?',
+      confirmLabel: 'Reset to ${remote.name}',
+      cancelLabel: 'Keep $local',
+      danger: true,
+    );
+    if (!reset) return;
+    var stashed = false;
+    final ok = await tab.run(
+      'Reset',
+      () async => stashed = await repo.resetHardStashingWork(
+        remote.sha,
+        stashMessage: 'Before resetting $local to ${remote.name}',
+      ),
+    );
+    if (ok) {
+      tab.app.notify(
+        'Reset $local to ${remote.name}'
+        '${stashed ? '; your uncommitted changes are in the stash' : ''}',
+      );
     }
   }
 

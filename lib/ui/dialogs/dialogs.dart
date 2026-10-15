@@ -45,6 +45,7 @@ Future<bool> confirm(
   required String title,
   required String message,
   String confirmLabel = 'OK',
+  String cancelLabel = 'Cancel',
   bool danger = false,
 }) async {
   final r = await showAppDialog<bool>(
@@ -58,7 +59,7 @@ Future<bool> confirm(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Cancel'),
+          child: Text(cancelLabel),
         ),
         FilledButton(
           autofocus: true,

@@ -453,6 +453,31 @@ void main() {
     expect((branch(), head()), ('fresh', a));
   });
 
+  test('a hard reset that stashes uncommitted work first', () async {
+    final a = t.commit('a', {'a.txt': 'a\n'});
+    final b = t.commit('b', {'a.txt': 'b\n'});
+    t.git(['checkout', '-q', '-b', 'side', a]);
+    final c = t.commit('c', {'c.txt': 'c\n'});
+    expect(await repo.countAhead(b, 'side'), 1); // c
+    expect(await repo.countAhead('side', b), 1); // b
+
+    // Changed, staged and untracked files: all stashed, then reset.
+    t.write('c.txt', 'changed\n');
+    t.write('new.txt', 'new\n');
+    t.git(['add', 'c.txt']);
+    expect(await repo.resetHardStashingWork(b, stashMessage: 'saved'), isTrue);
+    expect(t.git(['rev-parse', 'HEAD']).trim(), b);
+    expect(t.git(['branch', '--show-current']).trim(), 'side');
+    expect(t.git(['status', '--porcelain']).trim(), isEmpty);
+    expect(t.git(['stash', 'list']), contains('saved'));
+    expect(t.git(['show', '--name-only', 'stash@{0}^3']), contains('new.txt'));
+
+    // Nothing to stash: just the reset.
+    expect(await repo.resetHardStashingWork(c, stashMessage: 'x'), isFalse);
+    expect(t.git(['rev-parse', 'HEAD']).trim(), c);
+    expect(t.git(['stash', 'list']).trim().split('\n'), hasLength(1));
+  });
+
   test('remotes: fetch, checkout remote branch, push, pull', () async {
     t.commit('init', {'a.txt': 'a\n'});
     final remoteDir = await Directory.systemTemp.createTemp('gutter_remote_');
