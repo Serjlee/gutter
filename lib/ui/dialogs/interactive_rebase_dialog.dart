@@ -1,20 +1,18 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
-import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
-import '../details/details_panel.dart' show FileRow;
-import '../diff/commit_file_preview.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
-import '../widgets/resizable_box.dart';
-import 'dialogs.dart';
 import 'work_in_progress.dart';
 
-/// Opens the interactive rebase editor for `base..HEAD` (null base: root).
+/// Opens the interactive rebase editor for `base..HEAD` (null base: root),
+/// docked under the graph: the tab is read-only until the rebase is started
+/// or cancelled.
 Future<void> showInteractiveRebase(
   BuildContext context,
   RepoTabController tab,
@@ -23,11 +21,17 @@ Future<void> showInteractiveRebase(
   bool Function(List<RebaseStep> steps)? prepare,
   Set<String> initialSelection = const {},
 }) async {
+  if (tab.rebaseSession.value != null) {
+    tab.app.notify('An interactive rebase is already being prepared');
+    return;
+  }
   List<RebaseStep> steps;
   bool hasMerges;
+  String? head;
   try {
     steps = await tab.repo.rebaseCandidates(base);
     hasMerges = await tab.repo.rangeHasMerges(base);
+    head = await tab.repo.headSha();
   } catch (e) {
     tab.app.notifyError(e);
     return;
@@ -38,113 +42,264 @@ Future<void> showInteractiveRebase(
   }
   // Lets callers preset actions (e.g. squash a selection); false cancels.
   if (prepare != null && !prepare(steps)) return;
-  if (!context.mounted) return;
-  final settings = tab.app.settings;
-  final plan = await showAppDialog<RebasePlan>(
-    context: context,
-    builder: (_) => InteractiveRebaseDialog(
-      tab: tab,
-      steps: steps,
-      branch: tab.currentBranch ?? 'HEAD',
+  tab.openRebase(
+    RebaseSession(
+      base: base,
       baseLabel: baseLabel,
+      branch: tab.currentBranch ?? 'HEAD',
+      head: head,
+      steps: steps,
       hasMerges: hasMerges,
       initialSelection: initialSelection,
-      size: Size(settings.rebaseWidth, settings.rebaseHeight),
-      onResized: (size) {
-        settings
-          ..rebaseWidth = size.width
-          ..rebaseHeight = size.height;
-        tab.app.save();
-      },
-      split: settings.rebaseSplit,
-      onSplit: (split) {
-        settings.rebaseSplit = split;
-        tab.app.save();
-      },
-      messageSplit: settings.rebaseMessageSplit,
-      onMessageSplit: (split) {
-        settings.rebaseMessageSplit = split;
-        tab.app.save();
-      },
     ),
-  );
-  if (plan == null || !context.mounted) return;
-  if (!await resolveWorkInProgress(context, tab, action: 'rebase')) return;
-  await tab.run(
-    'Interactive rebase',
-    () => tab.repo.rebaseInteractive(base, plan),
   );
 }
 
-class InteractiveRebaseDialog extends StatefulWidget {
-  const InteractiveRebaseDialog({
+/// Runs the prepared rebase with [plan], once uncommitted changes are dealt
+/// with; if that's cancelled, the editor stays open.
+Future<void> startInteractiveRebase(
+  BuildContext context,
+  RepoTabController tab,
+  RebasePlan plan,
+) async {
+  final session = tab.rebaseSession.value;
+  if (session == null) return;
+  session.starting = true;
+  try {
+    if (await tab.repo.headSha() != session.head) {
+      tab.app.notify(
+        '${session.branch} changed since the editor opened: '
+        'open it again to rebase what it has now.',
+        error: true,
+      );
+      tab.closeRebase();
+      return;
+    }
+    if (!context.mounted ||
+        !await resolveWorkInProgress(context, tab, action: 'rebase')) {
+      return;
+    }
+  } finally {
+    session.starting = false;
+  }
+  if (tab.rebaseSession.value != session) return;
+  tab.closeRebase();
+  await tab.run(
+    'Interactive rebase',
+    () => tab.repo.rebaseInteractive(session.base, plan),
+  );
+}
+
+/// The color a rebase action is shown in (the editor, the graph).
+Color rebaseActionColor(RebaseAction a) => switch (a) {
+  RebaseAction.pick => AppColors.text,
+  RebaseAction.reword => AppColors.accent,
+  RebaseAction.edit => AppColors.warning,
+  RebaseAction.squash || RebaseAction.fixup => AppColors.squash,
+  RebaseAction.drop => AppColors.danger,
+};
+
+/// Starts [session]'s plan if it's valid; otherwise shows why in the editor.
+void _startSession(
+  BuildContext context,
+  RepoTabController tab,
+  RebaseSession session,
+) {
+  final error = session.check();
+  if (error != null) {
+    session.error = error;
+    tab.setRebaseCollapsed(false);
+    return;
+  }
+  unawaited(startInteractiveRebase(context, tab, session.plan));
+}
+
+/// [tab]'s prepared rebase, docked under the graph: the editor, resized
+/// from its top edge, or collapsed into a one-line summary.
+class RebaseDock extends StatelessWidget {
+  const RebaseDock({
+    super.key,
+    required this.tab,
+    required this.session,
+    required this.maxHeight,
+  });
+  final RepoTabController tab;
+  final RebaseSession session;
+
+  /// The most it can take (the graph keeps the rest).
+  final double maxHeight;
+
+  static const minHeight = 220.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = tab.app.settings;
+    void save() => tab.app.save();
+    if (session.collapsed) return _summary(context);
+    final low = min(minHeight, maxHeight);
+    final height = settings.rebaseDockHeight.clamp(low, maxHeight).toDouble();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ResizeHandle(
+          key: const ValueKey('rebase-dock-resize'),
+          vertical: true,
+          onDrag: (dy) {
+            // From the current height, not this build's: several moves can
+            // come in one frame.
+            final now = settings.rebaseDockHeight.clamp(low, maxHeight);
+            settings.rebaseDockHeight = (now - dy)
+                .clamp(low, maxHeight)
+                .toDouble();
+            tab.setRebaseCollapsed(false);
+          },
+          onEnd: save,
+        ),
+        SizedBox(
+          key: const ValueKey('rebase-dock'),
+          height: height,
+          child: Material(
+            color: AppColors.panel,
+            child: InteractiveRebaseEditor(
+              tab: tab,
+              session: session,
+              onStart: (_) => _startSession(context, tab, session),
+              onCancel: tab.closeRebase,
+              onCollapse: () => tab.setRebaseCollapsed(true),
+              split: settings.rebaseSplit,
+              onSplit: (split) {
+                settings.rebaseSplit = split;
+                save();
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// One line: what the plan does, and its actions.
+  Widget _summary(BuildContext context) {
+    return Container(
+      key: const ValueKey('rebase-summary'),
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note, size: 18, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text:
+                        'Interactive rebase: ${session.branch} onto '
+                        '${session.baseLabel}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: '  ${session.summary}',
+                    style: TextStyle(color: AppColors.textDim),
+                  ),
+                ],
+              ),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('rebase-expand'),
+            onPressed: () => tab.setRebaseCollapsed(false),
+            child: const Text('Edit plan'),
+          ),
+          TextButton(onPressed: tab.closeRebase, child: const Text('Cancel')),
+          const SizedBox(width: 6),
+          FilledButton(
+            onPressed: () => _startSession(context, tab, session),
+            child: const Text('Start rebase'),
+          ),
+          const SizedBox(width: 4),
+          SmallIconButton(
+            icon: Icons.expand_less,
+            tooltip: 'Show panel',
+            onPressed: () => tab.setRebaseCollapsed(false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class InteractiveRebaseEditor extends StatefulWidget {
+  const InteractiveRebaseEditor({
     super.key,
     this.tab,
-    required this.steps,
-    required this.branch,
-    required this.baseLabel,
-    required this.hasMerges,
-    this.initialSelection = const {},
-    this.size = const Size(960, 620),
-    this.onResized,
+    required this.session,
+    required this.onStart,
+    required this.onCancel,
+    this.onCollapse,
     this.split = 0.6,
     this.onSplit,
-    this.messageSplit = 1 / 3,
-    this.onMessageSplit,
   });
 
   /// Lists the highlighted commit's files (and previews them) when given.
   final RepoTabController? tab;
 
-  /// Oldest first.
-  final List<RebaseStep> steps;
-  final String branch;
-  final String baseLabel;
-  final bool hasMerges;
+  /// The rebase being prepared, which also keeps the editor's state (the
+  /// editor is built again when shown again).
+  final RebaseSession session;
 
-  /// Shas selected when the dialog opens (default: the newest commit); the
-  /// oldest of them is highlighted.
-  final Set<String> initialSelection;
+  /// Called with a valid plan to run it.
+  final ValueChanged<RebasePlan> onStart;
+  final VoidCallback onCancel;
 
-  /// The size it opens at; dragging its edges resizes it.
-  final Size size;
-  final ValueChanged<Size>? onResized;
+  /// Collapses the panel into a summary, when it can be.
+  final VoidCallback? onCollapse;
 
   /// The commit list's share of the width; dragging the gap changes it.
   final double split;
   final ValueChanged<double>? onSplit;
 
-  /// The message's share of the height above the files; dragging the gap
-  /// between them changes it.
-  final double messageSplit;
-  final ValueChanged<double>? onMessageSplit;
-
   @override
-  State<InteractiveRebaseDialog> createState() =>
-      _InteractiveRebaseDialogState();
+  State<InteractiveRebaseEditor> createState() =>
+      _InteractiveRebaseEditorState();
 }
 
-class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
+class _InteractiveRebaseEditorState extends State<InteractiveRebaseEditor> {
+  RebaseSession get _session => widget.session;
+
+  /// Changes the plan (or the editor's view of it): the graph shows it too.
+  void _update(VoidCallback f) {
+    setState(f);
+    _session.changed();
+  }
+
   // Displayed newest first like the graph; the plan is built oldest first.
-  late final List<RebaseStep> _rows = widget.steps.reversed.toList();
+  List<RebaseStep> get _rows => _session.rows;
 
   /// Rows the actions apply to.
-  final Set<RebaseStep> _selection = {};
+  Set<RebaseStep> get _selection => _session.selection;
 
   /// Highlighted row: its message is shown on the right, arrow keys move it.
-  RebaseStep? _cursor;
+  RebaseStep? get _cursor => _session.cursor;
+  set _cursor(RebaseStep? s) => _session.cursor = s;
 
   /// Start of a Shift range.
-  RebaseStep? _anchor;
+  RebaseStep? get _anchor => _session.anchor;
+  set _anchor(RebaseStep? s) => _session.anchor = s;
+
+  String? get _error => _session.error;
+  set _error(String? e) => _session.error = e;
 
   final _message = TextEditingController();
   final _listFocus = FocusNode(debugLabel: 'rebase-list');
-  String? _error;
   late double _split = widget.split;
-  late double _messageSplit = widget.messageSplit;
-
-  /// Each commit's files, loaded when it's first highlighted.
-  final _files = <String, Future<(Commit, List<FileChange>)>>{};
 
   static final _keys = {
     LogicalKeyboardKey.keyP: RebaseAction.pick,
@@ -163,20 +318,31 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   @override
   void initState() {
     super.initState();
-    final initial = _rows
-        .where((s) => widget.initialSelection.contains(s.sha))
-        .toList();
-    if (initial.isNotEmpty) {
-      _selection.addAll(initial);
-      _anchor = initial.last;
-      _setCursor(initial.last);
-    } else if (_rows.isNotEmpty) {
-      _selectOnly(_rows.first);
+    if (!_session.shown) {
+      _session.shown = true;
+      final initial = _rows
+          .where((s) => _session.initialSelection.contains(s.sha))
+          .toList();
+      if (initial.isNotEmpty) {
+        _selection.addAll(initial);
+        _anchor = initial.last;
+        _setCursor(initial.last);
+      } else if (_rows.isNotEmpty) {
+        _selectOnly(_rows.first);
+      }
+    } else {
+      // Shown again (expanded, or back on the tab): as it was.
+      _message.text = _cursor?.newMessage ?? '';
     }
+    // Docked under the graph (not a dialog): take the keys from it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _listFocus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
+    _commitEditor(); // what was typed stays with the plan
     _message.dispose();
     _listFocus.dispose();
     super.dispose();
@@ -204,6 +370,13 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
 
   void _setCursor(RebaseStep s) {
     _commitEditor();
+    if (s != _cursor) {
+      // The graph shows the highlighted commit (after this frame: it may be
+      // being built).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _cursor == s) widget.tab?.jumpToSha(s.sha);
+      });
+    }
     _cursor = s;
     final g = _groupFor(s);
     if (g != null && g.hasSquash && s.newMessage == s.message) {
@@ -230,7 +403,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   /// Click: select the row; Shift extends from the anchor, Ctrl/Cmd toggles.
   void _tapRow(RebaseStep s) {
     final kb = HardwareKeyboard.instance;
-    setState(() {
+    _update(() {
       if (kb.isShiftPressed && _anchor != null) {
         _selectRange(_anchor!, s);
         _setCursor(s);
@@ -251,7 +424,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
 
   void _tapCheckbox(RebaseStep s) {
     final kb = HardwareKeyboard.instance;
-    setState(() {
+    _update(() {
       if (kb.isShiftPressed && _anchor != null) {
         _selectRange(_anchor!, s);
         _setCursor(s);
@@ -263,7 +436,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   }
 
   void _selectAll(bool all) {
-    setState(() {
+    _update(() {
       _selection.clear();
       if (all) _selection.addAll(_rows);
     });
@@ -274,7 +447,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     if (_rows.isEmpty) return;
     final i = _cursor == null ? -1 : _rows.indexOf(_cursor!);
     final next = _rows[(i + delta).clamp(0, _rows.length - 1)];
-    setState(() {
+    _update(() {
       if (extend && _anchor != null) {
         _selectRange(_anchor!, next);
         _setCursor(next);
@@ -288,7 +461,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
   /// their relative order.
   void _moveSelection(int delta) {
     _commitEditor();
-    setState(() {
+    _update(() {
       if (delta < 0) {
         for (var i = 1; i < _rows.length; i++) {
           if (_selection.contains(_rows[i]) &&
@@ -363,7 +536,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
 
   void _setActions(List<RebaseStep> targets, RebaseAction a) {
     _commitEditor();
-    setState(() {
+    _update(() {
       for (final t in targets) {
         t.action = a;
       }
@@ -384,96 +557,19 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
 
   void _start() {
     _commitEditor();
-    final plan = RebasePlan(_oldestFirst);
-    try {
-      plan.validate();
-    } on RebasePlanError catch (e) {
-      setState(() => _error = e.message);
+    final error = _session.check();
+    if (error != null) {
+      _update(() => _error = error);
       return;
     }
-    if (_rows.every((s) => s.action == RebaseAction.drop)) {
-      setState(() => _error = 'At least one commit must be kept.');
-      return;
-    }
-    Navigator.pop(context, plan);
+    widget.onStart(_session.plan);
   }
 
-  Future<(Commit, List<FileChange>)> _filesOf(RebaseStep s) =>
-      _files[s.sha] ??= () async {
-        final repo = widget.tab!.repo;
-        final commit = await repo.commitOf(s.sha);
-        return (commit, await repo.commitFiles(commit));
-      }();
-
-  Future<void> _preview(Commit commit, FileChange file) async {
-    await showCommitFilePreview(context, widget.tab!, commit, file);
-    _listFocus.requestFocus(); // keep keys working
-  }
-
-  static Color actionColor(RebaseAction a) => switch (a) {
-    RebaseAction.pick => AppColors.text,
-    RebaseAction.reword => AppColors.accent,
-    RebaseAction.edit => AppColors.warning,
-    RebaseAction.squash || RebaseAction.fixup => AppColors.squash,
-    RebaseAction.drop => AppColors.danger,
-  };
+  static Color actionColor(RebaseAction a) => rebaseActionColor(a);
 
   static String _keyOf(RebaseAction a) => a.label[0];
 
   // ------------------------------------------------------------------ UI
-
-  /// The highlighted commit's changed files; a click shows one's diff.
-  Widget _fileList(RebaseStep s) {
-    return Container(
-      key: const ValueKey('rebase-files-pane'),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      // Keeps the previous commit's files until the next one's are read,
-      // so moving through the list doesn't flicker.
-      child: FutureBuilder<(Commit, List<FileChange>)>(
-        future: _filesOf(s),
-        builder: (context, snap) {
-          final loading = snap.connectionState != ConnectionState.done;
-          final data = snap.data;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SectionHeader(title: 'Changed files', count: data?.$2.length),
-              if (loading) const LinearProgressIndicator(minHeight: 2),
-              Expanded(
-                child: snap.hasError && !loading
-                    ? Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Text(
-                          '${snap.error}',
-                          style: TextStyle(color: AppColors.danger),
-                        ),
-                      )
-                    : ListView(
-                        key: const ValueKey('rebase-files'),
-                        children: [
-                          if (data != null)
-                            for (final f in data.$2)
-                              FileRow(
-                                key: ValueKey('rebase-file-${f.path}'),
-                                kind: f.kind,
-                                path: f.path,
-                                oldPath: f.oldPath,
-                                selected: false,
-                                onTap: () => _preview(data.$1, f),
-                              ),
-                        ],
-                      ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
   Widget _toolbar() {
     final n = _selection.length;
@@ -655,7 +751,7 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
                 itemCount: _rows.length,
                 onReorderItem: (from, to) {
                   _commitEditor();
-                  setState(() {
+                  _update(() {
                     final s = _rows.removeAt(from);
                     _rows.insert(to, s);
                   });
@@ -669,187 +765,185 @@ class _InteractiveRebaseDialogState extends State<InteractiveRebaseDialog> {
     );
   }
 
-  /// The highlighted commit's message and files.
-  Widget _sidePane(RebaseStep? selStep) {
-    return selStep == null
-        ? Center(
-            child: Text(
-              'Select a commit to see or edit its message',
-              style: TextStyle(color: AppColors.textDim),
-            ),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _editsMessage(selStep)
-                    ? 'New message'
-                    : 'Message (choose Reword to edit)',
-                style: TextStyle(fontSize: 12, color: AppColors.textDim),
-              ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: _messageAndFiles(
-                  selStep,
-                  TextField(
-                    key: ObjectKey(selStep),
-                    controller: _message,
-                    readOnly: !_editsMessage(selStep),
-                    maxLines: null,
-                    expands: true,
-                    textAlignVertical: TextAlignVertical.top,
-                    style: monoStyle(size: 12.5),
-                    onChanged: (_) => _commitEditor(),
-                  ),
-                ),
-              ),
-            ],
-          );
-  }
-
-  /// The [message] editor above the commit's files, split by a gap that
-  /// drags.
-  Widget _messageAndFiles(RebaseStep s, Widget message) {
-    if (widget.tab == null) return message;
-    return LayoutBuilder(
-      builder: (context, c) {
-        // Each part keeps room for a few lines.
-        const gap = 12.0;
-        final total = c.maxHeight - gap;
-        double fit(double h) =>
-            h.clamp(min(80.0, total / 2), max(total / 2, total - 90));
-        final height = fit(total * _messageSplit);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: height, child: message),
-            SizedBox(
-              key: const ValueKey('rebase-files-split'),
-              height: gap,
-              child: ResizeHandle(
-                vertical: true,
-                line: false,
-                onDrag: (dy) => setState(
-                  // From the current split: several moves can come in one
-                  // frame.
-                  () => _messageSplit =
-                      fit(fit(total * _messageSplit) + dy) / total,
-                ),
-                onEnd: () => widget.onMessageSplit?.call(_messageSplit),
-              ),
-            ),
-            Expanded(child: _fileList(s)),
-          ],
-        );
-      },
+  /// The new message of [s] (reworded, or heading squashed commits).
+  Widget _messagePane(RebaseStep s) {
+    return Column(
+      key: const ValueKey('rebase-message'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          s.action == RebaseAction.reword
+              ? 'New message'
+              : 'Message of the squashed commits',
+          style: TextStyle(fontSize: 12, color: AppColors.textDim),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: TextField(
+            key: ObjectKey(s),
+            controller: _message,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            style: monoStyle(size: 12.5),
+            onChanged: (_) => _commitEditor(),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final selStep = _cursor;
-    return Dialog(
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              _start,
-          const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
-        },
-        child: ResizableBox(
-          size: widget.size,
-          minSize: const Size(600, 420),
-          onResized: widget.onResized,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Interactive rebase: ${widget.branch} onto ${widget.baseLabel}',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Newest on top. Drag or ${altShortcut('↑↓')} to reorder; Shift/$modKey-click '
-                  'to select several. Keys: P pick, R reword, E edit, '
-                  'S squash, F fixup, D drop. Squash/Fixup fold commits into '
-                  'the one below them.',
-                  style: TextStyle(color: AppColors.textDim, fontSize: 12),
-                ),
-                if (widget.hasMerges)
-                  Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text(
-                      'This range contains merge commits; they will be flattened.',
-                      style: TextStyle(color: AppColors.warning, fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      // The commit list's share; the gap between the panes
-                      // drags. Each pane keeps room for its controls.
-                      const gap = 14.0;
-                      final total = c.maxWidth - gap;
-                      double fit(double w) => w.clamp(
-                        min(300.0, total / 2),
-                        max(total / 2, total - 220),
-                      );
-                      final width = fit(total * _split);
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(width: width, child: _listPane()),
-                          SizedBox(
-                            key: const ValueKey('rebase-split'),
-                            width: gap,
-                            child: ResizeHandle(
-                              line: false,
-                              onDrag: (dx) => setState(
-                                // From the current split: several moves can
-                                // come in one frame.
-                                () => _split =
-                                    fit(fit(total * _split) + dx) / total,
-                              ),
-                              onEnd: () => widget.onSplit?.call(_split),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): _start,
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // One line: what, how (a tooltip), what's wrong, the actions.
+            SizedBox(
+              height: 36,
+              child: Row(
+                children: [
+                  // What it is and what's wrong take what's left; the
+                  // actions stay at the right edge.
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.edit_note,
+                          size: 18,
+                          color: AppColors.accent,
+                        ),
+                        const SizedBox(width: 8),
+                        // The title shrinks last.
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            'Interactive rebase: ${_session.branch} onto '
+                            '${_session.baseLabel}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          Expanded(child: _sidePane(selStep)),
+                        ),
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message:
+                              'Newest on top. Drag or ${altShortcut('↑↓')} to '
+                              'reorder; Shift/$modKey-click to select several.\n'
+                              'Keys: P pick, R reword, E edit, S squash, F fixup, '
+                              'D drop.\nSquash/Fixup fold commits into the one '
+                              'below them. $modKey+Enter starts.',
+                          child: Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: AppColors.textFaint,
+                          ),
+                        ),
+                        if (_session.hasMerges) ...[
+                          const SizedBox(width: 10),
+                          Tooltip(
+                            message:
+                                'This range contains merge commits; they will be '
+                                'flattened.',
+                            child: Text(
+                              'Merges will be flattened',
+                              style: TextStyle(
+                                color: AppColors.warning,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         ],
-                      );
-                    },
-                  ),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: AppColors.danger),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _error ?? '',
+                            key: const ValueKey('rebase-error'),
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _start,
-                      child: const Text('Start rebase'),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: widget.onCancel,
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: _start,
+                    child: const Text('Start rebase'),
+                  ),
+                  if (widget.onCollapse != null) ...[
+                    const SizedBox(width: 4),
+                    SmallIconButton(
+                      key: const ValueKey('rebase-collapse'),
+                      icon: Icons.expand_more,
+                      tooltip: 'Collapse panel',
+                      onPressed: widget.onCollapse,
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Expanded(
+              // The commits; beside them, a message to write when the
+              // highlighted one gets a new one.
+              child: selStep == null || !_editsMessage(selStep)
+                  ? _listPane()
+                  : LayoutBuilder(
+                      builder: (context, c) {
+                        // The commit list's share; the gap between the panes
+                        // drags. Each pane keeps room for its controls.
+                        const gap = 14.0;
+                        final total = c.maxWidth - gap;
+                        double fit(double w) => w.clamp(
+                          min(300.0, total / 2),
+                          max(total / 2, total - 220),
+                        );
+                        final width = fit(total * _split);
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(width: width, child: _listPane()),
+                            SizedBox(
+                              key: const ValueKey('rebase-split'),
+                              width: gap,
+                              child: ResizeHandle(
+                                line: false,
+                                onDrag: (dx) => _update(
+                                  // From the current split: several moves can
+                                  // come in one frame.
+                                  () => _split =
+                                      fit(fit(total * _split) + dx) / total,
+                                ),
+                                onEnd: () => widget.onSplit?.call(_split),
+                              ),
+                            ),
+                            Expanded(child: _messagePane(selStep)),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );

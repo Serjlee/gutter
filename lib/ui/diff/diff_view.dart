@@ -18,14 +18,10 @@ import 'syntax.dart';
 const _lineHeight = 19.0;
 const _maxLinesBeforeConfirm = 6000;
 
-/// Diff (or file preview) of the file selected in the details panel, or
-/// of [source]'s file.
+/// Diff (or file preview) of the file selected in the details panel.
 class DiffView extends StatefulWidget {
-  const DiffView({super.key, required this.tab, this.source});
+  const DiffView({super.key, required this.tab});
   final RepoTabController tab;
-
-  /// The file to show, when not the tab's.
-  final DiffSource? source;
 
   @override
   State<DiffView> createState() => _DiffViewState();
@@ -46,7 +42,6 @@ class _DiffViewState extends State<DiffView> {
   final _hScroll = ScrollController();
 
   RepoTabController get tab => widget.tab;
-  DiffSource get source => widget.source ?? tab;
 
   // Syntax highlighting of the current diff: [hunk][line] -> spans.
   List<List<List<TextSpan>?>>? _spans;
@@ -65,9 +60,9 @@ class _DiffViewState extends State<DiffView> {
   /// own can start inside a multi-line string or block (a Markdown code
   /// fence, a YAML block), and then highlights wrongly from there on.
   Future<void> _loadFull(FileDiff diff, String lang) async {
-    final target = source.diffTarget;
+    final target = tab.diffTarget;
     if (target == null) return;
-    final (oldText, newText) = await source.diffFileTexts(target);
+    final (oldText, newText) = await tab.diffFileTexts(target);
     if (!mounted || !identical(diff, _fullFor)) return;
     List<List<TextSpan>>? spans(String? text) => text == null
         ? null
@@ -170,13 +165,13 @@ class _DiffViewState extends State<DiffView> {
   }
 
   bool get _canSelect {
-    final t = source.diffTarget;
-    return t is WorkingFileTarget && !t.entry.conflicted;
+    final t = tab.diffTarget;
+    return t is WorkingFileTarget && !t.entry.conflicted && !tab.locked;
   }
 
   void _toggleLine(int hunk, int line, {required bool shift}) {
     if (!_canSelect) return;
-    final lines = source.diff!.hunks[hunk].lines;
+    final lines = tab.diff!.hunks[hunk].lines;
     if (!lines[line].isChange) return;
     setState(() {
       final set = _selection.putIfAbsent(hunk, () => <int>{});
@@ -199,7 +194,7 @@ class _DiffViewState extends State<DiffView> {
   void _toggleRow(List<_SplitRow> rows, int row, {required bool shift}) {
     if (!_canSelect) return;
     final h = rows[row].$1;
-    final lines = source.diff!.hunks[h].lines;
+    final lines = tab.diff!.hunks[h].lines;
     List<int> changes(int r) => [
       for (final i in [rows[r].$2, rows[r].$3])
         if (i != null && i >= 0 && lines[i].isChange) i,
@@ -271,7 +266,7 @@ class _DiffViewState extends State<DiffView> {
 
   @override
   Widget build(BuildContext context) {
-    final target = source.diffTarget!;
+    final target = tab.diffTarget!;
     if (target is WorkingFileTarget && target.entry.conflicted) {
       return ConflictView(
         key: ValueKey('conflict-${target.path}'),
@@ -279,7 +274,7 @@ class _DiffViewState extends State<DiffView> {
         entry: target.entry,
       );
     }
-    final diff = source.diff;
+    final diff = tab.diff;
     if (!identical(diff, _selectionFor)) {
       _selection.clear();
       _anchor = null;
@@ -289,7 +284,7 @@ class _DiffViewState extends State<DiffView> {
     }
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): source.closeDiff,
+        const SingleActivator(LogicalKeyboardKey.escape): tab.closeDiff,
       },
       child: Focus(
         autofocus: true,
@@ -299,8 +294,7 @@ class _DiffViewState extends State<DiffView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _header(target, diff),
-              if (source.diffLoading)
-                const LinearProgressIndicator(minHeight: 2),
+              if (tab.diffLoading) const LinearProgressIndicator(minHeight: 2),
               Expanded(child: _body(target, diff)),
               if (_selectedCount > 0) _selectionBar(target),
             ],
@@ -362,6 +356,7 @@ class _DiffViewState extends State<DiffView> {
                 ),
               if (target is WorkingFileTarget &&
                   !target.entry.conflicted &&
+                  !tab.locked &&
                   compact) ...[
                 if (target.staged)
                   SmallIconButton(
@@ -387,6 +382,7 @@ class _DiffViewState extends State<DiffView> {
               ],
               if (target is WorkingFileTarget &&
                   !target.entry.conflicted &&
+                  !tab.locked &&
                   !compact) ...[
                 if (target.staged)
                   TextButton.icon(
@@ -458,7 +454,7 @@ class _DiffViewState extends State<DiffView> {
               SmallIconButton(
                 icon: Icons.close,
                 tooltip: 'Close (Esc)',
-                onPressed: source.closeDiff,
+                onPressed: tab.closeDiff,
               ),
             ],
           );
@@ -505,21 +501,18 @@ class _DiffViewState extends State<DiffView> {
     if (_mode == _Mode.file) {
       return FilePreview(
         key: _previewKey(target),
-        source: source,
+        tab: tab,
         version: diff,
         highlight: _highlightOn,
       );
     }
-    if (source.diffError != null) {
+    if (tab.diffError != null) {
       return Center(
-        child: Text(
-          source.diffError!,
-          style: TextStyle(color: AppColors.danger),
-        ),
+        child: Text(tab.diffError!, style: TextStyle(color: AppColors.danger)),
       );
     }
     if (diff == null) {
-      if (source.diffLoading) return const SizedBox();
+      if (tab.diffLoading) return const SizedBox();
       return Center(
         child: Text(
           'No changes to show (mode or permission change only)',
@@ -540,7 +533,7 @@ class _DiffViewState extends State<DiffView> {
           Expanded(
             child: FilePreview(
               key: _previewKey(target),
-              source: source,
+              tab: tab,
               version: diff,
             ),
           ),
@@ -593,7 +586,7 @@ class _DiffViewState extends State<DiffView> {
         max(hunk.oldStart + hunk.oldCount, hunk.newStart + hunk.newCount),
       );
     }
-    final spans = _highlightFor(diff, source.diffTarget!.path);
+    final spans = _highlightFor(diff, tab.diffTarget!.path);
     final noWidth = max(3, '$maxNo'.length) * _charWidth + 12;
     final contentWidth = noWidth * 2 + 20 + maxLen * _charWidth + 40;
     final wrap = tab.app.settings.diffWrap;
@@ -646,8 +639,9 @@ class _DiffViewState extends State<DiffView> {
 
   Widget _hunkHeader(FileDiff diff, int h) {
     final hunk = diff.hunks[h];
-    final t = source.diffTarget;
-    final working = t is WorkingFileTarget && !t.entry.conflicted;
+    final t = tab.diffTarget;
+    final working =
+        t is WorkingFileTarget && !t.entry.conflicted && !tab.locked;
     final staged = t is WorkingFileTarget && t.staged;
     Widget btn(String label, VoidCallback onTap, {Color? color}) => InkWell(
       onTap: onTap,
@@ -726,7 +720,7 @@ class _DiffViewState extends State<DiffView> {
         }
       }
     }
-    final spans = _highlightFor(diff, source.diffTarget!.path);
+    final spans = _highlightFor(diff, tab.diffTarget!.path);
     // Two half-width panes that always fit the view; long lines wrap and
     // both sides of a row keep the same height.
     return SelectionArea(

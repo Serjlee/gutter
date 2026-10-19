@@ -17,11 +17,11 @@ const _maxTextBytes = 2 * 1024 * 1024;
 class FilePreview extends StatefulWidget {
   const FilePreview({
     super.key,
-    required this.source,
+    required this.tab,
     this.version,
     this.highlight = false,
   });
-  final DiffSource source;
+  final RepoTabController tab;
 
   /// Syntax-highlight text files (by file extension).
   final bool highlight;
@@ -34,7 +34,7 @@ class FilePreview extends StatefulWidget {
 }
 
 class _FilePreviewState extends State<FilePreview> {
-  late Future<Uint8List?> _bytes = widget.source.previewBytes();
+  late Future<Uint8List?> _bytes = widget.tab.previewBytes();
 
   // Decoded text (and highlight spans), cached per loaded file.
   Uint8List? _decodedFor;
@@ -66,13 +66,13 @@ class _FilePreviewState extends State<FilePreview> {
   void didUpdateWidget(FilePreview old) {
     super.didUpdateWidget(old);
     if (!identical(old.version, widget.version)) {
-      _bytes = widget.source.previewBytes();
+      _bytes = widget.tab.previewBytes();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final path = widget.source.diffTarget?.path ?? '';
+    final path = widget.tab.diffTarget?.path ?? '';
     final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
     return FutureBuilder<Uint8List?>(
       future: _bytes,

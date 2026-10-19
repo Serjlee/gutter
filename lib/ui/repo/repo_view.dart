@@ -5,11 +5,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/settings_store.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/repository.dart';
 import '../details/details_panel.dart';
 import '../dialogs/dialogs.dart';
+import '../dialogs/interactive_rebase_dialog.dart';
 import '../diff/diff_view.dart';
 import '../graph_view/commit_graph_view.dart';
 import '../sidebar/sidebar.dart';
@@ -125,64 +127,13 @@ class _RepoViewState extends State<RepoView> {
               child: Column(
                 children: [
                   RepoToolbar(tab: tab, searchFocus: searchFocus),
+                  if (tab.rebaseSession.value case final session?)
+                    RebaseEditorBanner(tab: tab, session: session),
                   if (tab.operation != RepoOperation.none ||
                       tab.stashConflict != null ||
                       tab.status.conflicted.isNotEmpty)
                     OperationBanner(tab: tab),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, c) {
-                        // Keep side panels from squeezing the graph out.
-                        final maxSide = max(200.0, c.maxWidth * 0.3);
-                        final minSide = min(120.0, maxSide);
-                        final minDetails = min(220.0, maxSide);
-                        final sideW = min(
-                          settings.sidebarWidth,
-                          maxSide * 0.8,
-                        ).clamp(minSide, maxSide);
-                        final detailsW = settings.detailsWidth.clamp(
-                          minDetails,
-                          maxSide,
-                        );
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (settings.sidebarOpen) ...[
-                              SizedBox(
-                                width: sideW,
-                                child: Sidebar(tab: tab),
-                              ),
-                              ResizeHandle(
-                                onDrag: (dx) => setState(
-                                  () => settings.sidebarWidth = (sideW + dx)
-                                      .clamp(minSide, maxSide),
-                                ),
-                                onEnd: tab.app.save,
-                              ),
-                            ],
-                            Expanded(
-                              child: tab.diffTarget != null
-                                  ? DiffView(tab: tab)
-                                  : CommitGraphView(tab: tab),
-                            ),
-                            if (tab.detailsOpen) ...[
-                              ResizeHandle(
-                                onDrag: (dx) => setState(
-                                  () => settings.detailsWidth = (detailsW - dx)
-                                      .clamp(220.0, maxSide),
-                                ),
-                                onEnd: tab.app.save,
-                              ),
-                              SizedBox(
-                                width: detailsW,
-                                child: DetailsPanel(tab: tab),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                  ),
+                  Expanded(child: _main(tab, settings)),
                   OutputPanel(tab: tab),
                 ],
               ),
@@ -190,6 +141,86 @@ class _RepoViewState extends State<RepoView> {
           },
         ),
       ),
+    );
+  }
+
+  /// Sidebar, graph (or diff) and details, side by side; a rebase being
+  /// prepared has its editor under the sidebar and the graph.
+  Widget _main(RepoTabController tab, Settings settings) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Keep side panels from squeezing the graph out.
+        final maxSide = max(200.0, c.maxWidth * 0.3);
+        final minSide = min(120.0, maxSide);
+        final minDetails = min(220.0, maxSide);
+        final sideW = min(
+          settings.sidebarWidth,
+          maxSide * 0.8,
+        ).clamp(minSide, maxSide);
+        final detailsW = settings.detailsWidth.clamp(minDetails, maxSide);
+        final session = tab.rebaseSession.value;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (settings.sidebarOpen) ...[
+                          SizedBox(
+                            width: sideW,
+                            child: Sidebar(tab: tab),
+                          ),
+                          ResizeHandle(
+                            onDrag: (dx) => setState(
+                              () => settings.sidebarWidth = (sideW + dx).clamp(
+                                minSide,
+                                maxSide,
+                              ),
+                            ),
+                            onEnd: tab.app.save,
+                          ),
+                        ],
+                        Expanded(
+                          child: tab.diffTarget != null
+                              ? DiffView(tab: tab)
+                              : CommitGraphView(tab: tab),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (session != null)
+                    RebaseDock(
+                      tab: tab,
+                      session: session,
+                      // The graph keeps some room.
+                      maxHeight: max(0, c.maxHeight - 160),
+                    ),
+                ],
+              ),
+            ),
+            if (tab.detailsOpen) ...[
+              ResizeHandle(
+                onDrag: (dx) => setState(
+                  () => settings.detailsWidth = (detailsW - dx).clamp(
+                    220.0,
+                    maxSide,
+                  ),
+                ),
+                onEnd: tab.app.save,
+              ),
+              SizedBox(
+                width: detailsW,
+                child: DetailsPanel(tab: tab),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -211,7 +242,8 @@ class RepoToolbar extends StatelessWidget {
     final branch = tab.currentBranch;
     final head = tab.headRef;
     final busy = tab.busy;
-    final idle = busy == null;
+    // Read-only while an interactive rebase is prepared (Fetch still works).
+    final idle = busy == null && !tab.locked;
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -679,6 +711,59 @@ class _SearchBoxState extends State<_SearchBox> {
 /// Shown while a merge / rebase / cherry-pick / revert is in progress, or
 /// while a stash applied with conflicts: what's being combined, how many
 /// files still have conflicts, and the ways forward.
+/// Says the tab is read-only while an interactive rebase is prepared.
+class RebaseEditorBanner extends StatelessWidget {
+  const RebaseEditorBanner({
+    super.key,
+    required this.tab,
+    required this.session,
+  });
+  final RepoTabController tab;
+  final RebaseSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('rebase-editor-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      color: AppColors.accent.withValues(alpha: 0.14),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note, size: 18, color: AppColors.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text:
+                        'Preparing an interactive rebase of ${session.branch} '
+                        'onto ${session.baseLabel}. ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const TextSpan(
+                    text:
+                        'Nothing can be changed here until it is started or '
+                        'cancelled; browsing commits and branches still works.',
+                  ),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('banner-cancel-rebase'),
+            onPressed: tab.closeRebase,
+            child: const Text('Cancel rebase'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class OperationBanner extends StatelessWidget {
   const OperationBanner({super.key, required this.tab});
   final RepoTabController tab;
