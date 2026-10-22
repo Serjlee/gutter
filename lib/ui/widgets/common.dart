@@ -540,6 +540,23 @@ String formatDate(DateTime d) {
   return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
 }
 
+/// [formatDate] with seconds.
+String formatDateTime(DateTime d) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${formatDate(d)}:${two(d.second)}';
+}
+
+/// How long ago [d] was, compactly: "now", "5m", "3h", "12d", "4mo", "2y".
+String shortAge(DateTime d, {DateTime? now}) {
+  final diff = (now ?? DateTime.now()).difference(d);
+  if (diff.inMinutes < 1) return 'now';
+  if (diff.inHours < 1) return '${diff.inMinutes}m';
+  if (diff.inDays < 1) return '${diff.inHours}h';
+  if (diff.inDays < 31) return '${diff.inDays}d';
+  if (diff.inDays < 365) return '${diff.inDays ~/ 30}mo';
+  return '${diff.inDays ~/ 365}y';
+}
+
 String relativeTime(DateTime d) {
   final diff = DateTime.now().difference(d);
   if (diff.inSeconds < 60) return 'just now';

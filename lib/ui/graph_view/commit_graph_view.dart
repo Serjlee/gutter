@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,9 +13,13 @@ import '../dialogs/interactive_rebase_dialog.dart' show rebaseActionColor;
 import '../repo/repo_actions.dart';
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'date_groups.dart';
 import 'scroll_marks.dart';
 
 const _metrics = GraphMetrics();
+
+/// The gap under the last row of a [DateGroup], holding its separator.
+const _gap = 22.0;
 
 /// Column widths (message column takes the remaining space).
 class GraphColumns {
@@ -22,32 +27,33 @@ class GraphColumns {
     : refs = saved['refs'] ?? 190,
       graph = saved['graph'],
       author = saved['author'] ?? 140,
-      date = saved['date'] ?? 130,
+      // A new key: widths saved under "date" were for the full timestamp.
+      age = saved['age'] ?? 64,
       sha = saved['sha'] ?? 70;
 
   double refs;
   double? graph; // null: auto from lane count
   double author;
-  double date;
+  double age;
   double sha;
 
   double graphWidth(int lanes) =>
       graph ?? _metrics.widthFor(max(1, min(lanes, 12)));
 
   /// Decides which columns fit in [width]: optional columns are dropped
-  /// (sha, then date, then author) and the ref column shrinks so the
+  /// (sha, then age, then author) and the ref column shrinks so the
   /// message column keeps at least [minMessage] pixels.
   FittedColumns fit(double width, double graphW, {double minMessage = 160}) {
     var refsW = refs;
-    var showSha = true, showDate = true, showAuthor = true;
+    var showSha = true, showAge = true, showAuthor = true;
     double used() =>
         refsW +
         graphW +
         (showAuthor ? author : 0) +
-        (showDate ? date : 0) +
+        (showAge ? age : 0) +
         (showSha ? sha : 0);
     if (used() + minMessage > width) showSha = false;
-    if (used() + minMessage > width) showDate = false;
+    if (used() + minMessage > width) showAge = false;
     if (used() + minMessage > width) showAuthor = false;
     if (used() + minMessage > width) {
       refsW = max(70, width - minMessage - graphW);
@@ -56,7 +62,7 @@ class GraphColumns {
       refs: refsW,
       graph: graphW,
       author: showAuthor ? author : null,
-      date: showDate ? date : null,
+      age: showAge ? age : null,
       sha: showSha ? sha : null,
     );
   }
@@ -65,7 +71,7 @@ class GraphColumns {
     'refs': refs,
     'graph': ?graph,
     'author': author,
-    'date': date,
+    'age': age,
     'sha': sha,
   };
 }
@@ -77,13 +83,13 @@ class FittedColumns {
     required this.refs,
     required this.graph,
     this.author,
-    this.date,
+    this.age,
     this.sha,
   });
   final double refs;
   final double graph;
   final double? author;
-  final double? date;
+  final double? age;
   final double? sha;
 }
 
@@ -100,7 +106,33 @@ class _CommitGraphViewState extends State<CommitGraphView> {
   final _focus = FocusNode(debugLabel: 'graph');
   late GraphColumns _cols = GraphColumns(widget.tab.app.settings.columnWidths);
 
+  /// Ages go stale: the rows are redrawn each minute.
+  Timer? _clock;
+
+  /// [dateSeparators] of [_separatorsOf] on [_separatorsDay], and their
+  /// rows in order.
+  Map<int, DateGroup> _separators = const {};
+  List<int> _gaps = const [];
+  GraphData? _separatorsOf;
+  DateTime? _separatorsDay;
+
   RepoTabController get tab => widget.tab;
+
+  Map<int, DateGroup> _separatorsFor(GraphData graph) {
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    if (!identical(graph, _separatorsOf) || day != _separatorsDay) {
+      _separators = dateSeparators(
+        [for (var row = 0; row < graph.rowCount; row++) graph.commitAt(row)],
+        now,
+        isStash: (row) => graph.stashAt(row) != null,
+      );
+      _gaps = _separators.keys.toList()..sort();
+      _separatorsOf = graph;
+      _separatorsDay = day;
+    }
+    return _separators;
+  }
 
   @override
   void initState() {
@@ -108,6 +140,9 @@ class _CommitGraphViewState extends State<CommitGraphView> {
     tab.scrollToRow.addListener(_onScrollRequest);
     tab.app.avatars.addListener(_onAvatars);
     _scroll.addListener(_onScroll);
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
     // Keys go to the graph when it shows up (a tab opening, a diff
     // closing), so the arrow keys work straight away; unless a text field
     // has them.
@@ -136,6 +171,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
   void dispose() {
     tab.scrollToRow.removeListener(_onScrollRequest);
     tab.app.avatars.removeListener(_onAvatars);
+    _clock?.cancel();
     _scroll.dispose();
     _focus.dispose();
     super.dispose();
@@ -156,7 +192,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
     tab.scrollToRow.value = null;
     final h = _metrics.rowHeight;
     final pos = _scroll.position;
-    final top = row * h;
+    final top = row * h + lowerBound(_gaps, row) * _gap;
     final viewport = pos.viewportDimension;
     if (top < pos.pixels) {
       _scroll.jumpTo(top);
@@ -179,6 +215,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
     final graph = tab.graph;
     final graphW = _cols.graphWidth(graph.layout.maxLanes);
     final actions = RepoActions(context, tab);
+    final separators = _separatorsFor(graph);
     return Focus(
       focusNode: _focus,
       onKeyEvent: (node, event) {
@@ -234,7 +271,9 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                             child: ListView.builder(
                               key: PageStorageKey('graph-${tab.repo.path}'),
                               controller: _scroll,
-                              itemExtent: _metrics.rowHeight,
+                              itemExtentBuilder: (row, _) =>
+                                  _metrics.rowHeight +
+                                  (separators.containsKey(row) ? _gap : 0),
                               itemCount:
                                   graph.rowCount + (graph.truncated ? 1 : 0),
                               itemBuilder: (context, row) {
@@ -265,6 +304,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                                   cols: fitted,
                                   actions: actions,
                                   onFocus: () => _focus.requestFocus(),
+                                  separator: separators[row],
                                 );
                                 // A rebase being planned: rows show its
                                 // changes as they're made.
@@ -292,6 +332,8 @@ class _CommitGraphViewState extends State<CommitGraphView> {
                                   ? null
                                   : graph.rowOf(tab.headSha!),
                               headColor: AppColors.accent,
+                              gaps: _gaps,
+                              gapHeight: _gap,
                               trunk: [
                                 for (final e in tab.refsBySha.entries)
                                   if (e.value.any(isTrunkRef))
@@ -379,9 +421,9 @@ class _Header extends StatelessWidget {
             _handle((dx) => cols.author = max(40, cols.author - dx)),
             _title('AUTHOR', fitted.author! - 5),
           ],
-          if (fitted.date != null) ...[
-            _handle((dx) => cols.date = max(40, cols.date - dx)),
-            _title('DATE', fitted.date! - 5),
+          if (fitted.age != null) ...[
+            _handle((dx) => cols.age = max(40, cols.age - dx)),
+            _title('AGE', fitted.age! - 5),
           ],
           if (fitted.sha != null) ...[
             _handle((dx) => cols.sha = max(40, cols.sha - dx)),
@@ -414,6 +456,42 @@ class _RebaseBadge extends StatelessWidget {
   }
 }
 
+/// The gap under the last row of a [DateGroup]: a line, labeled with it.
+class _DateSeparator extends StatelessWidget {
+  const _DateSeparator(this.group, {required this.left});
+  final DateGroup group;
+
+  /// Where the message column starts: the line leaves the graph clear.
+  final double left;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: _gap,
+    child: Row(
+      children: [
+        SizedBox(width: left),
+        Expanded(child: Container(height: 1, color: AppColors.border)),
+        Container(
+          key: ValueKey('date-separator-${group.name}'),
+          height: 16,
+          margin: const EdgeInsets.only(left: 8, right: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.panelAlt,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            group.label,
+            style: TextStyle(fontSize: 11, height: 1, color: AppColors.textDim),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _GraphRow extends StatefulWidget {
   const _GraphRow({
     required this.tab,
@@ -421,6 +499,7 @@ class _GraphRow extends StatefulWidget {
     required this.cols,
     required this.actions,
     required this.onFocus,
+    this.separator,
   });
 
   final RepoTabController tab;
@@ -428,6 +507,9 @@ class _GraphRow extends StatefulWidget {
   final FittedColumns cols;
   final RepoActions actions;
   final VoidCallback onFocus;
+
+  /// The group this row is the last of: a gap follows, with a separator.
+  final DateGroup? separator;
 
   @override
   State<_GraphRow> createState() => _GraphRowState();
@@ -447,6 +529,7 @@ class _GraphRowState extends State<_GraphRow> {
     final selected = tab.isSelected(sha);
     final laneColor = AppColors.lane(graph.layout.nodeColor[row]);
     final isHit = tab.searchHitSet.contains(row);
+    final gap = widget.separator == null ? 0.0 : _gap;
     final dimmed = tab.search.trim().isNotEmpty && !isHit;
 
     final isCommit = commit != null && stash == null;
@@ -481,7 +564,7 @@ class _GraphRowState extends State<_GraphRow> {
     final msgColor = dimmed ? AppColors.textFaint : AppColors.text;
     final dimColor = dimmed ? AppColors.textFaint : AppColors.textDim;
 
-    return MouseRegion(
+    final content = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
@@ -548,27 +631,33 @@ class _GraphRowState extends State<_GraphRow> {
               SizedBox(
                 width: widget.cols.graph,
                 height: _metrics.rowHeight,
-                child: ClipRect(
-                  child: CustomPaint(
-                    painter: GraphRowPainter(
-                      layout: graph.layout,
-                      row: row,
-                      metrics: _metrics,
-                      style: commit == null
-                          ? NodeStyle.wip
-                          : stash != null
-                          ? NodeStyle.stash
-                          : (commit.isMerge
-                                ? NodeStyle.merge
-                                : NodeStyle.commit),
-                      initials: commit?.initials ?? '',
-                      avatar: commit == null || stash != null
-                          ? null
-                          : tab.avatarFor(commit.authorEmail),
-                      isHead: commit != null && sha == tab.headSha,
-                      trunk: trunkRow,
-                      dimmed: dimmed,
-                      hint: tab.app.settings.lineHint,
+                // Down through the gap under it, if any, so the lanes go on.
+                child: OverflowBox(
+                  alignment: Alignment.topCenter,
+                  minHeight: _metrics.rowHeight + gap,
+                  maxHeight: _metrics.rowHeight + gap,
+                  child: ClipRect(
+                    child: CustomPaint(
+                      painter: GraphRowPainter(
+                        layout: graph.layout,
+                        row: row,
+                        metrics: _metrics,
+                        style: commit == null
+                            ? NodeStyle.wip
+                            : stash != null
+                            ? NodeStyle.stash
+                            : (commit.isMerge
+                                  ? NodeStyle.merge
+                                  : NodeStyle.commit),
+                        initials: commit?.initials ?? '',
+                        avatar: commit == null || stash != null
+                            ? null
+                            : tab.avatarFor(commit.authorEmail),
+                        isHead: commit != null && sha == tab.headSha,
+                        trunk: trunkRow,
+                        dimmed: dimmed,
+                        hint: tab.app.settings.lineHint,
+                      ),
                     ),
                   ),
                 ),
@@ -614,12 +703,18 @@ class _GraphRowState extends State<_GraphRow> {
               ),
               if (widget.cols.author != null)
                 _cell(commit?.authorName ?? '', widget.cols.author!, dimColor),
-              if (widget.cols.date != null)
-                _cell(
-                  commit == null ? '' : formatDate(commit.date),
-                  widget.cols.date!,
-                  dimColor,
-                ),
+              if (widget.cols.age != null)
+                commit == null
+                    ? SizedBox(width: widget.cols.age)
+                    : Tooltip(
+                        message: _dates(commit),
+                        waitDuration: const Duration(milliseconds: 500),
+                        child: _cell(
+                          shortAge(commit.date),
+                          widget.cols.age!,
+                          dimColor,
+                        ),
+                      ),
               if (widget.cols.sha != null)
                 SizedBox(
                   width: widget.cols.sha,
@@ -638,7 +733,22 @@ class _GraphRowState extends State<_GraphRow> {
         ),
       ),
     );
+    final group = widget.separator;
+    if (group == null) return content;
+    return Column(
+      children: [
+        SizedBox(height: _metrics.rowHeight, child: content),
+        _DateSeparator(group, left: widget.cols.refs + widget.cols.graph),
+      ],
+    );
   }
+
+  /// The full timestamp; both, when it was committed later than authored
+  /// (rebased, cherry-picked).
+  static String _dates(Commit c) => c.commitTime - c.authorTime < 60
+      ? formatDateTime(c.date)
+      : 'Authored ${formatDateTime(c.date)}\n'
+            'Committed ${formatDateTime(c.commitDate)}';
 
   Widget _cell(String text, double width, Color color) => SizedBox(
     width: width,

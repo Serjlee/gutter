@@ -1004,6 +1004,7 @@ class RepoTabController extends ChangeNotifier {
             authorName: d.authorName,
             authorEmail: d.authorEmail,
             authorTime: d.authorTime,
+            commitTime: d.committerTime,
             subject: d.subject,
           );
       commitFiles = files;

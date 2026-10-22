@@ -9,7 +9,8 @@ class Commit {
     required this.authorEmail,
     required this.authorTime,
     required this.subject,
-  });
+    int? commitTime,
+  }) : commitTime = commitTime ?? authorTime;
 
   final String sha;
   final List<String> parents;
@@ -18,12 +19,18 @@ class Commit {
 
   /// Seconds since epoch.
   final int authorTime;
+
+  /// When it was committed (seconds since epoch): what the graph is sorted
+  /// by. Differs from [authorTime] for rebased or cherry-picked commits.
+  final int commitTime;
   final String subject;
 
   String get shortSha => sha.length > 7 ? sha.substring(0, 7) : sha;
   bool get isMerge => parents.length > 1;
   DateTime get date =>
       DateTime.fromMillisecondsSinceEpoch(authorTime * 1000, isUtc: false);
+  DateTime get commitDate =>
+      DateTime.fromMillisecondsSinceEpoch(commitTime * 1000, isUtc: false);
 
   String get initials {
     final parts = authorName

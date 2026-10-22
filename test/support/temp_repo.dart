@@ -50,10 +50,15 @@ class TempRepo {
 
   String read(String file) => File(p.join(path, file)).readAsStringSync();
 
-  /// Writes [files] and commits them; returns the new sha.
-  String commit(String message, [Map<String, String> files = const {}]) {
+  /// Writes [files] and commits them, [at] a given time or a minute after
+  /// the last commit; returns the new sha.
+  String commit(
+    String message, [
+    Map<String, String> files = const {},
+    DateTime? at,
+  ]) {
     files.forEach(write);
-    _clock += 60;
+    _clock = at == null ? _clock + 60 : at.millisecondsSinceEpoch ~/ 1000;
     git(['add', '-A']);
     git(['commit', '-q', '--allow-empty', '-m', message]);
     return git(['rev-parse', 'HEAD']).trim();

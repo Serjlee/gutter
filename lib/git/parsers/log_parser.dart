@@ -6,8 +6,8 @@ import '../models.dart';
 /// Format passed to `git log --format=` producing NUL separated fields.
 /// Records are terminated by `-z` (another NUL), so each commit is exactly
 /// [logFieldCount] fields.
-const logFormat = '%H%x00%P%x00%an%x00%ae%x00%at%x00%s';
-const logFieldCount = 6;
+const logFormat = '%H%x00%P%x00%an%x00%ae%x00%at%x00%ct%x00%s';
+const logFieldCount = 7;
 
 /// Parses output of `git log -z --format=[logFormat]`.
 List<Commit> parseLog(Uint8List bytes) {
@@ -38,7 +38,8 @@ List<Commit> parseLogString(String text) {
         authorName: fields[i + 2],
         authorEmail: fields[i + 3],
         authorTime: int.tryParse(fields[i + 4]) ?? 0,
-        subject: fields[i + 5],
+        commitTime: int.tryParse(fields[i + 5]),
+        subject: fields[i + 6],
       ),
     );
     i += logFieldCount;

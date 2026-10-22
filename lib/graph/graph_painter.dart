@@ -114,6 +114,9 @@ class GraphRowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final h = metrics.rowHeight;
     final cy = h / 2;
+    // Edges to the next row reach the bottom, which is lower than [h] when
+    // the row is followed by a gap.
+    final bottom = size.height;
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = metrics.lineWidth
@@ -175,7 +178,7 @@ class GraphRowPainter extends CustomPainter {
     layout.forEachStraight(row, (lane, color) {
       final x = metrics.laneX(lane);
       if (x > maxX) return;
-      line(Offset(x, cy), Offset(x, h), color);
+      line(Offset(x, cy), Offset(x, bottom), color);
     });
 
     // Bends arriving from row-1, drawn in the top half.
@@ -226,11 +229,11 @@ class GraphRowPainter extends CustomPainter {
             ..moveTo(x1, cy)
             ..lineTo(x2 - sign * r, cy)
             ..quadraticBezierTo(x2, cy, x2, cy + r)
-            ..lineTo(x2, h),
+            ..lineTo(x2, bottom),
           color,
         );
       } else {
-        line(Offset(x1, cy), Offset(x1, h), color);
+        line(Offset(x1, cy), Offset(x1, bottom), color);
       }
     }
 

@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
@@ -14,6 +15,8 @@ class ScrollMarks extends StatelessWidget {
     required this.head,
     required this.headColor,
     required this.trunk,
+    this.gaps = const [],
+    this.gapHeight = 0,
   });
 
   final int rowCount;
@@ -21,6 +24,10 @@ class ScrollMarks extends StatelessWidget {
   final int? head;
   final Color headColor;
   final List<int> trunk;
+
+  /// The rows followed by a gap [gapHeight] tall, in order.
+  final List<int> gaps;
+  final double gapHeight;
 
   static Color get trunkColor => AppColors.trunk;
 
@@ -43,10 +50,15 @@ List<ScrollMark> scrollMarks({
   required int? head,
   required Color headColor,
   required List<int> trunk,
+  List<int> gaps = const [],
+  double gapHeight = 0,
 }) {
   if (rowCount == 0) return const [];
-  final total = max(rowCount * rowHeight, height);
-  double at(int row) => (row + 0.5) * rowHeight / total * height;
+  final total = max(rowCount * rowHeight + gaps.length * gapHeight, height);
+  double at(int row) =>
+      ((row + 0.5) * rowHeight + lowerBound(gaps, row) * gapHeight) /
+      total *
+      height;
   final headAt = head == null ? null : at(head);
   final marks = <ScrollMark>[];
   var merged = false;
@@ -82,6 +94,8 @@ class _MarksPainter extends CustomPainter {
       head: w.head,
       headColor: w.headColor,
       trunk: w.trunk,
+      gaps: w.gaps,
+      gapHeight: w.gapHeight,
     );
     for (final m in marks) {
       canvas.drawRRect(

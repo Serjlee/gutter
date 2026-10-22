@@ -10,14 +10,16 @@ void main() {
     test('parses NUL separated records', () {
       final a = 'a' * 40, b = 'b' * 40, c = 'c' * 40;
       final text = [
-        '$a\x00$b $c\x00Ann Lee\x00ann@x.io\x001700000000\x00Merge x',
-        '$b\x00\x00Bob\x00bob@x.io\x001600000000\x00Initial: with\ttab ünïcode',
+        '$a\x00$b $c\x00Ann Lee\x00ann@x.io\x001700000000\x001700000100\x00Merge x',
+        '$b\x00\x00Bob\x00bob@x.io\x001600000000\x001600000000\x00Initial: with\ttab ünïcode',
       ].join('\x00');
       final commits = parseLogString(text);
       expect(commits, hasLength(2));
       expect(commits[0].parents, [b, c]);
       expect(commits[0].isMerge, isTrue);
       expect(commits[0].initials, 'AL');
+      expect(commits[0].authorTime, 1700000000);
+      expect(commits[0].commitTime, 1700000100);
       expect(commits[1].parents, isEmpty);
       expect(commits[1].subject, 'Initial: with\ttab ünïcode');
     });
