@@ -106,6 +106,34 @@ class GraphRowPainter extends CustomPainter {
       }
     }
 
+    // Behind the rest: a band from the node to the message in the node's
+    // color, fading in, so a row reads as part of its branch at a glance.
+    if (style != NodeStyle.wip) {
+      final x0 = metrics.laneX(layout.nodeLane[row]);
+      final band = Rect.fromLTRB(x0, 4, size.width, h - 4);
+      if (band.width > 0) {
+        final lane = AppColors.lane(
+          layout.nodeColor[row] & GraphLayout.colorMask,
+        );
+        final strength = AppColors.current.isDark ? 0.32 : 0.24;
+        canvas.drawRect(
+          band,
+          Paint()
+            ..shader = LinearGradient(
+              colors: [
+                lane.withValues(alpha: 0),
+                lane.withValues(alpha: strength * alpha),
+              ],
+            ).createShader(band),
+        );
+        // Its edge, against the message.
+        canvas.drawRect(
+          Rect.fromLTRB(size.width - 3, band.top, size.width, band.bottom),
+          Paint()..color = lane.withValues(alpha: alpha),
+        );
+      }
+    }
+
     // Straight lines: the lower half of the edges arriving from row-1 and the
     // upper half of the edges leaving towards row+1. Lines that only cross
     // the graph column's clip are skipped.
