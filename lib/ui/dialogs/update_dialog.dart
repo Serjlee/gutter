@@ -19,9 +19,13 @@ Future<void> showUpdateDialog(BuildContext context, AppController app) async {
 }
 
 /// The release notes proper: the tag's message, without the install notes
-/// CI appends after a `---` rule, and without Markdown markers.
+/// CI appends after a `---` rule (in early releases, under an Installation
+/// heading, or alone), and without Markdown markers.
 String releaseNotesText(String notes) {
-  final i = notes.indexOf(RegExp(r'^---\s*$', multiLine: true));
+  notes = notes.replaceAll('\r\n', '\n');
+  final i = notes.indexOf(
+    RegExp(r'^(---\s*$|#+\s*Installation|\*\*macOS\*\*)', multiLine: true),
+  );
   final text = (i < 0 ? notes : notes.substring(0, i)).trim();
   return text
       .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
@@ -43,7 +47,8 @@ class UpdateDialog extends StatelessWidget {
         final install = updater.installation;
         final mine = updater.release?.tag == release.tag;
         final stage = mine ? updater.stage : UpdateStage.idle;
-        final notes = releaseNotesText(release.notes);
+        // What's new since this build, release by release.
+        final news = app.updates.newReleases;
         final current = app.updates.current;
         return AlertDialog(
           title: Text(
@@ -60,26 +65,31 @@ class UpdateDialog extends StatelessWidget {
                   'You have ${current.isRelease ? current.version : current.label}.',
                   style: TextStyle(color: AppColors.textDim),
                 ),
-                if (notes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          notes,
-                          style: const TextStyle(fontSize: 12.5, height: 1.4),
-                        ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: SingleChildScrollView(
+                      key: const ValueKey('update-notes'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final (i, r)
+                              in (news.isEmpty ? [release] : news).indexed) ...[
+                            if (i > 0) const SizedBox(height: 14),
+                            _ReleaseNotes(r),
+                          ],
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
                 const SizedBox(height: 14),
                 _status(stage, install),
               ],
@@ -244,5 +254,47 @@ class UpdateDialog extends StatelessWidget {
           ),
         ];
     }
+  }
+}
+
+/// One release's version, date and notes.
+class _ReleaseNotes extends StatelessWidget {
+  const _ReleaseNotes(this.release);
+  final ReleaseInfo release;
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = releaseNotesText(release.notes);
+    final date = release.publishedAt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: release.version,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              if (date != null)
+                TextSpan(
+                  text: '   ${formatDate(date.toLocal()).substring(0, 10)}',
+                  style: TextStyle(color: AppColors.textDim),
+                ),
+            ],
+          ),
+          style: const TextStyle(fontSize: 12.5),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(
+          notes.isEmpty ? 'No release notes.' : notes,
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color: notes.isEmpty ? AppColors.textDim : null,
+          ),
+        ),
+      ],
+    );
   }
 }

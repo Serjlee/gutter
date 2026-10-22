@@ -148,9 +148,10 @@ loading history several times faster.
 
 Besides your own fetch, pull and push, Gutter makes two kinds of requests:
 
-- **Update check**: every 6 hours it asks GitHub for the latest release of
-  Gutter, and offers it when there's a newer one. It downloads the release
-  (from GitHub) only when you choose to update.
+- **Update check**: every 6 hours it asks GitHub for Gutter's releases,
+  and offers the latest when there's a newer one, with the notes of every
+  release since yours. It downloads the release (from GitHub) only when
+  you choose to update.
 - **GitHub avatars** (repositories on GitHub only): each author's picture
   is requested from GitHub's avatar server by commit email, as rows come
   into view.

@@ -61,25 +61,64 @@ void main() {
     expect(ReleaseInfo.fromGitHubJson('nope'), isNull);
   });
 
+  test('parses a list of releases, without pre-releases', () {
+    Map<String, Object?> json(String tag, {bool pre = false}) => {
+      'tag_name': tag,
+      'html_url': 'https://github.com/serjlee/gutter/releases/tag/$tag',
+      'prerelease': pre,
+    };
+    expect(
+      releasesFromGitHubJson([
+        json('v0.3.0'),
+        json('v0.4.0-rc1', pre: true),
+        json('v0.2.0'),
+      ]).map((r) => r.tag),
+      ['v0.3.0', 'v0.2.0'],
+    );
+    // A single release, as releases/latest returns it.
+    expect(releasesFromGitHubJson(json('v0.3.0')).single.tag, 'v0.3.0');
+    expect(releasesFromGitHubJson({'message': 'Not Found'}), isEmpty);
+  });
+
   group('UpdateChecker', () {
+    test('lists what is new since this build, newest first', () async {
+      ReleaseInfo r(String tag) =>
+          ReleaseInfo(tag: tag, url: 'https://x/$tag', publishedAt: null);
+      final all = [r('v0.1.0'), r('v0.10.0'), r('v0.2.0'), r('v0.9.1')];
+      final c = UpdateChecker(
+        current: const AppVersion(version: '0.2.0'),
+        fetcher: () async => all,
+      );
+      await c.check();
+      expect(c.latest!.tag, 'v0.10.0');
+      expect(c.newReleases.map((r) => r.tag), ['v0.10.0', 'v0.9.1']);
+
+      final dev = UpdateChecker(
+        current: const AppVersion(commit: 'abc1234'),
+        fetcher: () async => all,
+      );
+      await dev.check();
+      expect(dev.newReleases.map((r) => r.tag), ['v0.10.0']);
+    });
+
     test('flags newer releases for release builds only', () async {
       final older = UpdateChecker(
         current: const AppVersion(version: '0.1.0'),
-        fetcher: () async => release,
+        fetcher: () async => [release],
       );
       await older.check();
       expect(older.updateAvailable, isTrue);
 
       final same = UpdateChecker(
         current: const AppVersion(version: '0.2.0'),
-        fetcher: () async => release,
+        fetcher: () async => [release],
       );
       await same.check();
       expect(same.updateAvailable, isFalse);
 
       final dev = UpdateChecker(
         current: const AppVersion(commit: 'abc1234'),
-        fetcher: () async => release,
+        fetcher: () async => [release],
       );
       await dev.check();
       expect(dev.latest, isNotNull);
@@ -90,7 +129,7 @@ void main() {
       var fail = true;
       final c = UpdateChecker(
         current: const AppVersion(version: '0.1.0'),
-        fetcher: () async => fail ? throw Exception('offline') : release,
+        fetcher: () async => fail ? throw Exception('offline') : [release],
       );
       await c.check();
       expect(c.error, contains('offline'));
@@ -104,7 +143,7 @@ void main() {
     test('no release published yet', () async {
       final c = UpdateChecker(
         current: const AppVersion(version: '0.1.0'),
-        fetcher: () async => null,
+        fetcher: () async => const [],
       );
       await c.check();
       expect(c.latest, isNull);
@@ -120,7 +159,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final checker = UpdateChecker(
       current: const AppVersion(version: '0.1.0', commit: 'abc1234'),
-      fetcher: () async => release,
+      fetcher: () async => [release],
     );
     final app = AppController(
       null,
@@ -173,7 +212,7 @@ void main() {
   test('offers each release once, and never a skipped one', () async {
     final checker = UpdateChecker(
       current: const AppVersion(version: '0.1.0'),
-      fetcher: () async => release,
+      fetcher: () async => [release],
     );
     final app = AppController(null, Settings(), updates: checker);
     expect(app.takeUpdateOffer(), isFalse); // nothing known yet
@@ -188,6 +227,52 @@ void main() {
         '## What\'s new\n\n- **Faster** `fetch`\n\n---\n\n**macOS**: unzip',
       ),
       'What\'s new\n\n- Faster fetch',
+    );
+    // Early releases: an Installation heading, or nothing but install notes.
+    expect(
+      releaseNotesText(
+        '## New features\r\n\r\n- Select\r\n\r\n## Installation\r\n\r\n**macOS**',
+      ),
+      'New features\n\n- Select',
+    );
+    expect(releaseNotesText('**macOS** (`Gutter-macos-*.zip`): unzip'), '');
+  });
+
+  testWidgets('the update dialog lists every release since this build', (
+    tester,
+  ) async {
+    ReleaseInfo r(String tag, String notes) => ReleaseInfo(
+      tag: tag,
+      url: 'https://x/$tag',
+      publishedAt: DateTime.utc(2026, 10, 2),
+      notes: '$notes\n\n---\n\n**macOS**: unzip',
+    );
+    final checker = UpdateChecker(
+      current: const AppVersion(version: '0.5.0'),
+      fetcher: () async => [
+        r('v0.5.0', 'Installed already'),
+        r('v0.7.0', 'Rebase panel'),
+        r('v0.6.0', 'Windows support'),
+      ],
+    );
+    await checker.check();
+    final app = AppController(null, Settings(), updates: checker);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UpdateDialog(app: app, release: checker.latest!),
+        ),
+      ),
+    );
+    expect(find.text('Gutter 0.7.0 is available'), findsOneWidget);
+    expect(find.text('Rebase panel'), findsOneWidget);
+    expect(find.text('Windows support'), findsOneWidget);
+    expect(find.text('Installed already'), findsNothing);
+    expect(find.textContaining('macOS'), findsNothing);
+    // Newest first.
+    expect(
+      tester.getTopLeft(find.text('Rebase panel')).dy,
+      lessThan(tester.getTopLeft(find.text('Windows support')).dy),
     );
   });
 }

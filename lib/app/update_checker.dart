@@ -25,6 +25,7 @@ class ReleaseInfo {
     required this.publishedAt,
     this.notes = '',
     this.assets = const [],
+    this.prerelease = false,
   });
 
   final String tag;
@@ -34,6 +35,9 @@ class ReleaseInfo {
   /// The release notes (Markdown).
   final String notes;
   final List<ReleaseAsset> assets;
+
+  /// Marked as a pre-release (or a draft) on GitHub: never offered.
+  final bool prerelease;
 
   /// The version without a leading `v`.
   String get version =>
@@ -55,6 +59,7 @@ class ReleaseInfo {
       url: url,
       publishedAt: published is String ? DateTime.tryParse(published) : null,
       notes: body is String ? body : '',
+      prerelease: json['prerelease'] == true || json['draft'] == true,
       assets: [
         if (assets is List)
           for (final a in assets.whereType<Map>())
@@ -69,8 +74,16 @@ class ReleaseInfo {
   }
 }
 
-/// Fetches the latest published release, or null if there is none.
-typedef ReleaseFetcher = Future<ReleaseInfo?> Function();
+/// The releases in a GitHub releases payload: a list, or a single release
+/// (as `releases/latest` returns it). Pre-releases are left out.
+List<ReleaseInfo> releasesFromGitHubJson(Object? json) => [
+  for (final r in json is List ? json : [json])
+    if (ReleaseInfo.fromGitHubJson(r) case final release?)
+      if (!release.prerelease) release,
+];
+
+/// Fetches the published releases, in any order.
+typedef ReleaseFetcher = Future<List<ReleaseInfo>> Function();
 
 /// Periodically looks up the latest GitHub release of Gutter.
 class UpdateChecker extends ChangeNotifier {
@@ -78,18 +91,30 @@ class UpdateChecker extends ChangeNotifier {
     this.current = AppVersion.current,
     ReleaseFetcher? fetcher,
     this.interval = const Duration(hours: 6),
-  }) : _fetch = fetcher ?? fetchLatestGitHubRelease;
+  }) : _fetch = fetcher ?? fetchGitHubReleases;
 
   final AppVersion current;
   final ReleaseFetcher _fetch;
   final Duration interval;
 
-  ReleaseInfo? latest;
+  /// The published releases, newest first.
+  List<ReleaseInfo> releases = const [];
   DateTime? lastChecked;
   String? error;
   bool checking = false;
   Timer? _timer;
   bool _disposed = false;
+
+  ReleaseInfo? get latest => releases.firstOrNull;
+
+  /// The releases newer than this build, newest first: what an update
+  /// brings. Just the latest for builds without a version.
+  List<ReleaseInfo> get newReleases => current.isRelease
+      ? [
+          for (final r in releases)
+            if (compareVersions(r.tag, current.version) > 0) r,
+        ]
+      : [?latest];
 
   /// A newer release than this build exists. Builds without a version
   /// (local/dev builds) can't be compared, so this stays false for them.
@@ -119,7 +144,8 @@ class UpdateChecker extends ChangeNotifier {
     checking = true;
     notifyListeners();
     try {
-      latest = await _fetch();
+      releases = (await _fetch()).toList()
+        ..sort((a, b) => compareVersions(b.tag, a.tag));
       error = null;
     } catch (e) {
       error = e is HttpException ? e.message : e.toString();
@@ -138,7 +164,9 @@ class UpdateChecker extends ChangeNotifier {
   }
 }
 
-Future<ReleaseInfo?> fetchLatestGitHubRelease() async {
+/// The latest releases of Gutter on GitHub (enough to cover any version
+/// still in use).
+Future<List<ReleaseInfo>> fetchGitHubReleases() async {
   final client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 10)
     ..findProxy = HttpClient.findProxyFromEnvironment
@@ -149,17 +177,19 @@ Future<ReleaseInfo?> fetchLatestGitHubRelease() async {
     final req = await client.getUrl(
       override != null
           ? Uri.parse(override)
-          : Uri.https('api.github.com', '/repos/$releasesRepo/releases/latest'),
+          : Uri.https('api.github.com', '/repos/$releasesRepo/releases', {
+              'per_page': '50',
+            }),
     );
     req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
     final res = await req.close().timeout(const Duration(seconds: 15));
     final body = await res.transform(utf8.decoder).join();
-    // 404: no release published yet (or the repository is private).
-    if (res.statusCode == 404) return null;
+    // 404: the repository is private (or gone).
+    if (res.statusCode == 404) return const [];
     if (res.statusCode != 200) {
       throw HttpException('GitHub returned ${res.statusCode}');
     }
-    return ReleaseInfo.fromGitHubJson(jsonDecode(body));
+    return releasesFromGitHubJson(jsonDecode(body));
   } finally {
     client.close(force: true);
   }
