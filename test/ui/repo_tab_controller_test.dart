@@ -331,6 +331,35 @@ void main() {
       expect(tab.status.unstaged.single.path, 'a.txt');
     });
 
+    test('a stash applied with conflicts, then aborted', () async {
+      await tab.load();
+      t.write('a.txt', 'stashed\n');
+      t.write('new.txt', 'from the stash\n');
+      await tab.repo.stashPush(message: 'wip');
+      t.commit('meanwhile', {'a.txt': 'meanwhile\n'});
+      // Changes made before applying it: staged, unstaged and untracked.
+      t.write('b.txt', 'staged\n');
+      t.git(['add', 'b.txt']);
+      t.write('b.txt', 'staged, then changed\n');
+      t.write('mine.txt', 'untracked\n');
+      await tab.refresh();
+      final before = t.git(['status', '--porcelain']);
+
+      await tab.applyStash(tab.stashes.single, pop: true);
+      expect(tab.stashConflict, isNotNull);
+      expect(tab.status.conflicted.single.path, 'a.txt');
+
+      await tab.abortStashConflict();
+      expect(tab.stashConflict, isNull);
+      expect(tab.conflictSides, isNull);
+      expect(t.git(['status', '--porcelain']), before);
+      expect(t.read('a.txt'), 'meanwhile\n');
+      expect(t.read('b.txt'), 'staged, then changed\n');
+      expect(t.git(['show', ':b.txt']), 'staged\n');
+      expect(t.read('mine.txt'), 'untracked\n');
+      expect(tab.stashes, hasLength(1)); // still there to try again
+    });
+
     test('multi-selects commits with toggle and range', () async {
       await tab.load();
       String sha(String subject) =>

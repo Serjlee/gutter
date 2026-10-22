@@ -1121,6 +1121,41 @@ class Repository {
 
   Future<void> stashPop(int index) => stashApply(index, pop: true);
 
+  /// The uncommitted changes, staged and not, as a stash-like commit,
+  /// leaving them as they are; null when there are none. Untracked files
+  /// aren't in it (nothing removes them).
+  Future<String?> snapshotWork() async {
+    final sha = (await _out(['stash', 'create'])).trim();
+    return sha.isEmpty ? null : sha;
+  }
+
+  /// Undoes applying the stash [stashSha] when it stopped on conflicts:
+  /// drops what it brought, its untracked files too, and restores
+  /// [snapshot] ([snapshotWork] before applying it). The stash stays.
+  Future<void> abortStashApply(String stashSha, String? snapshot) =>
+      _mutate(() async {
+        await _run(['reset', '-q', '--hard', 'HEAD']);
+        // Applying a stash never overwrites untracked files, so these
+        // weren't there before.
+        final untracked = await _run([
+          'ls-tree',
+          '-r',
+          '-z',
+          '--name-only',
+          '$stashSha^3',
+        ], allowFailure: true);
+        if (untracked.ok) {
+          for (final f in untracked.stdout.split('\x00')) {
+            if (f.isEmpty) continue;
+            final file = File(p.join(path, f));
+            if (file.existsSync()) await file.delete();
+          }
+        }
+        if (snapshot != null) {
+          await _run(['stash', 'apply', '--index', snapshot]);
+        }
+      });
+
   Future<void> stashDrop(int index) =>
       _mutate(() => _run(['stash', 'drop', 'stash@{$index}']));
 

@@ -834,13 +834,20 @@ class OperationBanner extends StatelessWidget {
               },
               child: const Text('Resolve…'),
             ),
-          if (op == RepoOperation.none && tab.stashConflict != null)
+          if (op == RepoOperation.none && tab.stashConflict != null) ...[
+            TextButton(
+              key: const ValueKey('banner-abort-stash'),
+              onPressed: idle ? tab.abortStashConflict : null,
+              child: Text('Abort', style: TextStyle(color: AppColors.danger)),
+            ),
+            const SizedBox(width: 6),
             FilledButton(
               onPressed: idle && conflicts == 0
                   ? tab.finishStashConflict
                   : null,
               child: const Text('Done'),
             ),
+          ],
           if (op != RepoOperation.none && op != RepoOperation.bisect) ...[
             TextButton(
               onPressed: idle

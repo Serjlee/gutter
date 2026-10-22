@@ -51,9 +51,12 @@ class PushTarget {
 
 /// A stash applied (or popped) with conflicts.
 class StashConflict {
-  const StashConflict(this.sha, {required this.pop});
+  const StashConflict(this.sha, {required this.pop, this.snapshot});
   final String sha;
   final bool pop;
+
+  /// The changes there were before applying it, to restore on abort.
+  final String? snapshot;
 }
 
 /// Sha used for the pseudo "work in progress" row.
@@ -1359,12 +1362,16 @@ class RepoTabController extends ChangeNotifier {
   /// Applies (or pops) [stash]. Conflicts leave a [stashConflict] until
   /// the user is done with them.
   Future<void> applyStash(StashEntry stash, {required bool pop}) async {
+    String? snapshot;
+    try {
+      snapshot = await repo.snapshotWork();
+    } catch (_) {}
     final ok = await run(
       pop ? 'Pop stash' : 'Apply stash',
       () => repo.stashApply(stash.index, pop: pop),
     );
     if (!ok && status.conflicted.isNotEmpty) {
-      stashConflict = StashConflict(stash.sha, pop: pop);
+      stashConflict = StashConflict(stash.sha, pop: pop, snapshot: snapshot);
       conflictTotal = status.conflicted.length;
       try {
         conflictSides = await repo.conflictSides(RepoOperation.none);
@@ -1388,6 +1395,19 @@ class RepoTabController extends ChangeNotifier {
     });
     stashConflict = null;
     _notify();
+  }
+
+  /// Gives up on the conflicts of an applied stash: the working tree goes
+  /// back to how it was before, and the stash stays.
+  Future<void> abortStashConflict() async {
+    final sc = stashConflict;
+    if (sc == null) return;
+    if (await run('Abort', () => repo.abortStashApply(sc.sha, sc.snapshot))) {
+      stashConflict = null;
+      conflictSides = null;
+      conflictTotal = 0;
+      _notify();
+    }
   }
 
   /// Continues the operation in progress. A merge (cherry-pick, revert)
