@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../graph/graph_painter.dart' show LineHint;
 import 'tab_groups.dart';
 
 /// Persistent app settings and session state, stored as JSON.
@@ -58,6 +59,9 @@ class Settings {
   /// 'system' (follow the OS), 'light' or 'dark'.
   String themeMode = 'system';
 
+  /// What links each commit in the graph to its message.
+  LineHint lineHint = LineHint.leader;
+
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
     'activeTab': activeTab,
@@ -86,6 +90,7 @@ class Settings {
     'forceTagFetch': forceTagFetch,
     'skippedUpdate': skippedUpdate,
     'themeMode': themeMode,
+    'lineHint': lineHint.name,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -123,7 +128,9 @@ class Settings {
         'light' => 'light',
         'dark' => 'dark',
         _ => 'system',
-      };
+      }
+      ..lineHint =
+          LineHint.values.asNameMap()[j['lineHint']] ?? LineHint.leader;
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {

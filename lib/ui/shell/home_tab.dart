@@ -6,6 +6,7 @@ import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
 import '../../git/git_runner.dart';
+import '../../graph/graph_painter.dart';
 import '../../git/repository.dart';
 import '../dialogs/dialogs.dart';
 import '../dialogs/update_dialog.dart';
@@ -442,6 +443,24 @@ class _SettingsForm extends StatelessWidget {
           ),
         ),
         _row(
+          'Line hint',
+          AppDropdown<LineHint>(
+            key: const ValueKey('line-hint'),
+            value: s.lineHint,
+            items: const [
+              (LineHint.leader, 'Leader line', null),
+              (LineHint.line, 'Line', null),
+              (LineHint.fade, 'Fade', null),
+              (LineHint.none, 'None', null),
+            ],
+            preview: _LineHintPreview.new,
+            onChanged: app.setLineHint,
+          ),
+          info:
+              'What links each commit in the graph to its message, in its '
+              'branch\'s color.',
+        ),
+        _row(
           'Zoom',
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -596,6 +615,89 @@ class _SettingsForm extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Two graph rows drawn with [hint], as a sample of what it looks like.
+class _LineHintPreview extends StatelessWidget {
+  const _LineHintPreview(this.hint);
+  final LineHint hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = TextStyle(fontSize: 12, color: AppColors.text);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (lane, message) in [
+          (0, 'Merge branch \'feature\''),
+          (1, 'Add the login form'),
+        ])
+          SizedBox(
+            height: 24,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomPaint(
+                  size: const Size(64, 24),
+                  painter: _LineHintRowPainter(hint, lane),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    message,
+                    style: text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _LineHintRowPainter extends CustomPainter {
+  _LineHintRowPainter(this.hint, this.lane);
+  final LineHint hint;
+  final int lane;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double x(int lane) => 8.0 + lane * 14;
+    final line = Paint()..strokeWidth = 2;
+    // The first lane runs through both rows; the second starts at its node.
+    canvas.drawLine(
+      Offset(x(0), 0),
+      Offset(x(0), size.height),
+      line..color = AppColors.lane(0),
+    );
+    if (lane == 1) {
+      canvas.drawLine(
+        Offset(x(1), size.height / 2),
+        Offset(x(1), size.height),
+        line..color = AppColors.lane(1),
+      );
+    }
+    paintLineHint(
+      canvas,
+      hint,
+      color: AppColors.lane(lane),
+      from: x(lane),
+      to: size.width,
+      height: size.height,
+    );
+    canvas.drawCircle(
+      Offset(x(lane), size.height / 2),
+      5,
+      Paint()..color = AppColors.lane(lane),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LineHintRowPainter old) =>
+      old.hint != hint || old.lane != lane;
 }
 
 /// An ⓘ that explains a setting in a popover, on hover or click.

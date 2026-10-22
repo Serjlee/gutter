@@ -568,6 +568,7 @@ class _GraphRowState extends State<_GraphRow> {
                       isHead: commit != null && sha == tab.headSha,
                       trunk: trunkRow,
                       dimmed: dimmed,
+                      hint: tab.app.settings.lineHint,
                     ),
                   ),
                 ),

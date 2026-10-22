@@ -229,12 +229,16 @@ class AppDropdown<T> extends StatelessWidget {
     required this.onChanged,
     this.style,
     this.expand = false,
+    this.preview,
   });
 
   final T value;
 
   /// (value, label, color) triples.
   final List<(T, String, Color?)> items;
+
+  /// Shown under an item's label in the menu, when it returns one.
+  final Widget? Function(T value)? preview;
   final ValueChanged<T> onChanged;
   final TextStyle? style;
   final bool expand;
@@ -261,9 +265,12 @@ class AppDropdown<T> extends StatelessWidget {
           PopupMenuItem<T>(
             value: v,
             height: 32,
-            child: Text(
-              text,
-              style: color == null ? base : base.copyWith(color: color),
+            child: _withPreview(
+              Text(
+                text,
+                style: color == null ? base : base.copyWith(color: color),
+              ),
+              preview?.call(v),
             ),
           ),
       ],
@@ -279,6 +286,16 @@ class AppDropdown<T> extends StatelessWidget {
       ),
     );
   }
+
+  static Widget _withPreview(Widget label, Widget? preview) => preview == null
+      ? label
+      : Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [label, const SizedBox(height: 4), preview],
+          ),
+        );
 }
 
 /// Shows a context menu at a global pointer position (zoom-aware).

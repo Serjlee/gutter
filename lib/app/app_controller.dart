@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../git/git_errors.dart';
 import '../git/git_runner.dart';
 import '../git/repository.dart';
+import '../graph/graph_painter.dart' show LineHint;
 import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
@@ -522,6 +523,12 @@ class AppController extends ChangeNotifier {
   /// 'system', 'light' or 'dark'.
   void setThemeMode(String mode) {
     settings.themeMode = mode;
+    save();
+    notifyListeners();
+  }
+
+  void setLineHint(LineHint value) {
+    settings.lineHint = value;
     save();
     notifyListeners();
   }

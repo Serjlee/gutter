@@ -19,6 +19,47 @@ class GraphMetrics {
 
 enum NodeStyle { commit, merge, wip, stash }
 
+/// What links a commit's node to its message, in the branch's color.
+enum LineHint { none, leader, line, fade }
+
+/// Paints [hint] across a row of [height], from the node's center at [from]
+/// to the message at [to].
+void paintLineHint(
+  Canvas canvas,
+  LineHint hint, {
+  required Color color,
+  required double from,
+  required double to,
+  required double height,
+  double alpha = 1,
+}) {
+  if (hint == LineHint.none || to <= from) return;
+  Color a(double v) => color.withValues(alpha: v * alpha);
+  final cy = height / 2;
+  void fade(Rect r, double start, double end) => canvas.drawRect(
+    r,
+    Paint()
+      ..shader = LinearGradient(colors: [a(start), a(end)]).createShader(r),
+  );
+  switch (hint) {
+    case LineHint.none:
+      break;
+    case LineHint.leader || LineHint.line:
+      // A thin line, faint at the node and full at the message.
+      fade(Rect.fromLTRB(from, cy - 0.75, to, cy + 0.75), 0.2, 1);
+      if (hint == LineHint.leader) {
+        canvas.drawRect(
+          Rect.fromLTRB(to - 2, 8, to, height - 8),
+          Paint()..color = a(0.9),
+        );
+      }
+    case LineHint.fade:
+      // A band, strongest at the node, fading towards the message.
+      final strength = AppColors.current.isDark ? 0.28 : 0.21;
+      fade(Rect.fromLTRB(from, 4, to, height - 4), strength, strength * 0.2);
+  }
+}
+
 /// Paints one row of the commit graph: lower halves of the incoming edges,
 /// upper halves of the outgoing ones, and the node.
 class GraphRowPainter extends CustomPainter {
@@ -32,6 +73,7 @@ class GraphRowPainter extends CustomPainter {
     this.isHead = false,
     this.dimmed = false,
     this.trunk = false,
+    this.hint = LineHint.leader,
   });
 
   final GraphLayout layout;
@@ -47,6 +89,7 @@ class GraphRowPainter extends CustomPainter {
 
   /// A remote's main or master points here: ringed in gray.
   final bool trunk;
+  final LineHint hint;
 
   static final _textCache = <String, TextPainter>{};
 
@@ -106,32 +149,18 @@ class GraphRowPainter extends CustomPainter {
       }
     }
 
-    // Behind the rest: a band from the node to the message in the node's
-    // color, fading in, so a row reads as part of its branch at a glance.
+    // Behind the rest: a hint from the node to the message in the node's
+    // color, so a row reads as part of its branch at a glance.
     if (style != NodeStyle.wip) {
-      final x0 = metrics.laneX(layout.nodeLane[row]);
-      final band = Rect.fromLTRB(x0, 4, size.width, h - 4);
-      if (band.width > 0) {
-        final lane = AppColors.lane(
-          layout.nodeColor[row] & GraphLayout.colorMask,
-        );
-        final strength = AppColors.current.isDark ? 0.32 : 0.24;
-        canvas.drawRect(
-          band,
-          Paint()
-            ..shader = LinearGradient(
-              colors: [
-                lane.withValues(alpha: 0),
-                lane.withValues(alpha: strength * alpha),
-              ],
-            ).createShader(band),
-        );
-        // Its edge, against the message.
-        canvas.drawRect(
-          Rect.fromLTRB(size.width - 3, band.top, size.width, band.bottom),
-          Paint()..color = lane.withValues(alpha: alpha),
-        );
-      }
+      paintLineHint(
+        canvas,
+        hint,
+        color: AppColors.lane(layout.nodeColor[row] & GraphLayout.colorMask),
+        from: metrics.laneX(layout.nodeLane[row]),
+        to: size.width,
+        height: h,
+        alpha: alpha,
+      );
     }
 
     // Straight lines: the lower half of the edges arriving from row-1 and the
@@ -367,6 +396,7 @@ class GraphRowPainter extends CustomPainter {
       old.isHead != isHead ||
       old.trunk != trunk ||
       old.dimmed != dimmed ||
+      old.hint != hint ||
       old.initials != initials ||
       old.avatar != avatar ||
       old.metrics.laneWidth != metrics.laneWidth;
