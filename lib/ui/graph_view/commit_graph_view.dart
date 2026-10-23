@@ -536,6 +536,7 @@ class _GraphRowState extends State<_GraphRow> {
     final selected = tab.isSelected(sha);
     final laneColor = AppColors.lane(graph.layout.nodeColor[row]);
     final isHit = tab.searchHitSet.contains(row);
+    final query = tab.search.trim().toLowerCase();
     final gap = widget.separator == null ? 0.0 : _gap;
     final dimmed = tab.search.trim().isNotEmpty && !isHit;
 
@@ -627,12 +628,16 @@ class _GraphRowState extends State<_GraphRow> {
                 width: widget.cols.refs,
                 child: commit == null
                     ? const SizedBox()
-                    : _RefPills(
-                        refs: refs,
-                        laneColor: laneColor,
-                        actions: widget.actions,
-                        headSha: tab.headSha,
-                        isHeadCommit: sha == tab.headSha,
+                    : Opacity(
+                        // Faded with the rest of a row search passes over.
+                        opacity: dimmed ? 0.35 : 1,
+                        child: _RefPills(
+                          refs: refs,
+                          laneColor: laneColor,
+                          actions: widget.actions,
+                          headSha: tab.headSha,
+                          isHeadCommit: sha == tab.headSha,
+                        ),
                       ),
               ),
               SizedBox(
@@ -685,8 +690,8 @@ class _GraphRowState extends State<_GraphRow> {
                             if (rebaseBase)
                               _RebaseBadge('onto', AppColors.accent),
                             Expanded(
-                              child: Text(
-                                commit.subject,
+                              child: Text.rich(
+                                _marked(commit.subject, isHit ? query : ''),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -709,7 +714,12 @@ class _GraphRowState extends State<_GraphRow> {
                 ),
               ),
               if (widget.cols.author != null)
-                _cell(commit?.authorName ?? '', widget.cols.author!, dimColor),
+                _cell(
+                  commit?.authorName ?? '',
+                  widget.cols.author!,
+                  dimColor,
+                  query: isHit ? query : '',
+                ),
               if (widget.cols.age != null)
                 commit == null
                     ? SizedBox(width: widget.cols.age)
@@ -727,8 +737,13 @@ class _GraphRowState extends State<_GraphRow> {
                   width: widget.cols.sha,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      commit?.shortSha ?? '',
+                    child: Text.rich(
+                      _marked(
+                        commit?.shortSha ?? '',
+                        isHit && (commit?.sha.startsWith(query) ?? false)
+                            ? query
+                            : '',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.clip,
                       style: monoStyle(size: 12, color: dimColor),
@@ -757,18 +772,40 @@ class _GraphRowState extends State<_GraphRow> {
       : 'Authored ${formatDateTime(c.date)}\n'
             'Committed ${formatDateTime(c.commitDate)}';
 
-  Widget _cell(String text, double width, Color color) => SizedBox(
-    width: width,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 12, color: color),
-      ),
-    ),
-  );
+  /// [text] with each occurrence of [query] (ignoring case) marked.
+  static TextSpan _marked(String text, String query) {
+    final lower = text.toLowerCase();
+    // (Lowercasing may change lengths, as for "İ": then nothing's marked.)
+    if (query.isEmpty || lower.length != text.length) {
+      return TextSpan(text: text);
+    }
+    final mark = TextStyle(
+      backgroundColor: AppColors.warning.withValues(alpha: 0.35),
+    );
+    final spans = <TextSpan>[];
+    var at = 0;
+    for (var i = lower.indexOf(query); i >= 0; i = lower.indexOf(query, at)) {
+      if (i > at) spans.add(TextSpan(text: text.substring(at, i)));
+      at = i + query.length;
+      spans.add(TextSpan(text: text.substring(i, at), style: mark));
+    }
+    if (at < text.length) spans.add(TextSpan(text: text.substring(at)));
+    return TextSpan(children: spans);
+  }
+
+  Widget _cell(String text, double width, Color color, {String query = ''}) =>
+      SizedBox(
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text.rich(
+            _marked(text, query),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+        ),
+      );
 }
 
 class _WipSummary extends StatelessWidget {
