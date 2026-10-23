@@ -179,8 +179,19 @@ class CommitDetailsPanel extends StatelessWidget {
     final parents = stash != null ? d.parents.take(1).toList() : d.parents;
     final refs = tab.refsBySha[d.sha] ?? const <GitRef>[];
     final authorDate = DateTime.fromMillisecondsSinceEpoch(d.authorTime * 1000);
+    final commitDate = DateTime.fromMillisecondsSinceEpoch(
+      d.committerTime * 1000,
+    );
     final differentCommitter =
         d.committerEmail != d.authorEmail || d.committerName != d.authorName;
+    // Rebased, cherry-picked or amended later, or applied by someone else.
+    final committedApart =
+        differentCommitter || d.committerTime - d.authorTime >= 60;
+    String when(DateTime t) {
+      final age = shortAge(t);
+      return '${formatDate(t)} (${age == 'now' ? 'just now' : '$age ago'})';
+    }
+
     final files = tab.commitFiles;
     final selectedPath = tab.diffTarget is CommitFileTarget
         ? tab.diffTarget!.path
@@ -334,11 +345,23 @@ class CommitDetailsPanel extends StatelessWidget {
                       style: const TextStyle(fontSize: 12.5),
                     ),
                     Text(
-                      'authored ${formatDate(authorDate)}'
-                      '${differentCommitter ? ' · committed by ${d.committerName}' : ''}',
+                      'authored ${when(authorDate)}',
+                      key: const ValueKey('details-authored'),
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 12, color: AppColors.textDim),
                     ),
+                    if (committedApart)
+                      Text(
+                        'committed '
+                        '${differentCommitter ? 'by ${d.committerName} ' : ''}'
+                        '${when(commitDate)}',
+                        key: const ValueKey('details-committed'),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textDim,
+                        ),
+                      ),
                   ],
                 ),
               ),
