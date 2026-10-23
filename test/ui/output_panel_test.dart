@@ -123,4 +123,17 @@ void main() {
     await tester.pump();
     expect(find.text('git show HEAD:a.txt'), findsOneWidget);
   });
+
+  testWidgets('the header leaves out commands that went fine', (tester) async {
+    await tester.runAsync(
+      () => tab.run('Branch', () => tab.repo.createBranch('side')),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(body: OutputPanel(tab: tab)),
+      ),
+    );
+    expect(find.textContaining('git '), findsNothing);
+  });
 }

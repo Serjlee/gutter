@@ -155,6 +155,8 @@ class _OutputPanelState extends State<OutputPanel> {
         break;
       }
     }
+    // Only while it runs, or when it failed: the rest is in the list.
+    if (latest != null && !latest.running && !latest.failed) latest = null;
     return Container(
       height: 26,
       color: AppColors.panel,
