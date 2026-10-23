@@ -734,6 +734,10 @@ class RepoActions {
 
   List<PopupMenuEntry<VoidCallback>> commitMenu(Commit c) {
     final isHead = c.sha == tab.headSha;
+    // Already in HEAD's history: there's nothing to merge, rebase onto or
+    // pick from it.
+    final head = tab.headSha;
+    final inHead = head != null && tab.graph.inHistoryOf(head, c.sha);
     final branch = tab.currentBranch;
     final refs = refsAt(c.sha);
     final localBranches = refs
@@ -759,7 +763,7 @@ class RepoActions {
         icon: Icons.sell_outlined,
       ),
       const PopupMenuDivider(),
-      if (!isHead) ...[
+      if (!inHead) ...[
         menuItem(
           'Merge into ${branch ?? 'HEAD'}',
           () => merge(c.sha, _short(c.sha)),

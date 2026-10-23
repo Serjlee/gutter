@@ -117,6 +117,26 @@ class GraphData {
     };
     return _rows![sha];
   }
+
+  String? _historyOf;
+  Set<String> _history = const {};
+
+  /// Whether [sha] is [head] or one of its ancestors, as far as the loaded
+  /// history goes.
+  bool inHistoryOf(String head, String sha) {
+    if (head != _historyOf) {
+      final parents = {for (final c in history) c.sha: c.parents};
+      final seen = <String>{};
+      final todo = [head];
+      while (todo.isNotEmpty) {
+        final c = todo.removeLast();
+        if (seen.add(c)) todo.addAll(parents[c] ?? const []);
+      }
+      _history = seen;
+      _historyOf = head;
+    }
+    return _history.contains(sha);
+  }
 }
 
 /// What the diff area shows.
