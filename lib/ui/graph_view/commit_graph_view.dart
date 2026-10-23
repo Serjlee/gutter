@@ -40,24 +40,31 @@ class GraphColumns {
   double graphWidth(int lanes) =>
       graph ?? _metrics.widthFor(max(1, min(lanes, 12)));
 
-  /// Decides which columns fit in [width]: optional columns are dropped
-  /// (sha, then age, then author) and the ref column shrinks so the
-  /// message column keeps at least [minMessage] pixels.
-  FittedColumns fit(double width, double graphW, {double minMessage = 160}) {
+  /// Decides which columns fit in [width], keeping at least [minMessage]
+  /// pixels for the message: the sha goes first, then the ref column
+  /// shrinks, the author goes, the ref column shrinks more, and the age
+  /// goes last (it's narrow, and says the most at a glance).
+  FittedColumns fit(double width, double graphW, {double minMessage = 200}) {
     var refsW = refs;
     var showSha = true, showAge = true, showAuthor = true;
-    double used() =>
-        refsW +
-        graphW +
-        (showAuthor ? author : 0) +
-        (showAge ? age : 0) +
+    double spare() =>
+        width -
+        minMessage -
+        refsW -
+        graphW -
+        (showAuthor ? author : 0) -
+        (showAge ? age : 0) -
         (showSha ? sha : 0);
-    if (used() + minMessage > width) showSha = false;
-    if (used() + minMessage > width) showAge = false;
-    if (used() + minMessage > width) showAuthor = false;
-    if (used() + minMessage > width) {
-      refsW = max(70, width - minMessage - graphW);
+    void shrinkRefs(double to) {
+      if (spare() < 0 && refsW > to) refsW = max(to, refsW + spare());
     }
+
+    if (spare() < 0) showSha = false;
+    shrinkRefs(110);
+    if (spare() < 0) showAuthor = false;
+    shrinkRefs(80);
+    if (spare() < 0) showAge = false;
+    shrinkRefs(70);
     return FittedColumns(
       refs: refsW,
       graph: graphW,
@@ -1147,8 +1154,9 @@ class _RefPills extends StatelessWidget {
   }
 
   /// A ref label. With [fit], icons that don't fit in the width it gets are
-  /// dropped (last first) rather than overflowing, leaving the text some
-  /// room; it then can't be measured for intrinsic sizes (as menus do).
+  /// dropped (last first) rather than overflowing, the name first keeping
+  /// some room; it then can't be measured for intrinsic sizes (as menus
+  /// do).
   Widget _pill(
     BuildContext context, {
     required String label,
@@ -1160,6 +1168,11 @@ class _RefPills extends StatelessWidget {
     bool fit = true,
   }) {
     final all = [?icon, ...icons];
+    final style = TextStyle(
+      fontSize: 11.5,
+      color: AppColors.pillText,
+      fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+    );
     Widget content(int iconCount) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1168,11 +1181,7 @@ class _RefPills extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11.5,
-              color: AppColors.pillText,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            ),
+            style: style,
           ),
         ),
         for (final i in all.take(iconCount))
@@ -1200,8 +1209,18 @@ class _RefPills extends StatelessWidget {
           ? content(all.length)
           : LayoutBuilder(
               builder: (context, c) {
-                // Each icon takes 15px; keep 20px for the text.
-                final room = c.maxWidth - 20;
+                // Each icon takes 15px; the name keeps up to 48px (about
+                // seven letters) before they show.
+                final name = (TextPainter(
+                  text: TextSpan(
+                    text: label,
+                    style: DefaultTextStyle.of(context).style.merge(style),
+                  ),
+                  textDirection: TextDirection.ltr,
+                  textScaler: MediaQuery.textScalerOf(context),
+                  maxLines: 1,
+                )..layout()).width;
+                final room = c.maxWidth - min(name, 48);
                 final n = room.isFinite
                     ? (room / 15).floor().clamp(0, all.length)
                     : all.length;
