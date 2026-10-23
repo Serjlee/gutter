@@ -73,7 +73,7 @@ class GraphRowPainter extends CustomPainter {
     this.isHead = false,
     this.dimmed = false,
     this.trunk = false,
-    this.hint = LineHint.leader,
+    this.hint = LineHint.fade,
   });
 
   final GraphLayout layout;

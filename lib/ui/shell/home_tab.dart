@@ -448,9 +448,9 @@ class _SettingsForm extends StatelessWidget {
             key: const ValueKey('line-hint'),
             value: s.lineHint,
             items: const [
+              (LineHint.fade, 'Fade', null),
               (LineHint.leader, 'Leader line', null),
               (LineHint.line, 'Line', null),
-              (LineHint.fade, 'Fade', null),
               (LineHint.none, 'None', null),
             ],
             preview: _LineHintPreview.new,

@@ -11,11 +11,18 @@ import 'package:gutter/ui/shell/home_tab.dart';
 import '../support/temp_repo.dart';
 
 void main() {
-  test('the line hint is saved, unknown values meaning the leader line', () {
-    final s = Settings()..lineHint = LineHint.fade;
-    expect(Settings.fromJson(s.toJson()).lineHint, LineHint.fade);
-    expect(Settings.fromJson({'lineHint': 'zigzag'}).lineHint, LineHint.leader);
-    expect(Settings.fromJson({}).lineHint, LineHint.leader);
+  test('the line hint picked is saved; otherwise, the default', () {
+    LineHint load(Map<String, Object?> j) => Settings.fromJson(j).lineHint;
+    final s = Settings()..lineHint = LineHint.leader;
+    expect(Settings.fromJson(s.toJson()).lineHint, LineHint.leader);
+    expect(Settings().toJson().containsKey('lineHintChoice'), isFalse);
+    expect(load({}), LineHint.fade);
+    expect(load({'lineHintChoice': 'zigzag'}), LineHint.fade);
+    // Saved by 0.7: the leader line, the default then, may not have been
+    // picked; any other style was.
+    expect(load({'lineHint': 'leader'}), LineHint.fade);
+    expect(load({'lineHint': 'line'}), LineHint.line);
+    expect(load({'lineHint': 'none'}), LineHint.none);
   });
 
   testWidgets('picked in the settings, with previews, and drawn by the graph', (
@@ -50,7 +57,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Leader line'), findsOneWidget);
+    expect(find.text('Fade'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('line-hint')));
     await tester.pumpAndSettle();
@@ -65,9 +72,9 @@ void main() {
         reason: label,
       );
     }
-    await tester.tap(find.text('Fade').last);
+    await tester.tap(find.text('Line').last);
     await tester.pumpAndSettle();
-    expect(app.settings.lineHint, LineHint.fade);
+    expect(app.settings.lineHint, LineHint.line);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -81,7 +88,7 @@ void main() {
         .map((p) => p.painter)
         .whereType<GraphRowPainter>()
         .first;
-    expect(painter.hint, LineHint.fade);
+    expect(painter.hint, LineHint.line);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));

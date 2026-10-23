@@ -59,8 +59,14 @@ class Settings {
   /// 'system' (follow the OS), 'light' or 'dark'.
   String themeMode = 'system';
 
-  /// What links each commit in the graph to its message.
-  LineHint lineHint = LineHint.leader;
+  /// What links each commit in the graph to its message: the one picked,
+  /// else the default.
+  LineHint get lineHint => chosenLineHint ?? LineHint.fade;
+  set lineHint(LineHint value) => chosenLineHint = value;
+
+  /// The line hint picked in the settings, if any. Unset, the default
+  /// applies, whatever it is at the time.
+  LineHint? chosenLineHint;
 
   Map<String, Object?> toJson() => {
     'openTabs': openTabs,
@@ -90,7 +96,7 @@ class Settings {
     'forceTagFetch': forceTagFetch,
     'skippedUpdate': skippedUpdate,
     'themeMode': themeMode,
-    'lineHint': lineHint.name,
+    'lineHintChoice': ?chosenLineHint?.name,
   };
 
   static Settings fromJson(Map<String, Object?> j) {
@@ -129,8 +135,7 @@ class Settings {
         'dark' => 'dark',
         _ => 'system',
       }
-      ..lineHint =
-          LineHint.values.asNameMap()[j['lineHint']] ?? LineHint.leader;
+      ..chosenLineHint = _lineHintChoice(j);
     final cw = j['columnWidths'];
     if (cw is Map) {
       for (final e in cw.entries) {
@@ -141,6 +146,15 @@ class Settings {
     }
     return s;
   }
+}
+
+/// The line hint picked, from settings [j]. Before "lineHintChoice",
+/// "lineHint" was saved whether picked or not, so its default then, the
+/// leader line, may not have been picked: that one is left out.
+LineHint? _lineHintChoice(Map<String, Object?> j) {
+  final names = LineHint.values.asNameMap();
+  final old = j['lineHint'] == 'leader' ? null : names[j['lineHint']];
+  return names[j['lineHintChoice']] ?? old;
 }
 
 class SettingsStore {
