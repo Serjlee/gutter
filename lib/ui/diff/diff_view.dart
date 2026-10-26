@@ -1005,15 +1005,15 @@ class _Gutter extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onToggle(HardwareKeyboard.instance.isShiftPressed),
+        // Painted over, so a selectable line lines up with the others.
         child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: selected ? AppColors.accent : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
+          foregroundDecoration: selected
+              ? BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: AppColors.accent, width: 3),
+                  ),
+                )
+              : null,
           child: child,
         ),
       ),

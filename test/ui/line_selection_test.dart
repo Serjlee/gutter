@@ -134,4 +134,17 @@ void main() {
     expect(t.git(['show', ':a.txt']), 'a\nB\nc\n');
     await finish(tester);
   });
+
+  testWidgets('changed lines line up with the others', (tester) async {
+    await pumpDiff(tester);
+    // a (context) and B (added): their code starts at the same x.
+    double x(String text) => tester.getTopLeft(find.text(text)).dx;
+    expect(x('B'), x('a'));
+    expect(x('d'), x('c'));
+    // Selected too (the mark doesn't push it).
+    await tester.tap(find.text('+').first);
+    await tester.pump();
+    expect(x('B'), x('a'));
+    await finish(tester);
+  });
 }
