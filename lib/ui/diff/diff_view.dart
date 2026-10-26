@@ -591,8 +591,10 @@ class _DiffViewState extends State<DiffView> {
     final contentWidth = noWidth * 2 + 20 + maxLen * _charWidth + 40;
     final wrap = tab.app.settings.diffWrap;
     // The code can be selected and copied; line numbers, markers and hunk
-    // headers stay out of the selection.
+    // headers stay out of the selection. A new diff drops it, as the rows
+    // hold other lines then.
     final list = SelectionArea(
+      key: ObjectKey(diff),
       child: ListView.builder(
         controller: _vScroll,
         // Wrapped lines take as many rows as they need.
@@ -722,8 +724,10 @@ class _DiffViewState extends State<DiffView> {
     }
     final spans = _highlightFor(diff, tab.diffTarget!.path);
     // Two half-width panes that always fit the view; long lines wrap and
-    // both sides of a row keep the same height.
+    // both sides of a row keep the same height. A new diff drops the
+    // selection, as the rows hold other lines then.
     return SelectionArea(
+      key: ObjectKey(diff),
       child: ListView.builder(
         controller: _vScroll,
         itemCount: rows.length,

@@ -133,6 +133,9 @@ class _FilePreviewState extends State<FilePreview> {
         return Container(
           color: AppColors.background,
           child: SelectionArea(
+            // New content drops the selection, as the rows hold other
+            // lines then.
+            key: ObjectKey(lines),
             child: ListView.builder(
               itemExtent: 19,
               itemCount: lines.length,

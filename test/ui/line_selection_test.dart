@@ -147,4 +147,23 @@ void main() {
     expect(x('B'), x('a'));
     await finish(tester);
   });
+
+  testWidgets('a new diff drops the text selection', (tester) async {
+    await pumpDiff(tester);
+    final before = tester.state(find.byType(SelectableRegion));
+    final diffBefore = tab.diff;
+    // Staging a line: the diff is another, its rows hold other lines.
+    await tester.tap(find.text('+').last); // d
+    await tester.pump();
+    await tester.tap(find.text('Stage lines'));
+    for (var i = 0; i < 40 && identical(tab.diff, diffBefore); i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(t.git(['show', ':a.txt']), 'a\nb\nc\nd\n');
+    expect(tester.state(find.byType(SelectableRegion)), isNot(same(before)));
+    await finish(tester);
+  });
 }

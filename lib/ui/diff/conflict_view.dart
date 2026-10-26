@@ -484,6 +484,9 @@ class _ConflictViewState extends State<ConflictView> {
     final total = _parsed!.conflicts.length;
     var n = 0;
     return SelectionArea(
+      // Reloaded, the file drops the selection, as the rows hold other
+      // lines then.
+      key: ObjectKey(_parsed),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
