@@ -1663,14 +1663,23 @@ class RepoTabController extends ChangeNotifier {
     });
   }
 
+  /// Why [commit] can't go ahead now, if it can't.
+  String? get commitProblem {
+    if (commitMessage.text.trim().isEmpty) return 'Enter a commit message';
+    if (!amend && status.staged.isEmpty && !commitFinishesOperation) {
+      return 'Nothing staged to commit';
+    }
+    return null;
+  }
+
+  /// Whether [branch] is the repository's main line: main or master.
+  static bool isMainBranch(String? branch) =>
+      branch == 'main' || branch == 'master';
+
   Future<bool> commit() async {
     final msg = commitMessage.text.trim();
-    if (msg.isEmpty) {
-      app.notify('Enter a commit message', error: true);
-      return false;
-    }
-    if (!amend && status.staged.isEmpty && !commitFinishesOperation) {
-      app.notify('Nothing staged to commit', error: true);
+    if (commitProblem case final problem?) {
+      app.notify(problem, error: true);
       return false;
     }
     final ok = await run(

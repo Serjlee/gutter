@@ -53,6 +53,10 @@ class Settings {
   /// Fetch replaces local tags that moved on the remote, without asking.
   bool forceTagFetch = false;
 
+  /// Repositories where committing or pushing to main (or master) goes
+  /// ahead without asking first.
+  List<String> mainBranchUnguarded = [];
+
   /// A release the user chose to skip (its tag): not offered again.
   String? skippedUpdate;
 
@@ -94,6 +98,7 @@ class Settings {
     'syntaxHighlighting': syntaxHighlight,
     'githubAvatars': githubAvatars,
     'forceTagFetch': forceTagFetch,
+    'mainBranchUnguarded': mainBranchUnguarded,
     'skippedUpdate': skippedUpdate,
     'themeMode': themeMode,
     'lineHintChoice': ?chosenLineHint?.name,
@@ -129,6 +134,7 @@ class Settings {
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
+      ..mainBranchUnguarded = strings(j['mainBranchUnguarded'])
       ..skippedUpdate = j['skippedUpdate'] as String?
       ..themeMode = switch (j['themeMode']) {
         'light' => 'light',

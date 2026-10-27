@@ -666,10 +666,48 @@ class RepoActions {
     if (ok) await tab.run('Drop stash', () => repo.stashDrop(s.index));
   }
 
+  /// Before committing ([push] false) or pushing straight to [branch]:
+  /// when it's main or master, asks first, unless told not to for this
+  /// repository. Whether to go ahead.
+  Future<bool> _confirmMainBranch(String? branch, {required bool push}) async {
+    if (branch == null ||
+        !RepoTabController.isMainBranch(branch) ||
+        tab.app.settings.mainBranchUnguarded.contains(repo.path)) {
+      return true;
+    }
+    final target = push ? tab.pushTarget(branch) : null;
+    final (ok, optOut) = await confirmWithOptOut(
+      context,
+      title: push ? 'Push to $branch?' : 'Commit to $branch?',
+      message: push
+          ? 'You are about to push straight to $branch'
+                '${target == null ? '' : ' ($target)'}. Is this something '
+                'you actually want to do?'
+          : 'You are about to commit straight to $branch. Is this '
+                'something you actually want to do?',
+      optOutLabel: 'Don\'t ask again for this repository',
+      confirmLabel: push ? 'Push to $branch' : 'Commit to $branch',
+    );
+    if (optOut) tab.app.unguardMainBranch(repo.path);
+    return ok;
+  }
+
+  /// Commits what's staged, asking first on main.
+  Future<void> commit() async {
+    // A merge, cherry-pick or revert to finish was started on purpose.
+    if (tab.commitProblem == null &&
+        !tab.commitFinishesOperation &&
+        !await _confirmMainBranch(tab.currentBranch, push: false)) {
+      return;
+    }
+    await tab.commit();
+  }
+
   /// Pushes [branch] (default: the current one); if the remote rejects it
   /// because it has commits the branch doesn't, offers a force push.
   Future<void> push([String? branch]) async {
     branch ??= tab.currentBranch;
+    if (!await _confirmMainBranch(branch, push: true)) return;
     if (await tab.push(branch: branch) != PushOutcome.rejected) return;
     if (!context.mounted || branch == null) return;
     final target = tab.pushTarget(branch) ?? 'The remote branch';
@@ -700,6 +738,8 @@ class RepoActions {
       tab.app.notify('No remote configured', error: true);
       return;
     }
+    if (!await _confirmMainBranch(branch, push: true)) return;
+    if (!context.mounted) return;
     final ok = await confirm(
       context,
       title: 'Force push $branch',

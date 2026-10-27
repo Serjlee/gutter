@@ -75,6 +75,75 @@ Future<bool> confirm(
   return r ?? false;
 }
 
+/// [confirm], with a checkbox to stop asking ([optOutLabel]). Returns
+/// whether it was confirmed, and whether the box was ticked (only when
+/// confirmed).
+Future<(bool, bool)> confirmWithOptOut(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String optOutLabel,
+  String confirmLabel = 'OK',
+}) async {
+  var optOut = false;
+  final r = await showAppDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontSize: 17)),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: AppColors.textDim)),
+              const SizedBox(height: 14),
+              InkWell(
+                key: const ValueKey('opt-out'),
+                onTap: () => setState(() => optOut = !optOut),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: optOut,
+                        onChanged: (v) => setState(() => optOut = v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        optOutLabel,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    ),
+  );
+  final ok = r ?? false;
+  return (ok, ok && optOut);
+}
+
 class FieldSpec {
   const FieldSpec(
     this.label, {

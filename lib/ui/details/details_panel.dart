@@ -1062,9 +1062,9 @@ class _CommitComposer extends StatelessWidget {
                 LogicalKeyboardKey.enter,
                 control: true,
               ): () =>
-                  unawaited(tab.commit()),
+                  unawaited(RepoActions(context, tab).commit()),
               const SingleActivator(LogicalKeyboardKey.enter, meta: true): () =>
-                  unawaited(tab.commit()),
+                  unawaited(RepoActions(context, tab).commit()),
             },
             child: TextField(
               controller: tab.commitMessage,
@@ -1103,7 +1103,7 @@ class _CommitComposer extends StatelessWidget {
                 ? null
                 : rebasing
                 ? tab.continueOperation
-                : () => tab.commit(),
+                : () => RepoActions(context, tab).commit(),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.success,
               padding: const EdgeInsets.symmetric(vertical: 12),

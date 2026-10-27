@@ -514,6 +514,15 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Committing or pushing to main in the repository at [path] goes
+  /// ahead without asking from now on.
+  void unguardMainBranch(String path) {
+    if (settings.mainBranchUnguarded.contains(path)) return;
+    settings.mainBranchUnguarded = [...settings.mainBranchUnguarded, path];
+    save();
+    notifyListeners();
+  }
+
   void setForceTagFetch(bool value) {
     settings.forceTagFetch = value;
     save();
