@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
@@ -8,6 +9,8 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/ui/repo/repo_actions.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
+import 'package:gutter/ui/shell/home_tab.dart';
+import 'package:path/path.dart' as p;
 
 import '../support/temp_repo.dart';
 
@@ -128,5 +131,58 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('the home tab turns the question back on, repository by '
+      'repository', (tester) async {
+    late TempRepo quiet, asking;
+    await tester.runAsync(() async {
+      quiet = await TempRepo.create();
+      asking = await TempRepo.create();
+    });
+    addTearDown(() {
+      quiet.dispose();
+      asking.dispose();
+    });
+    final app = AppController(
+      null,
+      Settings()
+        ..knownRepos = [quiet.path, asking.path]
+        ..mainBranchUnguarded = [quiet.path],
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: app,
+            builder: (_, _) => HomeTab(app: app),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    const item = 'Ask again before committing to main';
+
+    Future<void> openMenu(TempRepo t) async {
+      await tester.tap(
+        find.text(p.basename(t.path)).first,
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openMenu(asking);
+    expect(find.text(item), findsNothing);
+    await tester.tapAt(const Offset(1390, 890)); // closes it
+    await tester.pumpAndSettle();
+
+    await openMenu(quiet);
+    await tester.tap(find.text(item));
+    await tester.pumpAndSettle();
+    expect(app.settings.mainBranchUnguarded, isEmpty);
   });
 }

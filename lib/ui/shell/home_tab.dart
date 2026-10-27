@@ -373,6 +373,13 @@ class _RepoTileState extends State<_RepoTile> {
             ),
             icon: Icons.copy,
           ),
+          // Told not to, earlier.
+          if (widget.app.settings.mainBranchUnguarded.contains(widget.path))
+            menuItem(
+              'Ask again before committing to main',
+              () => widget.app.guardMainBranch(widget.path),
+              icon: Icons.warning_amber,
+            ),
           menuItem(
             'Forget',
             () => widget.app.forgetRepo(widget.path),

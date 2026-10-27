@@ -523,6 +523,17 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Committing or pushing to main in the repository at [path] asks
+  /// first again.
+  void guardMainBranch(String path) {
+    settings.mainBranchUnguarded = [
+      for (final p in settings.mainBranchUnguarded)
+        if (p != path) p,
+    ];
+    save();
+    notifyListeners();
+  }
+
   void setForceTagFetch(bool value) {
     settings.forceTagFetch = value;
     save();
