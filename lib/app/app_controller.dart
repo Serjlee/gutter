@@ -567,6 +567,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCompactGraph(bool value) {
+    settings.compactGraph = value;
+    save();
+    notifyListeners();
+  }
+
   void setFileTree(bool value) {
     settings.fileTree = value;
     save();

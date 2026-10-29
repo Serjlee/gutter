@@ -44,6 +44,10 @@ class Settings {
   /// Show working-tree files as a folder tree instead of a flat list.
   bool fileTree = false;
 
+  /// The graph shows branch and tag labels next to the lanes instead of in
+  /// a column of their own.
+  bool compactGraph = false;
+
   /// Syntax highlighting in diffs and file previews (costs CPU on big files).
   bool syntaxHighlight = true;
 
@@ -93,6 +97,7 @@ class Settings {
     'diffSplit': diffSplit,
     'diffWrap': diffWrap,
     'fileTree': fileTree,
+    'compactGraph': compactGraph,
     // A new key: the old one ("syntaxHighlight") saved the former default,
     // off, for everyone.
     'syntaxHighlighting': syntaxHighlight,
@@ -131,6 +136,7 @@ class Settings {
       ..diffSplit = j['diffSplit'] == true
       ..diffWrap = j['diffWrap'] == true
       ..fileTree = j['fileTree'] == true
+      ..compactGraph = j['compactGraph'] == true
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
