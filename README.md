@@ -150,8 +150,10 @@ Besides your own fetch, pull and push, Gutter makes two kinds of requests:
 
 - **Update check**: every 6 hours it asks GitHub for Gutter's releases,
   and offers the latest when there's a newer one, with the notes of every
-  release since yours. It downloads the release (from GitHub) only when
-  you choose to update.
+  release since yours. A build of a commit rather than a release (a manual
+  CI run) is offered the latest release when that includes its commit,
+  which GitHub is asked about. It downloads the release (from GitHub)
+  only when you choose to update.
 - **GitHub avatars** (repositories on GitHub only): each author's picture
   is requested from GitHub's avatar server by commit email, as rows come
   into view.

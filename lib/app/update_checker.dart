@@ -85,16 +85,29 @@ List<ReleaseInfo> releasesFromGitHubJson(Object? json) => [
 /// Fetches the published releases, in any order.
 typedef ReleaseFetcher = Future<List<ReleaseInfo>> Function();
 
+/// How [head] relates to [base] in Gutter's history: "ahead" (it has
+/// commits [base] doesn't), "behind", "identical", "diverged", or null when
+/// it can't tell (a commit GitHub doesn't know).
+typedef CommitComparer = Future<String?> Function(String base, String head);
+
 /// Periodically looks up the latest GitHub release of Gutter.
 class UpdateChecker extends ChangeNotifier {
   UpdateChecker({
     this.current = AppVersion.current,
     ReleaseFetcher? fetcher,
+    CommitComparer? comparer,
     this.interval = const Duration(hours: 6),
-  }) : _fetch = fetcher ?? fetchGitHubReleases;
+  }) : _fetch = fetcher ?? fetchGitHubReleases,
+       _compare = comparer ?? compareOnGitHub;
 
   final AppVersion current;
   final ReleaseFetcher _fetch;
+  final CommitComparer _compare;
+
+  /// A build without a version (built from a commit, not a release): the
+  /// latest release has commits it doesn't, and none of its own are
+  /// missing from it.
+  bool _devBehind = false;
   final Duration interval;
 
   /// The published releases, newest first.
@@ -116,13 +129,14 @@ class UpdateChecker extends ChangeNotifier {
         ]
       : [?latest];
 
-  /// A newer release than this build exists. Builds without a version
-  /// (local/dev builds) can't be compared, so this stays false for them.
+  /// A newer release than this build exists. A build without a version
+  /// is compared by commit: the latest release must contain it, and more.
+  /// One with neither (a plain local build) never gets an update.
   bool get updateAvailable {
     final l = latest;
-    return l != null &&
-        current.isRelease &&
-        compareVersions(l.tag, current.version) > 0;
+    if (l == null) return false;
+    if (!current.isRelease) return _devBehind;
+    return compareVersions(l.tag, current.version) > 0;
   }
 
   /// Checks now and then every [interval] (first check after [delay]).
@@ -146,6 +160,14 @@ class UpdateChecker extends ChangeNotifier {
     try {
       releases = (await _fetch()).toList()
         ..sort((a, b) => compareVersions(b.tag, a.tag));
+      final l = latest;
+      if (!current.isRelease && current.commit.isNotEmpty && l != null) {
+        try {
+          _devBehind = await _compare(current.commit, l.tag) == 'ahead';
+        } catch (_) {
+          _devBehind = false;
+        }
+      }
       error = null;
     } catch (e) {
       error = e is HttpException ? e.message : e.toString();
@@ -190,6 +212,30 @@ Future<List<ReleaseInfo>> fetchGitHubReleases() async {
       throw HttpException('GitHub returned ${res.statusCode}');
     }
     return releasesFromGitHubJson(jsonDecode(body));
+  } finally {
+    client.close(force: true);
+  }
+}
+
+/// [CommitComparer] for Gutter's repository on GitHub.
+Future<String?> compareOnGitHub(String base, String head) async {
+  final client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..findProxy = HttpClient.findProxyFromEnvironment
+    ..userAgent = 'gutter-update-check';
+  try {
+    final req = await client.getUrl(
+      Uri.https('api.github.com', '/repos/$releasesRepo/compare/$base...$head'),
+    );
+    req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
+    final res = await req.close().timeout(const Duration(seconds: 15));
+    final body = await res.transform(utf8.decoder).join();
+    // 404: a commit GitHub doesn't know (never pushed), or no common history.
+    if (res.statusCode != 200) return null;
+    final json = jsonDecode(body);
+    return json is Map && json['status'] is String
+        ? json['status'] as String
+        : null;
   } finally {
     client.close(force: true);
   }

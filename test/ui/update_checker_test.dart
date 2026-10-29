@@ -96,12 +96,13 @@ void main() {
       final dev = UpdateChecker(
         current: const AppVersion(commit: 'abc1234'),
         fetcher: () async => all,
+        comparer: (_, _) async => 'ahead',
       );
       await dev.check();
       expect(dev.newReleases.map((r) => r.tag), ['v0.10.0']);
     });
 
-    test('flags newer releases for release builds only', () async {
+    test('flags newer releases: by version, else by commit', () async {
       final older = UpdateChecker(
         current: const AppVersion(version: '0.1.0'),
         fetcher: () async => [release],
@@ -116,13 +117,40 @@ void main() {
       await same.check();
       expect(same.updateAvailable, isFalse);
 
-      final dev = UpdateChecker(
-        current: const AppVersion(commit: 'abc1234'),
-        fetcher: () async => [release],
-      );
-      await dev.check();
-      expect(dev.latest, isNotNull);
-      expect(dev.updateAvailable, isFalse, reason: 'dev builds cannot compare');
+      // A build from a commit: offered the release when it contains the
+      // commit and more, and only then.
+      Future<bool> dev(
+        Object? Function() status, {
+        String commit = 'abc1234',
+      }) async {
+        final compared = <(String, String)>[];
+        final c = UpdateChecker(
+          current: AppVersion(commit: commit),
+          fetcher: () async => [release],
+          comparer: (base, head) async {
+            compared.add((base, head));
+            final s = status();
+            if (s is Exception) throw s;
+            return s as String?;
+          },
+        );
+        await c.check();
+        expect(c.latest, isNotNull);
+        if (commit.isNotEmpty) expect(compared, [(commit, 'v0.2.0')]);
+        if (commit.isEmpty) expect(compared, isEmpty);
+        return c.updateAvailable;
+      }
+
+      expect(await dev(() => 'ahead'), isTrue);
+      expect(await dev(() => 'identical'), isFalse);
+      expect(await dev(() => 'behind'), isFalse);
+      // Commits of its own (an unmerged branch): updating would lose them.
+      expect(await dev(() => 'diverged'), isFalse);
+      // Unknown to GitHub, or offline.
+      expect(await dev(() => null), isFalse);
+      expect(await dev(() => Exception('offline')), isFalse);
+      // No commit either: nothing to compare.
+      expect(await dev(() => 'ahead', commit: ''), isFalse);
     });
 
     test('records errors and recovers', () async {
