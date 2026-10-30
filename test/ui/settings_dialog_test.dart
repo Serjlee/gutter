@@ -56,13 +56,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('syntax-highlighting')),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('syntax-highlighting')));
-    await tester.pump();
-    expect(app.settings.syntaxHighlight, isFalse);
 
     // The other sections, a tab each.
     await tester.tap(find.byKey(const ValueKey('settings-tab-git')));
@@ -75,6 +68,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-tab-performance')));
     await tester.pump();
     expect(find.text('Commits loaded'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('syntax-highlighting')));
+    await tester.pump();
+    expect(app.settings.syntaxHighlight, isFalse);
 
     await tester.tap(find.byKey(const ValueKey('settings-close')));
     await tester.pump();

@@ -162,6 +162,7 @@ class SettingsForm extends StatelessWidget {
     final groups = switch (section) {
       SettingsSection.appearance => [
         [
+          _Row('Zoom', control: _ZoomStepper(app: app)),
           _Row(
             'Theme',
             below: _TilePicker<String>(
@@ -218,19 +219,6 @@ class SettingsForm extends StatelessWidget {
           ),
         ],
         [
-          _Row('Zoom', control: _ZoomStepper(app: app)),
-          _Row(
-            'Syntax highlighting',
-            subtitle: 'In diffs, file previews and conflicts',
-            info:
-                'Colors code for about 40 languages (by file extension). '
-                'Very large files stay plain.',
-            control: _Toggle(
-              key: const ValueKey('syntax-highlighting'),
-              value: s.syntaxHighlight,
-              onChanged: app.setSyntaxHighlight,
-            ),
-          ),
           _Row(
             'GitHub avatars',
             subtitle: 'Authors\' profile pictures, for repositories on GitHub',
@@ -309,6 +297,18 @@ class SettingsForm extends StatelessWidget {
                 (0, 'All', null),
               ],
               onChanged: app.setMaxCommits,
+            ),
+          ),
+          _Row(
+            'Syntax highlighting',
+            subtitle: 'In diffs, file previews and conflicts',
+            info:
+                'Colors code for about 40 languages (by file extension). '
+                'Very large files stay plain.',
+            control: _Toggle(
+              key: const ValueKey('syntax-highlighting'),
+              value: s.syntaxHighlight,
+              onChanged: app.setSyntaxHighlight,
             ),
           ),
         ],
