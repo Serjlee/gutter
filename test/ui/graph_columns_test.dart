@@ -34,24 +34,32 @@ void main() {
     expect(fit(300), 'refs 70');
   });
 
-  test('compact, the ref column goes and the graph stays as wide', () {
-    final cols = GraphColumns(const {})..compact = true;
-    expect(cols.graphWidth(4), GraphColumns(const {}).graphWidth(4));
-    final f = cols.fit(800, cols.graphWidth(4));
-    expect(f.refs, 0);
-    expect(f.author, isNotNull);
+  test('compact, the graph column has room for the labels', () {
+    final full = GraphColumns(const {});
+    final compact = GraphColumns(const {})..mode = GraphMode.compact;
+    expect(compact.graphWidth(4), full.graphWidth(4) + 160);
+    expect(compact.fit(800, compact.graphWidth(4)).refs, 0);
+    for (final m in [GraphMode.fork, GraphMode.alignedFork]) {
+      final cols = GraphColumns(const {})..mode = m;
+      expect(cols.graphWidth(4), full.graphWidth(4));
+      expect(cols.fit(800, cols.graphWidth(4)).refs, 0);
+    }
   });
 
-  testWidgets('the header toggle moves the labels before the messages', (
+  testWidgets('each graph mode puts the labels and messages its way', (
     tester,
   ) async {
     late TempRepo t;
     late RepoTabController tab;
     await tester.runAsync(() async {
+      // one (tagged), two: one lane; then side and three: two lanes.
       t = await TempRepo.create();
       t.commit('one', {'a.txt': '1\n'});
-      t.git(['branch', 'side']);
+      t.git(['tag', 'v1']);
       t.commit('two', {'a.txt': '2\n'});
+      t.git(['checkout', '-q', '-b', 'side']);
+      t.commit('side work', {'b.txt': '1\n'});
+      t.git(['checkout', '-q', 'main']);
       t.commit('three', {'a.txt': '3\n'});
       tab = RepoTabController(t.repo, AppController(null, Settings()));
       await tab.load();
@@ -75,7 +83,7 @@ void main() {
       ),
     );
     await tester.pump();
-    double labelX() => tester.getTopLeft(find.text('side')).dx;
+    double x(String text) => tester.getTopLeft(find.text(text)).dx;
     double nodeX() => tester
         .getTopLeft(
           find
@@ -85,34 +93,51 @@ void main() {
               .last,
         )
         .dx;
+    double pillX(String label) => tester
+        .getTopLeft(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Container))
+              .first,
+        )
+        .dx;
+    Future<void> mode(GraphMode m) async {
+      tab.app.setGraphMode(m);
+      await tester.pump();
+    }
 
-    // Their own column, left of the graph.
+    // Full: a column of their own, left of the graph.
     expect(find.text('BRANCH / TAG'), findsOneWidget);
-    expect(labelX(), lessThan(nodeX()));
+    expect(x('v1'), lessThan(nodeX()));
 
-    await tester.tap(find.byKey(const ValueKey('compact-graph')));
-    await tester.pump();
-    expect(tab.app.settings.compactGraph, isTrue);
+    // Compact: in the graph column; messages in theirs, all aligned.
+    await mode(GraphMode.compact);
     expect(find.text('BRANCH / TAG'), findsNothing);
-    // Before the message, its left edge where messages without labels
-    // start.
-    expect(labelX(), greaterThan(nodeX()));
-    final pill = find
-        .ancestor(of: find.text('side'), matching: find.byType(Container))
-        .first;
-    expect(tester.getTopLeft(pill).dx, tester.getTopLeft(find.text('two')).dx);
-    // A labelled row's message comes after its labels.
-    expect(
-      tester.getTopLeft(find.text('one')).dx,
-      greaterThan(tester.getTopLeft(find.text('two')).dx),
-    );
+    expect(x('v1'), greaterThan(nodeX()));
+    expect(x('one'), x('two'));
 
-    await tester.tap(find.byKey(const ValueKey('compact-graph')));
-    await tester.pump();
-    expect(tab.app.settings.compactGraph, isFalse);
-    expect(find.text('BRANCH / TAG'), findsOneWidget);
+    // Aligned Fork: before the message, where unlabelled messages start.
+    await mode(GraphMode.alignedFork);
+    expect(pillX('v1'), x('two'));
+    expect(x('one'), greaterThan(x('two')));
+    final aligned = pillX('v1');
+
+    // Fork: right after each row's own lanes, so further left on the
+    // bottom row, where the graph is one lane wide.
+    await mode(GraphMode.fork);
+    expect(pillX('v1'), lessThan(aligned - 10));
+    expect(x('one'), greaterThan(pillX('v1')));
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  test('the graph mode is saved; compact from before is aligned Fork', () {
+    final s = Settings()..graphMode = GraphMode.fork;
+    expect(Settings.fromJson(s.toJson()).graphMode, GraphMode.fork);
+    expect(Settings.fromJson({}).graphMode, GraphMode.full);
+    expect(
+      Settings.fromJson({'compactGraph': true}).graphMode,
+      GraphMode.alignedFork,
+    );
   });
 }

@@ -567,8 +567,8 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCompactGraph(bool value) {
-    settings.compactGraph = value;
+  void setGraphMode(GraphMode value) {
+    settings.graphMode = value;
     save();
     notifyListeners();
   }

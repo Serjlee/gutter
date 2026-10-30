@@ -44,9 +44,8 @@ class Settings {
   /// Show working-tree files as a folder tree instead of a flat list.
   bool fileTree = false;
 
-  /// The graph shows branch and tag labels next to the lanes instead of in
-  /// a column of their own.
-  bool compactGraph = false;
+  /// Where the graph puts branch and tag labels, and messages.
+  GraphMode graphMode = GraphMode.full;
 
   /// Syntax highlighting in diffs and file previews (costs CPU on big files).
   bool syntaxHighlight = true;
@@ -97,7 +96,7 @@ class Settings {
     'diffSplit': diffSplit,
     'diffWrap': diffWrap,
     'fileTree': fileTree,
-    'compactGraph': compactGraph,
+    'graphMode': graphMode.name,
     // A new key: the old one ("syntaxHighlight") saved the former default,
     // off, for everyone.
     'syntaxHighlighting': syntaxHighlight,
@@ -136,7 +135,10 @@ class Settings {
       ..diffSplit = j['diffSplit'] == true
       ..diffWrap = j['diffWrap'] == true
       ..fileTree = j['fileTree'] == true
-      ..compactGraph = j['compactGraph'] == true
+      ..graphMode =
+          GraphMode.values.asNameMap()[j['graphMode']] ??
+          // Before the modes, compact was aligned Fork.
+          (j['compactGraph'] == true ? GraphMode.alignedFork : GraphMode.full)
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
@@ -167,6 +169,21 @@ LineHint? _lineHintChoice(Map<String, Object?> j) {
   final names = LineHint.values.asNameMap();
   final old = j['lineHint'] == 'leader' ? null : names[j['lineHint']];
   return names[j['lineHintChoice']] ?? old;
+}
+
+/// How the commit graph lays out branch and tag labels, and messages.
+enum GraphMode {
+  /// Labels in a column of their own, left of the graph.
+  full,
+
+  /// Labels in the graph column, past the lanes; messages aligned after it.
+  compact,
+
+  /// Labels, then the message, right after each row's own lanes.
+  fork,
+
+  /// Messages aligned after the graph; a commit's labels before its message.
+  alignedFork,
 }
 
 class SettingsStore {

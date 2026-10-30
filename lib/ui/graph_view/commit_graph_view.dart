@@ -5,9 +5,11 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
+import '../../graph/graph_layout.dart';
 import '../../graph/graph_painter.dart';
 import '../dialogs/interactive_rebase_dialog.dart' show rebaseActionColor;
 import '../repo/repo_actions.dart';
@@ -18,8 +20,11 @@ import 'scroll_marks.dart';
 
 const _metrics = GraphMetrics();
 
-/// The widest a commit's ref labels get before its message, compact.
+/// The widest a commit's ref labels get before its message (Fork modes).
 const _inlineLabelsMax = 240.0;
+
+/// Room the ref labels get in the graph column, past the lanes (compact).
+const _labelRoom = 160.0;
 
 /// The gap under the last row of a [DateGroup], holding its separator.
 const _gap = 22.0;
@@ -40,19 +45,19 @@ class GraphColumns {
   double age;
   double sha;
 
-  /// Ref labels go before the commit message, as in Fork, instead of in a
-  /// column of their own.
-  bool compact = false;
+  /// Where the ref labels go: a column of their own only when full.
+  GraphMode mode = GraphMode.full;
 
   double graphWidth(int lanes) =>
-      graph ?? _metrics.widthFor(max(1, min(lanes, 12)));
+      (graph ?? _metrics.widthFor(max(1, min(lanes, 12)))) +
+      (mode == GraphMode.compact ? _labelRoom : 0);
 
   /// Decides which columns fit in [width], keeping at least [minMessage]
   /// pixels for the message: the sha goes first, then the ref column
   /// shrinks, the author goes, the ref column shrinks more, and the age
   /// goes last (it's narrow, and says the most at a glance).
   FittedColumns fit(double width, double graphW, {double minMessage = 200}) {
-    var refsW = compact ? 0.0 : refs;
+    var refsW = mode == GraphMode.full ? refs : 0.0;
     var showSha = true, showAge = true, showAuthor = true;
     double spare() =>
         width -
@@ -227,8 +232,7 @@ class _CommitGraphViewState extends State<CommitGraphView> {
   @override
   Widget build(BuildContext context) {
     final graph = tab.graph;
-    final compact = tab.app.settings.compactGraph;
-    _cols.compact = compact;
+    _cols.mode = tab.app.settings.graphMode;
     final graphW = _cols.graphWidth(graph.layout.maxLanes);
     final actions = RepoActions(context, tab);
     final separators = _separatorsFor(graph);
@@ -264,7 +268,6 @@ class _CommitGraphViewState extends State<CommitGraphView> {
               _Header(
                 cols: _cols,
                 fitted: fitted,
-                onCompact: () => tab.app.setCompactGraph(!compact),
                 onResize: _resize,
                 onResizeEnd: _saveColumns,
                 onResetGraph: () {
@@ -376,14 +379,10 @@ class _Header extends StatelessWidget {
     required this.onResize,
     required this.onResizeEnd,
     required this.onResetGraph,
-    required this.onCompact,
   });
 
   final GraphColumns cols;
   final FittedColumns fitted;
-
-  /// Moves the ref labels into the graph column, or back out.
-  final VoidCallback onCompact;
   final void Function(void Function()) onResize;
   final VoidCallback onResizeEnd;
   final VoidCallback onResetGraph;
@@ -415,30 +414,6 @@ class _Header extends StatelessWidget {
     return SizedBox(width: width, child: text);
   }
 
-  /// The first column's title, after the compact toggle; [title] wraps
-  /// the title alone.
-  Widget _first(String t, double width, {Widget Function(Widget)? title}) =>
-      SizedBox(
-        width: width,
-        child: Row(
-          children: [
-            const SizedBox(width: 2),
-            SmallIconButton(
-              key: const ValueKey('compact-graph'),
-              icon: cols.compact ? Icons.last_page : Icons.first_page,
-              size: 14,
-              tooltip: cols.compact
-                  ? 'Branch and tag labels in their own column'
-                  : 'Compact: branch and tag labels next to the graph',
-              onPressed: onCompact,
-            ),
-            Expanded(
-              child: (title ?? (w) => w)(_title(t, null, expand: false)),
-            ),
-          ],
-        ),
-      );
-
   Widget _handle(void Function(double) onDrag) => ResizeHandle(
     onDrag: (dx) => onResize(() => onDrag(dx)),
     onEnd: onResizeEnd,
@@ -454,24 +429,23 @@ class _Header extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!cols.compact) ...[
-            _first('BRANCH / TAG', fitted.refs - 5),
+          if (fitted.refs > 0) ...[
+            _title('BRANCH / TAG', fitted.refs - 5),
             _handle((dx) => cols.refs = max(60, fitted.refs + dx)),
           ],
-          // A double click resets its width (the toggle isn't part of it).
-          if (cols.compact)
-            _first(
-              'GRAPH',
-              fitted.graph - 5,
-              title: (w) =>
-                  GestureDetector(onDoubleTap: onResetGraph, child: w),
-            )
-          else
-            GestureDetector(
-              onDoubleTap: onResetGraph,
-              child: _title('GRAPH', fitted.graph - 5),
+          GestureDetector(
+            onDoubleTap: onResetGraph,
+            child: _title('GRAPH', fitted.graph - 5),
+          ),
+          // (Compact, the labels' room comes on top of the lanes'.)
+          _handle(
+            (dx) => cols.graph = max(
+              30,
+              fitted.graph -
+                  (cols.mode == GraphMode.compact ? _labelRoom : 0) +
+                  dx,
             ),
-          _handle((dx) => cols.graph = max(30, fitted.graph + dx)),
+          ),
           _title('COMMIT MESSAGE', null, expand: true),
           if (fitted.author != null) ...[
             _handle((dx) => cols.author = max(40, cols.author - dx)),
@@ -548,6 +522,15 @@ class _DateSeparator extends StatelessWidget {
   );
 }
 
+/// Where the lanes in use at [row] end: room for labels or the message.
+double _rowLanesX(GraphLayout layout, int row) {
+  final lanes = max(
+    layout.rowLanes[row],
+    row > 0 ? layout.rowLanes[row - 1] : 0,
+  );
+  return _metrics.widthFor(max(1, lanes)) - 2;
+}
+
 class _GraphRow extends StatefulWidget {
   const _GraphRow({
     required this.tab,
@@ -587,7 +570,7 @@ class _GraphRowState extends State<_GraphRow> {
     final isHit = tab.searchHitSet.contains(row);
     final query = tab.search.trim().toLowerCase();
     final gap = widget.separator == null ? 0.0 : _gap;
-    final compact = tab.app.settings.compactGraph;
+    final mode = tab.app.settings.graphMode;
     final dimmed = tab.search.trim().isNotEmpty && !isHit;
 
     final isCommit = commit != null && stash == null;
@@ -622,8 +605,10 @@ class _GraphRowState extends State<_GraphRow> {
     final msgColor = dimmed ? AppColors.textFaint : AppColors.text;
     final dimColor = dimmed ? AppColors.textFaint : AppColors.textDim;
 
-    // Compact: the labels go before the message, as wide as they are.
-    final inlinePills = compact && commit != null && refs.isNotEmpty
+    final labelled = commit != null && refs.isNotEmpty;
+    // The Fork modes: the labels go before the message, as wide as they are.
+    final inlinePills =
+        labelled && (mode == GraphMode.fork || mode == GraphMode.alignedFork)
         ? _RefPills(
             refs: refs,
             laneColor: laneColor,
@@ -685,7 +670,7 @@ class _GraphRowState extends State<_GraphRow> {
               : null,
           child: Row(
             children: [
-              if (!compact)
+              if (mode == GraphMode.full)
                 SizedBox(
                   width: widget.cols.refs,
                   child: commit == null
@@ -703,37 +688,69 @@ class _GraphRowState extends State<_GraphRow> {
                         ),
                 ),
               SizedBox(
-                width: widget.cols.graph,
+                // Fork: the message starts right after the row's lanes.
+                width: mode == GraphMode.fork
+                    ? min(widget.cols.graph, _rowLanesX(graph.layout, row))
+                    : widget.cols.graph,
                 height: _metrics.rowHeight,
                 // Down through the gap under it, if any, so the lanes go on.
-                child: OverflowBox(
-                  alignment: Alignment.topCenter,
-                  minHeight: _metrics.rowHeight + gap,
-                  maxHeight: _metrics.rowHeight + gap,
-                  child: ClipRect(
-                    child: CustomPaint(
-                      painter: GraphRowPainter(
-                        layout: graph.layout,
-                        row: row,
-                        metrics: _metrics,
-                        style: commit == null
-                            ? NodeStyle.wip
-                            : stash != null
-                            ? NodeStyle.stash
-                            : (commit.isMerge
-                                  ? NodeStyle.merge
-                                  : NodeStyle.commit),
-                        initials: commit?.initials ?? '',
-                        avatar: commit == null || stash != null
-                            ? null
-                            : tab.avatarFor(commit.authorEmail),
-                        isHead: commit != null && sha == tab.headSha,
-                        trunk: trunkRow,
-                        dimmed: dimmed,
-                        hint: tab.app.settings.lineHint,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: _metrics.rowHeight + gap,
+                      maxHeight: _metrics.rowHeight + gap,
+                      child: ClipRect(
+                        child: CustomPaint(
+                          painter: GraphRowPainter(
+                            layout: graph.layout,
+                            row: row,
+                            metrics: _metrics,
+                            style: commit == null
+                                ? NodeStyle.wip
+                                : stash != null
+                                ? NodeStyle.stash
+                                : (commit.isMerge
+                                      ? NodeStyle.merge
+                                      : NodeStyle.commit),
+                            initials: commit?.initials ?? '',
+                            avatar: commit == null || stash != null
+                                ? null
+                                : tab.avatarFor(commit.authorEmail),
+                            isHead: commit != null && sha == tab.headSha,
+                            trunk: trunkRow,
+                            dimmed: dimmed,
+                            hint: tab.app.settings.lineHint,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    // Compact: the labels past the lanes in use at the row,
+                    // so they never cover a line.
+                    if (mode == GraphMode.compact && labelled)
+                      Positioned(
+                        left: _rowLanesX(graph.layout, row),
+                        width: max(
+                          0.0,
+                          widget.cols.graph - _rowLanesX(graph.layout, row) - 4,
+                        ),
+                        top: 0,
+                        height: _metrics.rowHeight,
+                        child: Opacity(
+                          opacity: dimmed ? 0.35 : 1,
+                          child: _RefPills(
+                            refs: refs,
+                            laneColor: laneColor,
+                            actions: widget.actions,
+                            headSha: tab.headSha,
+                            isHeadCommit: sha == tab.headSha,
+                            overGraph: true,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Expanded(
@@ -973,6 +990,7 @@ class _RefPills extends StatelessWidget {
     required this.headSha,
     required this.isHeadCommit,
     this.inline = false,
+    this.overGraph = false,
   });
 
   final List<GitRef> refs;
@@ -984,6 +1002,9 @@ class _RefPills extends StatelessWidget {
   /// Before the commit message (compact): no padding on the left, so the
   /// first label lines up with messages that have none.
   final bool inline;
+
+  /// Drawn over the graph's lines (compact mode): opaque.
+  final bool overGraph;
 
   EdgeInsets get _padding => inline
       ? const EdgeInsets.fromLTRB(0, 4, 6, 4)
@@ -1333,7 +1354,12 @@ class _RefPills extends StatelessWidget {
       height: 21,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: bold ? 0.35 : 0.2),
+        color: overGraph
+            ? Color.alphaBlend(
+                color.withValues(alpha: bold ? 0.35 : 0.2),
+                AppColors.background,
+              )
+            : color.withValues(alpha: bold ? 0.35 : 0.2),
         border: outlined
             ? Border.all(color: ScrollMarks.trunkColor, width: 1.5)
             : Border.all(color: color.withValues(alpha: 0.8)),

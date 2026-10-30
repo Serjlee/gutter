@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
 import '../../git/git_runner.dart';
@@ -77,6 +78,27 @@ class SettingsForm extends StatelessWidget {
             ],
             onChanged: app.setThemeMode,
           ),
+        ),
+        _row(
+          'Graph',
+          AppDropdown<GraphMode>(
+            key: const ValueKey('graph-mode'),
+            value: s.graphMode,
+            items: const [
+              (GraphMode.full, 'Full', null),
+              (GraphMode.compact, 'Compact', null),
+              (GraphMode.fork, 'Fork', null),
+              (GraphMode.alignedFork, 'Aligned Fork', null),
+            ],
+            preview: _GraphModePreview.new,
+            onChanged: app.setGraphMode,
+          ),
+          info:
+              'Where the graph puts branch and tag labels.\n\n'
+              'Full: in a column of their own.\n'
+              'Compact: in the graph column, past the lanes.\n'
+              'Fork: before the message, right after each commit\'s lanes.\n'
+              'Aligned Fork: before the message, with messages in a column.',
         ),
         _row(
           'Line hint',
@@ -251,6 +273,149 @@ class SettingsForm extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Three graph rows laid out as [mode] does it, as a sample.
+class _GraphModePreview extends StatelessWidget {
+  const _GraphModePreview(this.mode);
+  final GraphMode mode;
+
+  static const _rowH = 22.0;
+  static const _labelsW = 46.0; // Full: their column
+  static const _room = 46.0; // Compact: theirs in the graph column
+
+  /// x of a lane's center.
+  static double _lane(int lane) => 8.0 + lane * 12;
+
+  /// Where the lanes in use at a row end.
+  static double _lanesEnd(int lanes) => _lane(lanes - 1) + 9;
+
+  @override
+  Widget build(BuildContext context) {
+    // (node lane, lanes in use, label, label color, message); the lanes
+    // themselves are drawn by _PreviewLanes.
+    final rows = [
+      (0, 1, 'main', AppColors.lane(0), 'Fix typo'),
+      (1, 2, null, AppColors.lane(1), 'Add login form'),
+      (0, 2, 'v1.0', AppColors.tag, 'Merge login'),
+    ];
+    final graphX = mode == GraphMode.full ? _labelsW : 0.0;
+    final graphW = _lanesEnd(2) + (mode == GraphMode.compact ? _room : 0) + 6;
+    final text = TextStyle(fontSize: 11.5, color: AppColors.text);
+    Widget pill(String label, Color color) => Container(
+      height: 15,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          color.withValues(alpha: 0.2),
+          AppColors.background,
+        ),
+        border: Border.all(color: color.withValues(alpha: 0.8)),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 9.5, height: 1, color: AppColors.pillText),
+      ),
+    );
+    Widget message(String? label, Color color, String msg) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (label != null) ...[pill(label, color), const SizedBox(width: 4)],
+        Text(msg, style: text, maxLines: 1),
+      ],
+    );
+    return SizedBox(
+      width: 240,
+      height: _rowH * rows.length,
+      child: Stack(
+        children: [
+          Positioned(
+            left: graphX,
+            top: 0,
+            width: graphW,
+            bottom: 0,
+            child: CustomPaint(painter: _PreviewLanes()),
+          ),
+          for (final (i, (_, lanes, label, color, msg)) in rows.indexed)
+            ...switch (mode) {
+              GraphMode.full => [
+                if (label != null)
+                  Positioned(
+                    left: 0,
+                    top: i * _rowH + 3.5,
+                    child: pill(label, color),
+                  ),
+                Positioned(
+                  left: graphX + graphW,
+                  top: i * _rowH,
+                  height: _rowH,
+                  child: Center(child: Text(msg, style: text)),
+                ),
+              ],
+              GraphMode.compact => [
+                if (label != null)
+                  Positioned(
+                    left: _lanesEnd(lanes) + 2,
+                    top: i * _rowH + 3.5,
+                    child: pill(label, color),
+                  ),
+                Positioned(
+                  left: graphW,
+                  top: i * _rowH,
+                  height: _rowH,
+                  child: Center(child: Text(msg, style: text)),
+                ),
+              ],
+              GraphMode.fork || GraphMode.alignedFork => [
+                Positioned(
+                  left: mode == GraphMode.fork ? _lanesEnd(lanes) + 4 : graphW,
+                  top: i * _rowH,
+                  height: _rowH,
+                  child: Center(child: message(label, color, msg)),
+                ),
+              ],
+            },
+        ],
+      ),
+    );
+  }
+}
+
+/// The preview's lanes: main, and a branch merged back into it.
+class _PreviewLanes extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const h = _GraphModePreview._rowH;
+    final x0 = _GraphModePreview._lane(0), x1 = _GraphModePreview._lane(1);
+    final line = Paint()
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(x0, 0),
+      Offset(x0, size.height),
+      line..color = AppColors.lane(0),
+    );
+    // The branch: from its commit down into the merge.
+    canvas.drawPath(
+      Path()
+        ..moveTo(x1, h * 1.5)
+        ..lineTo(x1, h * 2.2)
+        ..quadraticBezierTo(x1, h * 2.5, x0 + 4, h * 2.5),
+      line..color = AppColors.lane(1),
+    );
+    for (final (row, lane) in [(0, 0), (1, 1), (2, 0)]) {
+      canvas.drawCircle(
+        Offset(_GraphModePreview._lane(lane), (row + 0.5) * h),
+        4.5,
+        Paint()..color = AppColors.lane(lane),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PreviewLanes old) => false;
 }
 
 /// Two graph rows drawn with [hint], as a sample of what it looks like.
