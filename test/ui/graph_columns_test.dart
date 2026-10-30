@@ -34,16 +34,15 @@ void main() {
     expect(fit(300), 'refs 70');
   });
 
-  test('compact, the ref labels take room in the graph column instead', () {
+  test('compact, the ref column goes and the graph stays as wide', () {
     final cols = GraphColumns(const {})..compact = true;
-    // 100 px of lanes, and the labels' room past them.
-    expect(cols.graphWidth(4), GraphColumns(const {}).graphWidth(4) + 160);
+    expect(cols.graphWidth(4), GraphColumns(const {}).graphWidth(4));
     final f = cols.fit(800, cols.graphWidth(4));
     expect(f.refs, 0);
     expect(f.author, isNotNull);
   });
 
-  testWidgets('the header toggle moves the labels into the graph column', (
+  testWidgets('the header toggle moves the labels before the messages', (
     tester,
   ) async {
     late TempRepo t;
@@ -52,6 +51,8 @@ void main() {
       t = await TempRepo.create();
       t.commit('one', {'a.txt': '1\n'});
       t.git(['branch', 'side']);
+      t.commit('two', {'a.txt': '2\n'});
+      t.commit('three', {'a.txt': '3\n'});
       tab = RepoTabController(t.repo, AppController(null, Settings()));
       await tab.load();
     });
@@ -93,8 +94,18 @@ void main() {
     await tester.pump();
     expect(tab.app.settings.compactGraph, isTrue);
     expect(find.text('BRANCH / TAG'), findsNothing);
-    // Past the lanes, in the graph column.
+    // Before the message, its left edge where messages without labels
+    // start.
     expect(labelX(), greaterThan(nodeX()));
+    final pill = find
+        .ancestor(of: find.text('side'), matching: find.byType(Container))
+        .first;
+    expect(tester.getTopLeft(pill).dx, tester.getTopLeft(find.text('two')).dx);
+    // A labelled row's message comes after its labels.
+    expect(
+      tester.getTopLeft(find.text('one')).dx,
+      greaterThan(tester.getTopLeft(find.text('two')).dx),
+    );
 
     await tester.tap(find.byKey(const ValueKey('compact-graph')));
     await tester.pump();

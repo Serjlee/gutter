@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart';
 import '../../git/rebase_plan.dart';
-import '../../graph/graph_layout.dart';
 import '../../graph/graph_painter.dart';
 import '../dialogs/interactive_rebase_dialog.dart' show rebaseActionColor;
 import '../repo/repo_actions.dart';
@@ -19,8 +18,8 @@ import 'scroll_marks.dart';
 
 const _metrics = GraphMetrics();
 
-/// Room the ref labels get in a compact graph, past its lanes.
-const _labelRoom = 160.0;
+/// The widest a commit's ref labels get before its message, compact.
+const _inlineLabelsMax = 240.0;
 
 /// The gap under the last row of a [DateGroup], holding its separator.
 const _gap = 22.0;
@@ -41,13 +40,12 @@ class GraphColumns {
   double age;
   double sha;
 
-  /// Ref labels go in the graph column, right of the lanes, instead of a
+  /// Ref labels go before the commit message, as in Fork, instead of in a
   /// column of their own.
   bool compact = false;
 
   double graphWidth(int lanes) =>
-      (graph ?? _metrics.widthFor(max(1, min(lanes, 12)))) +
-      (compact ? _labelRoom : 0);
+      graph ?? _metrics.widthFor(max(1, min(lanes, 12)));
 
   /// Decides which columns fit in [width], keeping at least [minMessage]
   /// pixels for the message: the sha goes first, then the ref column
@@ -473,13 +471,7 @@ class _Header extends StatelessWidget {
               onDoubleTap: onResetGraph,
               child: _title('GRAPH', fitted.graph - 5),
             ),
-          // (Compact, the labels' room comes on top of the lanes'.)
-          _handle(
-            (dx) => cols.graph = max(
-              30,
-              fitted.graph - (cols.compact ? _labelRoom : 0) + dx,
-            ),
-          ),
+          _handle((dx) => cols.graph = max(30, fitted.graph + dx)),
           _title('COMMIT MESSAGE', null, expand: true),
           if (fitted.author != null) ...[
             _handle((dx) => cols.author = max(40, cols.author - dx)),
@@ -556,16 +548,6 @@ class _DateSeparator extends StatelessWidget {
   );
 }
 
-/// Where a row's ref labels start in a compact graph: past the lanes in use
-/// at the row, so they never cover a line.
-double _labelsX(GraphLayout layout, int row) {
-  final lanes = max(
-    layout.rowLanes[row],
-    row > 0 ? layout.rowLanes[row - 1] : 0,
-  );
-  return _metrics.widthFor(max(1, lanes)) - 2;
-}
-
 class _GraphRow extends StatefulWidget {
   const _GraphRow({
     required this.tab,
@@ -640,6 +622,17 @@ class _GraphRowState extends State<_GraphRow> {
     final msgColor = dimmed ? AppColors.textFaint : AppColors.text;
     final dimColor = dimmed ? AppColors.textFaint : AppColors.textDim;
 
+    // Compact: the labels go before the message, as wide as they are.
+    final inlinePills = compact && commit != null && refs.isNotEmpty
+        ? _RefPills(
+            refs: refs,
+            laneColor: laneColor,
+            actions: widget.actions,
+            headSha: tab.headSha,
+            isHeadCommit: sha == tab.headSha,
+            inline: true,
+          )
+        : null;
     final content = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -713,61 +706,34 @@ class _GraphRowState extends State<_GraphRow> {
                 width: widget.cols.graph,
                 height: _metrics.rowHeight,
                 // Down through the gap under it, if any, so the lanes go on.
-                child: Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
-                  children: [
-                    OverflowBox(
-                      alignment: Alignment.topCenter,
-                      minHeight: _metrics.rowHeight + gap,
-                      maxHeight: _metrics.rowHeight + gap,
-                      child: ClipRect(
-                        child: CustomPaint(
-                          painter: GraphRowPainter(
-                            layout: graph.layout,
-                            row: row,
-                            metrics: _metrics,
-                            style: commit == null
-                                ? NodeStyle.wip
-                                : stash != null
-                                ? NodeStyle.stash
-                                : (commit.isMerge
-                                      ? NodeStyle.merge
-                                      : NodeStyle.commit),
-                            initials: commit?.initials ?? '',
-                            avatar: commit == null || stash != null
-                                ? null
-                                : tab.avatarFor(commit.authorEmail),
-                            isHead: commit != null && sha == tab.headSha,
-                            trunk: trunkRow,
-                            dimmed: dimmed,
-                            hint: tab.app.settings.lineHint,
-                          ),
-                        ),
+                child: OverflowBox(
+                  alignment: Alignment.topCenter,
+                  minHeight: _metrics.rowHeight + gap,
+                  maxHeight: _metrics.rowHeight + gap,
+                  child: ClipRect(
+                    child: CustomPaint(
+                      painter: GraphRowPainter(
+                        layout: graph.layout,
+                        row: row,
+                        metrics: _metrics,
+                        style: commit == null
+                            ? NodeStyle.wip
+                            : stash != null
+                            ? NodeStyle.stash
+                            : (commit.isMerge
+                                  ? NodeStyle.merge
+                                  : NodeStyle.commit),
+                        initials: commit?.initials ?? '',
+                        avatar: commit == null || stash != null
+                            ? null
+                            : tab.avatarFor(commit.authorEmail),
+                        isHead: commit != null && sha == tab.headSha,
+                        trunk: trunkRow,
+                        dimmed: dimmed,
+                        hint: tab.app.settings.lineHint,
                       ),
                     ),
-                    if (compact && commit != null && refs.isNotEmpty)
-                      Positioned(
-                        left: _labelsX(graph.layout, row),
-                        width: max(
-                          0.0,
-                          widget.cols.graph - _labelsX(graph.layout, row) - 4,
-                        ),
-                        top: 0,
-                        height: _metrics.rowHeight,
-                        child: Opacity(
-                          opacity: dimmed ? 0.35 : 1,
-                          child: _RefPills(
-                            refs: refs,
-                            laneColor: laneColor,
-                            actions: widget.actions,
-                            headSha: tab.headSha,
-                            isHeadCommit: sha == tab.headSha,
-                            overGraph: true,
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
               Expanded(
@@ -777,6 +743,17 @@ class _GraphRowState extends State<_GraphRow> {
                       ? _WipSummary(tab: tab)
                       : Row(
                           children: [
+                            if (inlinePills != null)
+                              Opacity(
+                                opacity: dimmed ? 0.35 : 1,
+                                child: SizedBox(
+                                  width: inlinePills.naturalWidth(
+                                    context,
+                                    _inlineLabelsMax,
+                                  ),
+                                  child: inlinePills,
+                                ),
+                              ),
                             if (step != null &&
                                 step.action != RebaseAction.pick)
                               _RebaseBadge(
@@ -995,7 +972,7 @@ class _RefPills extends StatelessWidget {
     required this.actions,
     required this.headSha,
     required this.isHeadCommit,
-    this.overGraph = false,
+    this.inline = false,
   });
 
   final List<GitRef> refs;
@@ -1004,8 +981,13 @@ class _RefPills extends StatelessWidget {
   final String? headSha;
   final bool isHeadCommit;
 
-  /// Drawn over the graph's lines (in a compact graph): opaque.
-  final bool overGraph;
+  /// Before the commit message (compact): no padding on the left, so the
+  /// first label lines up with messages that have none.
+  final bool inline;
+
+  EdgeInsets get _padding => inline
+      ? const EdgeInsets.fromLTRB(0, 4, 6, 4)
+      : const EdgeInsets.symmetric(horizontal: 6, vertical: 4);
 
   List<_PillData> _group() {
     final pills = <String, _PillData>{};
@@ -1059,7 +1041,7 @@ class _RefPills extends StatelessWidget {
     final detachedHead = isHeadCommit && !refs.any((r) => r.isHead);
     if (pills.isEmpty && !detachedHead) return const SizedBox();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: _padding,
       child: LayoutBuilder(
         builder: (context, c) {
           final fit = _fit(context, pills, c.maxWidth, detachedHead);
@@ -1133,6 +1115,21 @@ class _RefPills extends StatelessWidget {
   }
 
   static const _gap = 4.0;
+
+  /// The width the labels take whole (padding included), up to [max].
+  double naturalWidth(BuildContext context, double max) {
+    final pills = _group();
+    final detachedHead = isHeadCommit && !refs.any((r) => r.isHead);
+    if (pills.isEmpty && !detachedHead) return 0;
+    final fit = _fit(context, pills, double.infinity, detachedHead);
+    final n = fit.shown.length;
+    final w =
+        fit.headWidth +
+        fit.widths.fold(0.0, (a, b) => a + b) +
+        _gap * (n - (detachedHead ? 0 : 1)) +
+        _padding.horizontal;
+    return min(w, max);
+  }
 
   /// Shortened below this, a label isn't worth showing (about five
   /// characters and "…", its icons dropped).
@@ -1336,12 +1333,7 @@ class _RefPills extends StatelessWidget {
       height: 21,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
-        color: overGraph
-            ? Color.alphaBlend(
-                color.withValues(alpha: bold ? 0.35 : 0.2),
-                AppColors.background,
-              )
-            : color.withValues(alpha: bold ? 0.35 : 0.2),
+        color: color.withValues(alpha: bold ? 0.35 : 0.2),
         border: outlined
             ? Border.all(color: ScrollMarks.trunkColor, width: 1.5)
             : Border.all(color: color.withValues(alpha: 0.8)),
