@@ -100,6 +100,10 @@ class SettingsForm extends StatelessWidget {
               'Fork: before the message, right after each commit\'s lanes.\n'
               'Aligned Fork: before the message, with messages in a column.',
         ),
+        _current(
+          const ValueKey('graph-mode-preview'),
+          _GraphModePreview(s.graphMode),
+        ),
         _row(
           'Line hint',
           AppDropdown<LineHint>(
@@ -117,6 +121,10 @@ class SettingsForm extends StatelessWidget {
           info:
               'What links each commit in the graph to its message, in its '
               'branch\'s color.',
+        ),
+        _current(
+          const ValueKey('line-hint-preview'),
+          _LineHintPreview(s.lineHint),
         ),
         _row(
           'Zoom',
@@ -234,6 +242,23 @@ class SettingsForm extends StatelessWidget {
       ],
     );
   }
+
+  /// What the current choice looks like, under its row's control.
+  Widget _current(Key key, Widget preview) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        key: key,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: preview,
+      ),
+    ),
+  );
 
   /// A label and its control; with [expand] the control takes the rest of
   /// the row (text fields) instead of the label. [info] adds an info icon

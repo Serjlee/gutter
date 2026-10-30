@@ -27,6 +27,22 @@ void main() {
     await tester.pump();
     expect(find.text('Settings'), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
+    // The current graph mode and line hint, shown without opening their
+    // menus.
+    expect(find.byKey(const ValueKey('line-hint-preview')), findsOneWidget);
+    final graphPreview = find.byKey(const ValueKey('graph-mode-preview'));
+    double gap() {
+      double x(String t) => tester
+          .getTopLeft(find.descendant(of: graphPreview, matching: find.text(t)))
+          .dx;
+      return x('Fix typo') - x('main');
+    }
+
+    final full = gap(); // the label in its column, the message past the graph
+    app.setGraphMode(GraphMode.fork);
+    await tester.pump();
+    expect(gap(), lessThan(full)); // the message right after the label
+
     await tester.tap(find.byKey(const ValueKey('settings-close')));
     await tester.pump();
     expect(find.byKey(const ValueKey('theme-mode')), findsNothing);
