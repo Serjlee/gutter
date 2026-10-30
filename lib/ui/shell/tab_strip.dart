@@ -821,7 +821,7 @@ class _HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Repositories (${shortcut('T')})',
+      message: 'Dashboard (${shortcut('T')})',
       child: InkWell(
         onTap: onTap,
         child: Container(
