@@ -101,6 +101,20 @@ class _GutterAppState extends State<GutterApp>
 
   bool _framed = false;
   final _themes = <Brightness, ThemeData>{};
+  final _navigator = GlobalKey<NavigatorState>();
+
+  /// Rebuilds and repaints everything under the navigator for a new
+  /// palette, dialogs open over the shell included: they stay open.
+  void _restyle() {
+    void visit(Element e) {
+      e.markNeedsBuild();
+      if (e is RenderObjectElement) e.renderObject.markNeedsPaint();
+      e.visitChildren(visit);
+    }
+
+    final root = _navigator.currentContext;
+    if (root != null) visit(root as Element);
+  }
 
   @override
   void onWindowFocus() => widget.app.setFocused(true);
@@ -115,32 +129,30 @@ class _GutterAppState extends State<GutterApp>
   Widget build(BuildContext context) {
     final app = widget.app;
     // The theme setting changes through the app; the palette is read by
-    // every widget as it builds, so a switch rebuilds the whole tree.
+    // every widget as it builds and paints, so a switch rebuilds and
+    // repaints all of it (the shell, from scratch: see AppShell).
     return ListenableBuilder(
       listenable: app,
       builder: (context, _) {
-        _applyPalette();
-        return KeyedSubtree(
-          key: ValueKey(AppColors.current.brightness),
-          child: MaterialApp(
-            title: 'Gutter',
-            debugShowCheckedModeBanner: false,
-            // One ThemeData per palette: a new one would rebuild every
-            // widget that uses the theme, on any app change.
-            theme: _themes.putIfAbsent(
-              AppColors.current.brightness,
-              buildTheme,
+        if (_applyPalette()) _restyle();
+        return MaterialApp(
+          navigatorKey: _navigator,
+          // At once, as the palette that most widgets read switches.
+          themeAnimationDuration: Duration.zero,
+          title: 'Gutter',
+          debugShowCheckedModeBanner: false,
+          // One ThemeData per palette: a new one would rebuild every
+          // widget that uses the theme, on any app change.
+          theme: _themes.putIfAbsent(AppColors.current.brightness, buildTheme),
+          builder: (context, child) => ListenableBuilder(
+            listenable: app,
+            builder: (context, _) => ZoomScope(
+              zoom: app.zoom,
+              onZoomChanged: app.setZoom,
+              child: child!,
             ),
-            builder: (context, child) => ListenableBuilder(
-              listenable: app,
-              builder: (context, _) => ZoomScope(
-                zoom: app.zoom,
-                onZoomChanged: app.setZoom,
-                child: child!,
-              ),
-            ),
-            home: AppShell(app: app),
           ),
+          home: AppShell(app: app),
         );
       },
     );

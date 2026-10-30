@@ -235,23 +235,27 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return FocusScope(
       autofocus: true,
-      child: Scaffold(
-        body: ListenableBuilder(
-          listenable: app,
-          builder: (context, _) {
-            final tab = app.activeTab;
-            return Column(
-              children: [
-                TabStrip(app: app),
-                const Divider(),
-                Expanded(
-                  child: tab == null
-                      ? HomeTab(app: app)
-                      : RepoView(key: ObjectKey(tab), tab: tab),
-                ),
-              ],
-            );
-          },
+      // Built anew for a new palette: some widgets keep what they styled.
+      child: KeyedSubtree(
+        key: ValueKey(AppColors.current.brightness),
+        child: Scaffold(
+          body: ListenableBuilder(
+            listenable: app,
+            builder: (context, _) {
+              final tab = app.activeTab;
+              return Column(
+                children: [
+                  TabStrip(app: app),
+                  const Divider(),
+                  Expanded(
+                    child: tab == null
+                        ? HomeTab(app: app)
+                        : RepoView(key: ObjectKey(tab), tab: tab),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

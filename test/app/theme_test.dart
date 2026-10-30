@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
 import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
+import 'package:gutter/main.dart';
 import 'package:gutter/ui/graph_view/commit_graph_view.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
 import 'package:gutter/ui/dialogs/settings_dialog.dart';
@@ -96,5 +98,45 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching the theme keeps the settings open, restyled', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final app = AppController(null, Settings()..themeMode = 'dark');
+    await tester.pumpWidget(GutterApp(app: app));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('theme-mode-light')));
+    await tester.pump();
+    expect(AppColors.current, AppPalette.light);
+    expect(find.byKey(const ValueKey('settings-close')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('theme-mode-light')),
+        matching: find.byKey(const ValueKey('theme-mode-selected')),
+      ),
+      findsOneWidget,
+    );
+    // In the new palette: the dialog and what is in it.
+    final material = tester.widget<Material>(
+      find
+          .descendant(of: find.byType(Dialog), matching: find.byType(Material))
+          .first,
+    );
+    expect(material.color, AppPalette.light.panel);
+    expect(
+      tester.widget<Text>(find.text('Dark')).style?.color,
+      AppPalette.light.textDim,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 10));
   });
 }
