@@ -7,8 +7,8 @@ import 'package:gutter/app/theme.dart';
 import 'package:gutter/ui/shell/app_shell.dart';
 
 void main() {
-  testWidgets('the settings open in a dialog: from the home tab, and with '
-      'Ctrl+P', (tester) async {
+  testWidgets('the settings open in a dialog: from the home tab, with '
+      'Ctrl+P, and from the macOS app menu', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -53,6 +53,26 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('settings-close')));
+    await tester.pump();
+
+    // What the macOS runner sends for "Preferences…".
+    Future<void> preferences() async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'gutter/menu',
+        const StandardMethodCodec().encodeMethodCall(
+          const MethodCall('openSettings'),
+        ),
+        (_) {},
+      );
+      await tester.pump();
+    }
+
+    await preferences();
+    expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
+    // Not twice, over itself.
+    await preferences();
+    expect(find.text('Settings'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 10));

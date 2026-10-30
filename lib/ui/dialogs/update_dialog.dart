@@ -18,6 +18,28 @@ Future<void> showUpdateDialog(BuildContext context, AppController app) async {
   );
 }
 
+/// "Check for Updates…": checks now, then offers the latest release, even
+/// a skipped one, or says why there's none.
+Future<void> checkForUpdatesNow(BuildContext context, AppController app) async {
+  final updates = app.updates;
+  await updates.check();
+  if (!context.mounted) return;
+  if (updates.updateAvailable) {
+    // Offered here: the check's own offer then stays away.
+    app.takeUpdateOffer();
+    await showUpdateDialog(context, app);
+  } else if (updates.error != null) {
+    app.notify('Couldn\'t check for updates: ${updates.error}', error: true);
+  } else {
+    final latest = updates.latest;
+    app.notify(
+      latest == null
+          ? 'No release of Gutter published yet'
+          : 'Gutter is up to date (latest release: ${latest.tag})',
+    );
+  }
+}
+
 /// The release notes proper: the tag's message, without the install notes
 /// CI appends after a `---` rule (in early releases, under an Installation
 /// heading, or alone), and without Markdown markers.

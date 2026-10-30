@@ -1,13 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
 import 'package:gutter/app/settings_store.dart';
+import 'package:gutter/app/theme.dart';
 import 'package:gutter/app/update_checker.dart';
 import 'package:gutter/app/updater.dart';
 import 'package:gutter/app/version.dart';
 import 'package:gutter/ui/dialogs/update_dialog.dart';
+import 'package:gutter/ui/shell/app_shell.dart';
 import 'package:gutter/ui/shell/home_tab.dart';
 
 const release = ReleaseInfo(
@@ -302,5 +305,63 @@ void main() {
       tester.getTopLeft(find.text('Rebase panel')).dy,
       lessThan(tester.getTopLeft(find.text('Windows support')).dy),
     );
+  });
+
+  testWidgets('"Check for Updates…" offers even a skipped release, or says '
+      'why there is none', (tester) async {
+    var releases = [release];
+    var fail = false;
+    final checker = UpdateChecker(
+      current: const AppVersion(version: '0.1.0'),
+      fetcher: () async => fail ? throw Exception('offline') : releases,
+    );
+    final app = AppController(
+      null,
+      Settings()..skippedUpdate = 'v0.2.0',
+      updates: checker,
+    );
+    final messages = <String>[];
+    app.messages.listen((m) => messages.add(m.text));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: AppShell(app: app),
+      ),
+    );
+    await tester.pump();
+
+    /// What the macOS runner sends when the menu item is chosen.
+    Future<void> choose() async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'gutter/menu',
+        const StandardMethodCodec().encodeMethodCall(
+          const MethodCall('checkForUpdates'),
+        ),
+        (_) {},
+      );
+      // (The app shell never settles: a few frames.)
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    // Skipped, yet asked for: offered, once.
+    await choose();
+    expect(find.text('Gutter 0.2.0 is available'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('update-later')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    releases = [const ReleaseInfo(tag: 'v0.1.0', url: 'u', publishedAt: null)];
+    await choose();
+    expect(find.textContaining('is available'), findsNothing);
+    expect(messages.last, 'Gutter is up to date (latest release: v0.1.0)');
+
+    fail = true;
+    await choose();
+    expect(messages.last, startsWith("Couldn't check for updates"));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 10));
   });
 }

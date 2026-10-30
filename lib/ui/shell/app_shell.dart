@@ -41,10 +41,25 @@ class _AppShellState extends State<AppShell> {
     // Shortcuts widget, when the focused widget goes away).
     HardwareKeyboard.instance.addHandler(_onKey);
     app.updates.addListener(_offerUpdate);
+    // The app menu's items on macOS (the runner sets them up).
+    // (Answered right away: their dialogs stay up as long as they like.)
+    _menu.setMethodCallHandler((call) async {
+      if (!mounted) return;
+      switch (call.method) {
+        case 'checkForUpdates':
+          unawaited(checkForUpdatesNow(context, app));
+        case 'openSettings':
+          // Not over another dialog, as with the shortcut.
+          if (!_overlayOpen) _openSettings();
+      }
+    });
   }
+
+  static const _menu = MethodChannel('gutter/menu');
 
   @override
   void dispose() {
+    _menu.setMethodCallHandler(null);
     app.updates.removeListener(_offerUpdate);
     HardwareKeyboard.instance.removeHandler(_onKey);
     _messages?.cancel();
