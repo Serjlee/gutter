@@ -44,6 +44,13 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   var _section = SettingsSection.appearance;
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,12 +79,18 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-              child: ListenableBuilder(
-                listenable: widget.app,
-                builder: (_, _) =>
-                    SettingsForm(app: widget.app, section: _section),
+            // Always shown when there is more: easy to miss otherwise.
+            child: Scrollbar(
+              controller: _scroll,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+                child: ListenableBuilder(
+                  listenable: widget.app,
+                  builder: (_, _) =>
+                      SettingsForm(app: widget.app, section: _section),
+                ),
               ),
             ),
           ),
