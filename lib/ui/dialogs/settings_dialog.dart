@@ -79,24 +79,32 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
-            // Always shown when there is more: easy to miss otherwise.
-            child: Scrollbar(
-              controller: _scroll,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
+            // Always shown when there is more (easy to miss otherwise),
+            // in the middle of the right margin.
+            child: ScrollbarTheme(
+              data: ScrollbarTheme.of(context).copyWith(
+                thickness: const WidgetStatePropertyAll(6),
+                crossAxisMargin: 7,
+                mainAxisMargin: 8,
+              ),
+              child: Scrollbar(
                 controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-                child: ListenableBuilder(
-                  listenable: widget.app,
-                  builder: (_, _) =>
-                      SettingsForm(app: widget.app, section: _section),
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(20),
+                  child: ListenableBuilder(
+                    listenable: widget.app,
+                    builder: (_, _) =>
+                        SettingsForm(app: widget.app, section: _section),
+                  ),
                 ),
               ),
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
@@ -330,11 +338,10 @@ class SettingsForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final rows in groups)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: _Group(rows),
-          ),
+        for (final (i, rows) in groups.indexed) ...[
+          if (i > 0) const SizedBox(height: 16),
+          _Group(rows),
+        ],
       ],
     );
   }
@@ -390,7 +397,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
