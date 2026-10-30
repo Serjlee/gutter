@@ -6,7 +6,7 @@ import 'package:gutter/app/theme.dart';
 import 'package:gutter/graph/graph_painter.dart';
 import 'package:gutter/ui/graph_view/commit_graph_view.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
-import 'package:gutter/ui/shell/home_tab.dart';
+import 'package:gutter/ui/dialogs/settings_dialog.dart';
 
 import '../support/temp_repo.dart';
 
@@ -51,7 +51,8 @@ void main() {
         home: Scaffold(
           body: ListenableBuilder(
             listenable: app,
-            builder: (_, _) => HomeTab(app: app),
+            builder: (_, _) =>
+                SingleChildScrollView(child: SettingsForm(app: app)),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/ui/graph_view/commit_graph_view.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
+import 'package:gutter/ui/dialogs/settings_dialog.dart';
 import 'package:gutter/ui/shell/home_tab.dart';
 
 import '../support/temp_repo.dart';
@@ -73,7 +74,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTheme(),
-        home: Scaffold(body: HomeTab(app: tab.app)),
+        home: Scaffold(
+          body: Column(
+            children: [
+              Expanded(child: HomeTab(app: tab.app)),
+              SettingsForm(app: tab.app),
+            ],
+          ),
+        ),
       ),
     );
     await tester.pump();

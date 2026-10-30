@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../dialogs/dialogs.dart';
+import '../dialogs/settings_dialog.dart';
 import '../dialogs/update_dialog.dart';
 import '../repo/repo_view.dart';
 import 'home_tab.dart';
@@ -150,6 +152,8 @@ class _AppShellState extends State<AppShell> {
       );
   }
 
+  void _openSettings() => showSettingsDialog(context, app);
+
   Future<void> _openRepoDialog() async {
     final dir = await getDirectoryPath(confirmButtonText: 'Open repository');
     if (dir != null) await app.openRepo(dir);
@@ -191,6 +195,14 @@ class _AppShellState extends State<AppShell> {
     both(LogicalKeyboardKey.keyR, () => app.activeTab?.refresh(forceLog: true));
     both(LogicalKeyboardKey.keyI, () => app.activeTab?.toggleDetails());
     both(LogicalKeyboardKey.keyB, () => app.activeTab?.toggleSidebar());
+    // Settings: ⌘, on macOS (as its apps have it), Ctrl+P elsewhere.
+    if (Platform.isMacOS) {
+      map[const SingleActivator(LogicalKeyboardKey.comma, meta: true)] =
+          _openSettings;
+    } else {
+      map[const SingleActivator(LogicalKeyboardKey.keyP, control: true)] =
+          _openSettings;
+    }
     map[const SingleActivator(LogicalKeyboardKey.f5)] = () =>
         app.activeTab?.refresh(forceLog: true);
     for (var i = 1; i <= 9; i++) {
