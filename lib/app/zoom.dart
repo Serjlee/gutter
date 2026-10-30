@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import 'theme.dart';
@@ -175,5 +176,10 @@ class _ZoomAwarePhysics extends ScrollPhysics {
 
   @override
   bool shouldAcceptUserOffset(ScrollMetrics position) =>
-      !isZoomModifierPressed && super.shouldAcceptUserOffset(position);
+      (_layingOut || !isZoomModifierPressed) &&
+      super.shouldAcceptUserOffset(position);
+
+  static bool get _layingOut =>
+      SchedulerBinding.instance.schedulerPhase ==
+      SchedulerPhase.persistentCallbacks;
 }
