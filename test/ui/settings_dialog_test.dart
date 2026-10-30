@@ -25,23 +25,56 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('open-settings')));
     await tester.pump();
-    expect(find.text('Settings'), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
-    // The current graph mode and line hint, shown without opening their
-    // menus.
-    expect(find.byKey(const ValueKey('line-hint-preview')), findsOneWidget);
-    final graphPreview = find.byKey(const ValueKey('graph-mode-preview'));
-    double gap() {
+    // Each graph mode and line hint shows what it looks like, side by side;
+    // a tap picks one.
+    double gap(GraphMode mode) {
+      final tile = find.byKey(ValueKey('graph-mode-${mode.name}'));
       double x(String t) => tester
-          .getTopLeft(find.descendant(of: graphPreview, matching: find.text(t)))
+          .getTopLeft(find.descendant(of: tile, matching: find.text(t)))
           .dx;
       return x('Fix typo') - x('main');
     }
 
-    final full = gap(); // the label in its column, the message past the graph
-    app.setGraphMode(GraphMode.fork);
+    // Full: the label in its column, the message past the graph; Fork: the
+    // message right after the label.
+    expect(gap(GraphMode.fork), lessThan(gap(GraphMode.full)));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('line-hint')),
+        matching: find.text('Fix typo'),
+      ),
+      findsNWidgets(4),
+    );
+    await tester.tap(find.byKey(const ValueKey('graph-mode-fork')));
     await tester.pump();
-    expect(gap(), lessThan(full)); // the message right after the label
+    expect(app.settings.graphMode, GraphMode.fork);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('graph-mode-fork')),
+        matching: find.byKey(const ValueKey('graph-mode-selected')),
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('syntax-highlighting')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('syntax-highlighting')));
+    await tester.pump();
+    expect(app.settings.syntaxHighlight, isFalse);
+
+    // The other sections, a tab each.
+    await tester.tap(find.byKey(const ValueKey('settings-tab-git')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('theme-mode')), findsNothing);
+    expect(find.byKey(const ValueKey('git-path')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('force-tag-fetch')));
+    await tester.pump();
+    expect(app.settings.forceTagFetch, isTrue);
+    await tester.tap(find.byKey(const ValueKey('settings-tab-performance')));
+    await tester.pump();
+    expect(find.text('Commits loaded'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('settings-close')));
     await tester.pump();
@@ -56,8 +89,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-close')));
     await tester.pump();
 
-    // What the macOS runner sends for "Preferences…".
-    Future<void> preferences() async {
+    // What the macOS runner sends for "Settings…".
+    Future<void> settingsItem() async {
       await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
         'gutter/menu',
         const StandardMethodCodec().encodeMethodCall(
@@ -68,11 +101,11 @@ void main() {
       await tester.pump();
     }
 
-    await preferences();
+    await settingsItem();
     expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
     // Not twice, over itself.
-    await preferences();
-    expect(find.text('Settings'), findsOneWidget);
+    await settingsItem();
+    expect(find.byKey(const ValueKey('settings-close')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 10));

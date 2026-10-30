@@ -78,15 +78,23 @@ void main() {
           body: Column(
             children: [
               Expanded(child: HomeTab(app: tab.app)),
-              SettingsForm(app: tab.app),
+              Expanded(
+                child: SingleChildScrollView(child: SettingsForm(app: tab.app)),
+              ),
             ],
           ),
         ),
       ),
     );
     await tester.pump();
-    expect(find.text('Light'), findsNothing); // the setting says System
-    expect(find.text('System'), findsOneWidget);
+    // The setting says System.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('theme-mode-system')),
+        matching: find.byKey(const ValueKey('theme-mode-selected')),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

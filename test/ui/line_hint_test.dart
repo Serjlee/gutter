@@ -58,23 +58,25 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Fade'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('line-hint')));
-    await tester.pumpAndSettle();
-    // Each option shows what it looks like.
-    final menu = find.byType(PopupMenuItem<LineHint>);
-    expect(menu, findsNWidgets(4));
-    for (final label in ['Leader line', 'Line', 'Fade', 'None']) {
-      final item = find.ancestor(of: find.text(label).last, matching: menu);
+    // Each option shows what it looks like; Fade is picked.
+    final picker = find.byKey(const ValueKey('line-hint'));
+    for (final hint in LineHint.values) {
+      final tile = find.byKey(ValueKey('line-hint-${hint.name}'));
+      expect(find.descendant(of: picker, matching: tile), findsOneWidget);
       expect(
-        find.descendant(of: item, matching: find.text('Add the login form')),
+        find.descendant(of: tile, matching: find.text('Fix typo')),
         findsOneWidget,
-        reason: label,
       );
     }
-    await tester.tap(find.text('Line').last);
-    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('line-hint-fade')),
+        matching: find.byKey(const ValueKey('line-hint-selected')),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('line-hint-line')));
+    await tester.pump();
     expect(app.settings.lineHint, LineHint.line);
 
     await tester.pumpWidget(
