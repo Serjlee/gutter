@@ -595,29 +595,36 @@ class _DiffViewState extends State<DiffView> {
     // hold other lines then.
     final list = SelectionArea(
       key: ObjectKey(diff),
-      child: ListView.builder(
-        controller: _vScroll,
-        // Wrapped lines take as many rows as they need.
-        itemExtent: wrap ? null : _lineHeight,
-        itemCount: rows.length,
-        itemBuilder: (context, i) {
-          final (h, l) = rows[i];
-          if (l < 0) {
-            return SelectionContainer.disabled(
-              child: SizedBox(height: _lineHeight, child: _hunkHeader(diff, h)),
+      child: ScrollSelectionFix(
+        child: ListView.builder(
+          controller: _vScroll,
+          // Wrapped lines take as many rows as they need.
+          itemExtent: wrap ? null : _lineHeight,
+          itemCount: rows.length,
+          itemBuilder: (context, i) {
+            final (h, l) = rows[i];
+            if (l < 0) {
+              return SelectionContainer.disabled(
+                child: SizedBox(
+                  height: _lineHeight,
+                  child: _hunkHeader(diff, h),
+                ),
+              );
+            }
+            final line = diff.hunks[h].lines[l];
+            return SelectionRow(
+              child: _UnifiedLine(
+                line: line,
+                spans: spans?[h][l],
+                numberWidth: noWidth,
+                selected: _selection[h]?.contains(l) ?? false,
+                selectable: _canSelect && line.isChange,
+                wrap: wrap,
+                onToggle: (shift) => _toggleLine(h, l, shift: shift),
+              ),
             );
-          }
-          final line = diff.hunks[h].lines[l];
-          return _UnifiedLine(
-            line: line,
-            spans: spans?[h][l],
-            numberWidth: noWidth,
-            selected: _selection[h]?.contains(l) ?? false,
-            selectable: _canSelect && line.isChange,
-            wrap: wrap,
-            onToggle: (shift) => _toggleLine(h, l, shift: shift),
-          );
-        },
+          },
+        ),
       ),
     );
     return wrap ? list : _scrollable(contentWidth, list);
@@ -728,41 +735,48 @@ class _DiffViewState extends State<DiffView> {
     // selection, as the rows hold other lines then.
     return SelectionArea(
       key: ObjectKey(diff),
-      child: ListView.builder(
-        controller: _vScroll,
-        itemCount: rows.length,
-        itemBuilder: (context, i) {
-          final (h, left, right) = rows[i];
-          if (left == -1 && right == -1) {
-            return SelectionContainer.disabled(
-              child: SizedBox(height: _lineHeight, child: _hunkHeader(diff, h)),
-            );
-          }
-          final lines = diff.hunks[h].lines;
-          Widget side(int? idx, bool isLeft) {
-            if (idx == null) return Container(color: AppColors.panel);
-            final line = lines[idx];
-            return _SplitLine(
-              line: line,
-              spans: spans?[h][idx],
-              number: isLeft ? line.oldNo : line.newNo,
-              selected: _selection[h]?.contains(idx) ?? false,
-              selectable: _canSelect && line.isChange,
-              onToggle: (shift) => _toggleRow(rows, i, shift: shift),
-            );
-          }
+      child: ScrollSelectionFix(
+        child: ListView.builder(
+          controller: _vScroll,
+          itemCount: rows.length,
+          itemBuilder: (context, i) {
+            final (h, left, right) = rows[i];
+            if (left == -1 && right == -1) {
+              return SelectionContainer.disabled(
+                child: SizedBox(
+                  height: _lineHeight,
+                  child: _hunkHeader(diff, h),
+                ),
+              );
+            }
+            final lines = diff.hunks[h].lines;
+            Widget side(int? idx, bool isLeft) {
+              if (idx == null) return Container(color: AppColors.panel);
+              final line = lines[idx];
+              return _SplitLine(
+                line: line,
+                spans: spans?[h][idx],
+                number: isLeft ? line.oldNo : line.newNo,
+                selected: _selection[h]?.contains(idx) ?? false,
+                selectable: _canSelect && line.isChange,
+                onToggle: (shift) => _toggleRow(rows, i, shift: shift),
+              );
+            }
 
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: side(left, true)),
-                Container(width: 1, color: AppColors.border),
-                Expanded(child: side(right, false)),
-              ],
-            ),
-          );
-        },
+            return SelectionRow(
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: side(left, true)),
+                    Container(width: 1, color: AppColors.border),
+                    Expanded(child: side(right, false)),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
+import '../../app/zoom.dart';
 import '../../git/models.dart';
 
 /// Vertical drag handle between two panes.
@@ -587,6 +588,53 @@ Future<void> openWithSystem(String target) async {
       ? 'explorer'
       : 'xdg-open';
   await Process.start(cmd, [target], mode: ProcessStartMode.detached);
+}
+
+/// Between a [SelectionArea] and the scroll view in it, whose rows are each
+/// in a [SelectionRow]: when the app is zoomed, keeps the scroll view out of
+/// the selection, the rows joining the area directly.
+///
+/// Works around a Flutter bug: in a scaled scroll view, a drag selection
+/// lands off by the scroll offset times (zoom - 1), as the scroll view adds
+/// its offset scaled and takes it off unscaled; far enough down, the line
+/// below the pointer is selected. The cost, zoomed: a drag past the list's
+/// edge doesn't scroll it.
+class ScrollSelectionFix extends StatelessWidget {
+  const ScrollSelectionFix({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final registrar = SelectionContainer.maybeOf(context);
+    if (ZoomScope.of(context) == 1 || registrar == null) return child;
+    return _RowRegistrar(
+      registrar: registrar,
+      child: SelectionContainer.disabled(child: child),
+    );
+  }
+}
+
+/// A row of a list in a [ScrollSelectionFix].
+class SelectionRow extends StatelessWidget {
+  const SelectionRow({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final registrar = context
+        .dependOnInheritedWidgetOfExactType<_RowRegistrar>()
+        ?.registrar;
+    if (registrar == null) return child;
+    return SelectionRegistrarScope(registrar: registrar, child: child);
+  }
+}
+
+class _RowRegistrar extends InheritedWidget {
+  const _RowRegistrar({required this.registrar, required super.child});
+  final SelectionRegistrar registrar;
+
+  @override
+  bool updateShouldNotify(_RowRegistrar old) => old.registrar != registrar;
 }
 
 /// One line of a selectable list of lines (diffs, file previews), inside a

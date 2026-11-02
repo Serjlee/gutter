@@ -487,21 +487,29 @@ class _ConflictViewState extends State<ConflictView> {
       // Reloaded, the file drops the selection, as the rows hold other
       // lines then.
       key: ObjectKey(_parsed),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          for (var i = 0; i < segments.length; i++)
-            if (segments[i] is ConflictBlock)
-              _block(segments[i] as ConflictBlock, n++, total, _spans?[i])
-            else
-              _plain(
-                segments[i] as List<String>,
-                i,
-                _spans?[i].current,
-                first: i == 0,
-                last: i == segments.length - 1,
+      child: ScrollSelectionFix(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            for (var i = 0; i < segments.length; i++)
+              SelectionRow(
+                child: segments[i] is ConflictBlock
+                    ? _block(
+                        segments[i] as ConflictBlock,
+                        n++,
+                        total,
+                        _spans?[i],
+                      )
+                    : _plain(
+                        segments[i] as List<String>,
+                        i,
+                        _spans?[i].current,
+                        first: i == 0,
+                        last: i == segments.length - 1,
+                      ),
               ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -34,8 +34,20 @@ class ZoomScope extends StatefulWidget {
   final ValueChanged<double> onZoomChanged;
   final Widget child;
 
+  /// The zoom of the [ZoomScope] above, 1 without one.
+  static double of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_Zoom>()?.zoom ?? 1;
+
   @override
   State<ZoomScope> createState() => _ZoomScopeState();
+}
+
+class _Zoom extends InheritedWidget {
+  const _Zoom({required this.zoom, required super.child});
+  final double zoom;
+
+  @override
+  bool updateShouldNotify(_Zoom old) => old.zoom != zoom;
 }
 
 class _ZoomScopeState extends State<ZoomScope> {
@@ -75,9 +87,12 @@ class _ZoomScopeState extends State<ZoomScope> {
   Widget build(BuildContext context) {
     final zoom = widget.zoom;
     final mq = MediaQuery.of(context);
-    final inner = ScrollConfiguration(
-      behavior: const _ZoomAwareScrollBehavior(),
-      child: widget.child,
+    final inner = _Zoom(
+      zoom: zoom,
+      child: ScrollConfiguration(
+        behavior: const _ZoomAwareScrollBehavior(),
+        child: widget.child,
+      ),
     );
     Widget content = inner;
     if (zoom != 1.0) {

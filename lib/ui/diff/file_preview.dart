@@ -136,42 +136,49 @@ class _FilePreviewState extends State<FilePreview> {
             // New content drops the selection, as the rows hold other
             // lines then.
             key: ObjectKey(lines),
-            child: ListView.builder(
-              itemExtent: 19,
-              itemCount: lines.length,
-              itemBuilder: (context, i) => Row(
-                children: [
-                  // Copies take the code, not the line numbers.
-                  SelectionContainer.disabled(
-                    child: SizedBox(
-                      width: numWidth,
-                      child: Text(
-                        '${i + 1}',
-                        textAlign: TextAlign.right,
-                        style: monoStyle(size: 12, color: AppColors.textFaint),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: SelectableLine(
-                      child: Text.rich(
-                        TextSpan(
-                          style: monoStyle(size: 12.5),
-                          text: spans == null || i >= spans.length
-                              ? lines[i]
-                              : null,
-                          children: spans == null || i >= spans.length
-                              ? null
-                              : spans[i],
+            child: ScrollSelectionFix(
+              child: ListView.builder(
+                itemExtent: 19,
+                itemCount: lines.length,
+                itemBuilder: (context, i) => SelectionRow(
+                  child: Row(
+                    children: [
+                      // Copies take the code, not the line numbers.
+                      SelectionContainer.disabled(
+                        child: SizedBox(
+                          width: numWidth,
+                          child: Text(
+                            '${i + 1}',
+                            textAlign: TextAlign.right,
+                            style: monoStyle(
+                              size: 12,
+                              color: AppColors.textFaint,
+                            ),
+                          ),
                         ),
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.fade,
                       ),
-                    ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: SelectableLine(
+                          child: Text.rich(
+                            TextSpan(
+                              style: monoStyle(size: 12.5),
+                              text: spans == null || i >= spans.length
+                                  ? lines[i]
+                                  : null,
+                              children: spans == null || i >= spans.length
+                                  ? null
+                                  : spans[i],
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.fade,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
