@@ -32,11 +32,22 @@ Future<void> checkForUpdatesNow(BuildContext context, AppController app) async {
     app.notify('Couldn\'t check for updates: ${updates.error}', error: true);
   } else {
     final latest = updates.latest;
-    app.notify(
-      latest == null
-          ? 'No release of Gutter published yet'
-          : 'Gutter is up to date (latest release: ${latest.tag})',
-    );
+    final String message;
+    if (latest == null) {
+      message = 'No release of Gutter published yet';
+    } else if (updates.current.isRelease || updates.devStatus == 'identical') {
+      message = 'Gutter is up to date (latest release: ${latest.tag})';
+    } else if (updates.devStatus == 'behind') {
+      // A test build with commits the latest release doesn't have yet.
+      message =
+          'This test build is newer than the latest release '
+          '(${latest.tag})';
+    } else {
+      message =
+          'Couldn\'t tell how this test build compares to the latest '
+          'release (${latest.tag})';
+    }
+    app.notify(message);
   }
 }
 

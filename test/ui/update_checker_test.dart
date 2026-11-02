@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -147,8 +148,10 @@ void main() {
       expect(await dev(() => 'ahead'), isTrue);
       expect(await dev(() => 'identical'), isFalse);
       expect(await dev(() => 'behind'), isFalse);
-      // Commits of its own (an unmerged branch): updating would lose them.
-      expect(await dev(() => 'diverged'), isFalse);
+      // Commits of its own too: a branch build, its branch merged with
+      // other commits (squashed, reworded) or not yet; the release still
+      // has what it lacks.
+      expect(await dev(() => 'diverged'), isTrue);
       // Unknown to GitHub, or offline.
       expect(await dev(() => null), isFalse);
       expect(await dev(() => Exception('offline')), isFalse);
@@ -360,6 +363,63 @@ void main() {
     fail = true;
     await choose();
     expect(messages.last, startsWith("Couldn't check for updates"));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('"Check for Updates…" on a test build says how it compares', (
+    tester,
+  ) async {
+    String? status;
+    final checker = UpdateChecker(
+      current: const AppVersion(commit: 'abc1234'),
+      fetcher: () async => [
+        const ReleaseInfo(tag: 'v0.9.1', url: 'u', publishedAt: null),
+      ],
+      comparer: (_, _) async => status,
+    );
+    final app = AppController(null, Settings(), updates: checker);
+    final messages = <String>[];
+    app.messages.listen((m) => messages.add(m.text));
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: Builder(
+            builder: (c) {
+              context = c;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+
+    Future<String?> check(String? s) async {
+      status = s;
+      messages.clear();
+      unawaited(checkForUpdatesNow(context, app));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      return messages.lastOrNull;
+    }
+
+    expect(
+      await check('identical'),
+      'Gutter is up to date (latest release: v0.9.1)',
+    );
+    expect(
+      await check('behind'),
+      'This test build is newer than the latest release (v0.9.1)',
+    );
+    expect(await check(null), startsWith("Couldn't tell how this test build"));
+    // Built from a branch merged with other commits: the release has its
+    // fixes, and more.
+    expect(await check('diverged'), isNull);
+    expect(find.text('Gutter 0.9.1 is available'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 10));

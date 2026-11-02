@@ -104,10 +104,10 @@ class UpdateChecker extends ChangeNotifier {
   final ReleaseFetcher _fetch;
   final CommitComparer _compare;
 
-  /// A build without a version (built from a commit, not a release): the
-  /// latest release has commits it doesn't, and none of its own are
-  /// missing from it.
-  bool _devBehind = false;
+  /// For a build without a version (built from a commit, not a release):
+  /// how the latest release relates to its commit, as [CommitComparer]
+  /// says, or null when it can't tell.
+  String? devStatus;
   final Duration interval;
 
   /// The published releases, newest first.
@@ -130,12 +130,16 @@ class UpdateChecker extends ChangeNotifier {
       : [?latest];
 
   /// A newer release than this build exists. A build without a version
-  /// is compared by commit: the latest release must contain it, and more.
+  /// is compared by commit: the latest release must have commits it
+  /// doesn't. Diverged counts: a branch merged with its commits squashed
+  /// or reworded never lands as such, and its build would never update.
   /// One with neither (a plain local build) never gets an update.
   bool get updateAvailable {
     final l = latest;
     if (l == null) return false;
-    if (!current.isRelease) return _devBehind;
+    if (!current.isRelease) {
+      return devStatus == 'ahead' || devStatus == 'diverged';
+    }
     return compareVersions(l.tag, current.version) > 0;
   }
 
@@ -163,9 +167,9 @@ class UpdateChecker extends ChangeNotifier {
       final l = latest;
       if (!current.isRelease && current.commit.isNotEmpty && l != null) {
         try {
-          _devBehind = await _compare(current.commit, l.tag) == 'ahead';
+          devStatus = await _compare(current.commit, l.tag);
         } catch (_) {
-          _devBehind = false;
+          devStatus = null;
         }
       }
       error = null;
