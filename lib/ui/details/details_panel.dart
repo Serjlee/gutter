@@ -1080,22 +1080,35 @@ class _CommitComposer extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              SizedBox(
-                height: 24,
-                width: 24,
-                child: Checkbox(
-                  value: tab.amend,
-                  onChanged: (v) => tab.setAmend(v ?? false),
+          // The label toggles it too.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              key: const ValueKey('amend-toggle'),
+              borderRadius: BorderRadius.circular(4),
+              onTap: () => tab.setAmend(!tab.amend),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: Checkbox(
+                        value: tab.amend,
+                        onChanged: (v) => tab.setAmend(v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Amend previous commit',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-              const Text(
-                'Amend previous commit',
-                style: TextStyle(fontSize: 12.5),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 8),
           FilledButton(
