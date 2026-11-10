@@ -231,6 +231,13 @@ class _RepoViewState extends State<RepoView> {
       null;
 }
 
+/// What Pull can do, as its menu and tooltip name it.
+const _pullModes = {
+  PullMode.ffOnly: 'fast-forward only',
+  PullMode.merge: 'merge',
+  PullMode.rebase: 'rebase',
+};
+
 class RepoToolbar extends StatelessWidget {
   const RepoToolbar({super.key, required this.tab, required this.searchFocus});
   final RepoTabController tab;
@@ -244,6 +251,7 @@ class RepoToolbar extends StatelessWidget {
     final busy = tab.busy;
     // Read-only while an interactive rebase is prepared (Fetch still works).
     final idle = busy == null && !tab.locked;
+    final pullMode = tab.app.settings.pullMode;
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -321,32 +329,19 @@ class RepoToolbar extends StatelessWidget {
                     ToolbarButton(
                       icon: Icons.download,
                       label: 'Pull',
-                      tooltip: 'Pull (fast-forward only)',
+                      tooltip: 'Pull (${_pullModes[pullMode]})',
                       busy: busy == 'Pull',
-                      onPressed: idle
-                          ? () => actions.pull(PullMode.ffOnly)
-                          : null,
+                      onPressed: idle ? () => actions.pull(pullMode) : null,
+                      // Picks what the button does, from then on.
+                      menuTooltip: 'How to pull',
                       menu: [
-                        menuItem(
-                          'Fetch all',
-                          () => tab.fetch(),
-                          icon: Icons.sync,
-                        ),
-                        menuItem(
-                          'Pull (fast-forward only)',
-                          () => actions.pull(PullMode.ffOnly),
-                          icon: Icons.fast_forward,
-                        ),
-                        menuItem(
-                          'Pull (merge)',
-                          () => actions.pull(PullMode.merge),
-                          icon: Icons.merge,
-                        ),
-                        menuItem(
-                          'Pull (rebase)',
-                          () => actions.pull(PullMode.rebase),
-                          icon: Icons.low_priority,
-                        ),
+                        for (final MapEntry(key: mode, value: name)
+                            in _pullModes.entries)
+                          menuItem(
+                            'Pull ($name)',
+                            () => tab.app.setPullMode(mode),
+                            icon: mode == pullMode ? Icons.check : null,
+                          ),
                       ],
                     ),
                     ToolbarButton(

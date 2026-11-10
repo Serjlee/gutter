@@ -80,6 +80,7 @@ class ToolbarButton extends StatelessWidget {
     this.tooltip,
     this.busy = false,
     this.menu,
+    this.menuTooltip = 'More options',
   });
 
   final IconData icon;
@@ -90,6 +91,7 @@ class ToolbarButton extends StatelessWidget {
 
   /// Optional dropdown shown by a small arrow.
   final List<PopupMenuEntry<VoidCallback>>? menu;
+  final String menuTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +147,7 @@ class ToolbarButton extends StatelessWidget {
             height: 4 + 20 + 2,
             child: PopupMenuButton<VoidCallback>(
               popUpAnimationStyle: AnimationStyle.noAnimation,
-              tooltip: 'More options',
+              tooltip: menuTooltip,
               itemBuilder: (_) => menu!,
               onSelected: (cb) => cb(),
               borderRadius: BorderRadius.circular(4),

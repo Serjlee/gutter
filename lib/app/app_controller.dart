@@ -534,6 +534,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPullMode(PullMode value) {
+    settings.pullMode = value;
+    save();
+    notifyListeners();
+  }
+
   void setForceTagFetch(bool value) {
     settings.forceTagFetch = value;
     save();

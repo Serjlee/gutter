@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../git/repository.dart' show PullMode;
 import '../graph/graph_painter.dart' show LineHint;
 import 'tab_groups.dart';
 
@@ -56,6 +57,9 @@ class Settings {
   /// Fetch replaces local tags that moved on the remote, without asking.
   bool forceTagFetch = false;
 
+  /// What the Pull button does, as picked in its menu.
+  PullMode pullMode = PullMode.ffOnly;
+
   /// Repositories where committing or pushing to main (or master) goes
   /// ahead without asking first.
   List<String> mainBranchUnguarded = [];
@@ -102,6 +106,7 @@ class Settings {
     'syntaxHighlighting': syntaxHighlight,
     'githubAvatars': githubAvatars,
     'forceTagFetch': forceTagFetch,
+    'pullMode': pullMode.name,
     'mainBranchUnguarded': mainBranchUnguarded,
     'skippedUpdate': skippedUpdate,
     'themeMode': themeMode,
@@ -142,6 +147,7 @@ class Settings {
       ..syntaxHighlight = j['syntaxHighlighting'] != false
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
+      ..pullMode = PullMode.values.asNameMap()[j['pullMode']] ?? PullMode.ffOnly
       ..mainBranchUnguarded = strings(j['mainBranchUnguarded'])
       ..skippedUpdate = j['skippedUpdate'] as String?
       ..themeMode = switch (j['themeMode']) {
