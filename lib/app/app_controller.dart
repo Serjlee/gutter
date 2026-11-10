@@ -704,13 +704,30 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The apps a repository can open with, by id: the file manager, VS Code
-  /// when installed, then the apps added (their commands are their ids).
+  /// The apps a repository can open with, by id, in their order: the file
+  /// manager, VS Code when found, and the apps added (their commands are
+  /// their ids).
   List<String> get openWithIds => [
-    fileManagerId,
-    if (vsCode != null) vsCodeId,
-    ...settings.openWithApps,
+    for (final id in settings.openWithApps)
+      if (id != vsCodeId || vsCode != null) id,
   ];
+
+  /// The apps with a button in the repository's toolbar, in their order.
+  List<String> get openWithShownIds => [
+    for (final id in openWithIds)
+      if (!settings.openWithHidden.contains(id)) id,
+  ];
+
+  /// Gives the app [id] a button in the toolbar, or takes it away.
+  void setOpenWithShown(String id, bool shown) {
+    settings.openWithHidden = [
+      for (final h in settings.openWithHidden)
+        if (h != id) h,
+      if (!shown) id,
+    ];
+    save();
+    notifyListeners();
+  }
 
   /// Opens [repo] with the app [id], saying why not if it fails.
   Future<void> openRepoWith(String repo, String id) async {
@@ -737,8 +754,13 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// The name of the app [id] in menus and messages.
-  String openWithName(String id) => switch (id) {
+  /// The name of the app [id] in menus and messages: the one given it,
+  /// else its own.
+  String openWithName(String id) =>
+      settings.openWithNames[id] ?? openWithDefaultName(id);
+
+  /// The app [id]'s own name.
+  String openWithDefaultName(String id) => switch (id) {
     fileManagerId =>
       Platform.isMacOS
           ? 'Finder'
@@ -763,6 +785,42 @@ class AppController extends ChangeNotifier {
       for (final c in settings.openWithApps)
         if (c != command) c,
     ];
+    settings.openWithNames.remove(command);
+    settings.openWithIcons.remove(command);
+    settings.openWithHidden.remove(command);
+    save();
+    notifyListeners();
+  }
+
+  /// Names the app [id]; empty, it goes by its own name again.
+  void setOpenWithName(String id, String name) {
+    name = name.trim();
+    if (name.isEmpty || name == openWithDefaultName(id)) {
+      settings.openWithNames.remove(id);
+    } else {
+      settings.openWithNames[id] = name;
+    }
+    save();
+    notifyListeners();
+  }
+
+  /// Gives the app [id] the icon [key]; null, its own again.
+  void setOpenWithIcon(String id, String? key) {
+    if (key == null) {
+      settings.openWithIcons.remove(id);
+    } else {
+      settings.openWithIcons[id] = key;
+    }
+    save();
+    notifyListeners();
+  }
+
+  /// Moves the app at [from] to [to], among all of them (VS Code too,
+  /// found or not).
+  void moveOpenWithApp(int from, int to) {
+    final apps = [...settings.openWithApps];
+    apps.insert(to, apps.removeAt(from));
+    settings.openWithApps = apps;
     save();
     notifyListeners();
   }

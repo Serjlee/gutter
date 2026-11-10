@@ -1,16 +1,18 @@
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/open_with.dart'
-    show InstalledApp, desktopPrefix, openWithLabel, openWithProblem;
+    show InstalledApp, desktopPrefix, openWithProblem;
 import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
 import '../../git/git_runner.dart';
 import '../../graph/graph_painter.dart';
 import '../widgets/common.dart';
+import '../shell/open_with_menu.dart';
 import 'dialogs.dart';
 
 /// The settings, in a dialog, at [section]: from the dashboard, with ⌘,
@@ -316,21 +318,7 @@ class SettingsForm extends StatelessWidget {
       ],
       SettingsSection.apps => [
         [
-          _Row(
-            Platform.isMacOS || Platform.isWindows
-                ? app.openWithName(AppController.fileManagerId)
-                : 'File manager',
-            subtitle: 'Always there',
-          ),
-          _Row(
-            'VS Code',
-            subtitle: app.vsCode == null
-                ? 'Not found: its code command isn\'t installed'
-                : 'Found: ${app.vsCode}',
-          ),
-        ],
-        [
-          if (s.openWithApps.isNotEmpty) _AppList(app: app),
+          _AppList(app: app),
           _Row(
             'Add an app',
             subtitle:
@@ -380,9 +368,8 @@ class SettingsForm extends StatelessWidget {
     };
     final intro = switch (section) {
       SettingsSection.apps =>
-        'The external apps that can be used to open a repository with. '
-            'Can be selected in contextual menus or with the dedicated '
-            'button in the repository view (near the search bar).',
+        'External apps that can open a repository directory. Shortcuts '
+            'will be added in the repository toolbar.',
       _ => null,
     };
     return Column(
@@ -1101,7 +1088,8 @@ class _InfoIconState extends State<_InfoIcon> {
   }
 }
 
-/// The apps added, each with Remove: a few, then they scroll.
+/// The apps to open with, in order (drag to reorder), each with its icon
+/// and name to change, and Remove: a few, then they scroll.
 class _AppList extends StatefulWidget {
   const _AppList({required this.app});
   final AppController app;
@@ -1122,45 +1110,367 @@ class _AppListState extends State<_AppList> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
-    final line = AppColors.border.withValues(alpha: 0.7);
+    final ids = app.settings.openWithApps;
+    final header = TextStyle(
+      fontSize: 10.5,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.5,
+      color: AppColors.textDim,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The columns, named once.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _AppRow.leadWidth,
+            10,
+            _AppRow.trailWidth,
+            2,
+          ),
+          child: Row(
+            children: [
+              Expanded(child: Text('APP', style: header)),
+              SizedBox(
+                width: _AppRow.showWidth,
+                child: Center(child: Text('SHOW', style: header)),
+              ),
+            ],
+          ),
+        ),
+        _list(app, ids),
+      ],
+    );
+  }
+
+  Widget _list(AppController app, List<String> ids) {
     return ConstrainedBox(
       // About four apps, the next one peeking out.
-      constraints: const BoxConstraints(maxHeight: 210),
+      constraints: const BoxConstraints(maxHeight: 230),
       child: Scrollbar(
         controller: _scroll,
         thumbVisibility: true,
-        child: ListView(
+        child: ReorderableListView.builder(
           key: const ValueKey('app-list'),
-          controller: _scroll,
+          scrollController: _scroll,
           shrinkWrap: true,
+          buildDefaultDragHandles: false,
           padding: EdgeInsets.zero,
-          children: [
-            for (final (i, command) in app.settings.openWithApps.indexed) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  indent: 14,
-                  endIndent: 14,
-                  color: line,
-                ),
-              _Row(
-                openWithLabel(command),
-                // The command, or the app's file, when the name doesn't
-                // say it all.
-                subtitle: openWithLabel(command) == command
-                    ? null
-                    : command.replaceFirst(desktopPrefix, ''),
-                control: SmallIconButton(
-                  key: ValueKey('remove-app-$command'),
-                  icon: Icons.close,
-                  tooltip: 'Remove',
-                  onPressed: () => app.removeOpenWithApp(command),
+          itemCount: ids.length,
+          onReorderItem: app.moveOpenWithApp,
+          proxyDecorator: (child, _, _) => Material(
+            color: AppColors.panelAlt,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(6),
+            child: child,
+          ),
+          itemBuilder: (context, i) =>
+              _AppRow(key: ValueKey(ids[i]), app: app, id: ids[i], index: i),
+        ),
+      ),
+    );
+  }
+}
+
+/// An app to open with: its drag handle, icon, name (its own, as a hint,
+/// until given one), what it runs, and Remove (VS Code, found, stays).
+class _AppRow extends StatefulWidget {
+  const _AppRow({
+    super.key,
+    required this.app,
+    required this.id,
+    required this.index,
+  });
+  final AppController app;
+  final String id;
+  final int index;
+
+  /// What comes before the name (drag handle, icon), and after the Show
+  /// column (Remove): for the header to line up.
+  static const leadWidth = 6.0 + 26 + 4 + 32 + 10;
+  static const trailWidth = 4.0 + 24 + 10;
+  static const showWidth = 44.0;
+
+  @override
+  State<_AppRow> createState() => _AppRowState();
+}
+
+class _AppRowState extends State<_AppRow> {
+  late final _name = TextEditingController(
+    text: widget.app.settings.openWithNames[widget.id] ?? '',
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _rename() => widget.app.setOpenWithName(widget.id, _name.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final app = widget.app;
+    final id = widget.id;
+    // The file manager and VS Code: theirs, not to edit or remove.
+    final builtIn =
+        id == AppController.fileManagerId || id == AppController.vsCodeId;
+    final missing = id == AppController.vsCodeId && app.vsCode == null;
+    final runs = switch (id) {
+      AppController.fileManagerId =>
+        'Also ${shortcut('O', shift: true)}, in a repository',
+      AppController.vsCodeId =>
+        app.vsCode ?? 'Not found: its code command isn\'t installed',
+      _ => id.replaceFirst(desktopPrefix, ''),
+    };
+    final row = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.index > 0)
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 14,
+            endIndent: 14,
+            color: AppColors.border.withValues(alpha: 0.7),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 8, 10, 8),
+          child: Row(
+            children: [
+              ReorderableDragStartListener(
+                index: widget.index,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.drag_indicator,
+                      size: 18,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
                 ),
               ),
+              const SizedBox(width: 4),
+              if (builtIn)
+                SizedBox.square(
+                  dimension: 32,
+                  child: Icon(
+                    openWithIcon(app, id),
+                    size: 18,
+                    color: AppColors.textDim,
+                  ),
+                )
+              else
+                _IconPicker(app: app, id: id),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (builtIn)
+                      Text(
+                        id == AppController.fileManagerId &&
+                                !Platform.isMacOS &&
+                                !Platform.isWindows
+                            ? 'File manager'
+                            : app.openWithName(id),
+                        style: const TextStyle(fontSize: 13),
+                      )
+                    else
+                      Focus(
+                        onFocusChange: (f) {
+                          if (!f) _rename();
+                        },
+                        child: TextField(
+                          key: ValueKey('app-name-$id'),
+                          controller: _name,
+                          onSubmitted: (_) => _rename(),
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration.collapsed(
+                            // Its own name, dim: given none, it goes by it.
+                            hintText: app.openWithDefaultName(id),
+                            hintStyle: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textDim,
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      runs,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: AppColors.textDim),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: _AppRow.showWidth,
+                child: Tooltip(
+                  message: 'A button for it in the repository\'s toolbar',
+                  child: Checkbox(
+                    key: ValueKey('app-show-$id'),
+                    value: !app.settings.openWithHidden.contains(id),
+                    onChanged: (v) => app.setOpenWithShown(id, v ?? true),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (builtIn)
+                const SizedBox(width: 24)
+              else
+                SmallIconButton(
+                  key: ValueKey('remove-app-$id'),
+                  icon: Icons.close,
+                  tooltip: 'Remove',
+                  onPressed: () => app.removeOpenWithApp(id),
+                ),
             ],
-          ],
+          ),
         ),
+      ],
+    );
+    // VS Code, not found: dim, its place kept for when it is.
+    return missing ? Opacity(opacity: 0.55, child: row) : row;
+  }
+}
+
+/// The app [id]'s icon, as a button picking another: one of the icons, an
+/// image of the user's (PNG), or its own again.
+class _IconPicker extends StatelessWidget {
+  const _IconPicker({required this.app, required this.id});
+  final AppController app;
+  final String id;
+
+  Future<void> _pick(BuildContext context) async {
+    final box = context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final at = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+    final key = await showMenu<String>(
+      context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(at.left, at.bottom + 4, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [_IconGrid(app: app, id: id)],
+    );
+    switch (key) {
+      case null:
+        return;
+      case '':
+        app.setOpenWithIcon(id, null);
+      case _IconGrid.image:
+        final file = await openFile(
+          acceptedTypeGroups: const [
+            XTypeGroup(label: 'PNG images', extensions: ['png']),
+          ],
+        );
+        if (file != null) {
+          app.setOpenWithIcon(id, '$imageIconPrefix${file.path}');
+        }
+      default:
+        app.setOpenWithIcon(id, key);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Change the icon',
+      child: InkWell(
+        key: ValueKey('app-icon-$id'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => _pick(context),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child:
+              openWithImage(app, id, size: 18) ??
+              Icon(openWithIcon(app, id), size: 18, color: AppColors.text),
+        ),
+      ),
+    );
+  }
+}
+
+/// The icons to pick from, in a grid: the app's own first, the choices,
+/// then "PNG image…".
+class _IconGrid extends PopupMenuEntry<String> {
+  const _IconGrid({required this.app, required this.id});
+  final AppController app;
+  final String id;
+
+  /// What picking "PNG image…" returns.
+  static const image = ':image';
+
+  @override
+  double get height => 0;
+
+  @override
+  bool represents(String? value) => false;
+
+  @override
+  State<_IconGrid> createState() => _IconGridState();
+}
+
+class _IconGridState extends State<_IconGrid> {
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.app.settings.openWithIcons[widget.id] ?? '';
+    Widget cell(String key, IconData icon, String tooltip) => Tooltip(
+      message: tooltip,
+      child: InkWell(
+        key: ValueKey('icon-choice-$key'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => Navigator.pop(context, key),
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: key == current ? AppColors.selection : null,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.text),
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 6 * 38,
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                cell('', openWithDefaultIcon(widget.id), 'Its own'),
+                for (final MapEntry(:key, :value)
+                    in openWithIconChoices.entries)
+                  cell(key, value, key),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            key: const ValueKey('icon-choice-image'),
+            onPressed: () => Navigator.pop(context, _IconGrid.image),
+            icon: const Icon(Icons.image_outlined, size: 16),
+            label: const Text('PNG image…'),
+          ),
+        ],
       ),
     );
   }

@@ -187,6 +187,9 @@ PopupMenuItem<VoidCallback> menuItem(
   String label,
   VoidCallback onTap, {
   IconData? icon,
+
+  /// In [icon]'s place: an image, say.
+  Widget? leading,
   bool enabled = true,
   bool danger = false,
 
@@ -201,13 +204,18 @@ PopupMenuItem<VoidCallback> menuItem(
       children: [
         SizedBox(
           width: 24,
-          child: icon == null
-              ? null
-              : Icon(
-                  icon,
-                  size: 16,
-                  color: danger ? AppColors.danger : AppColors.textDim,
-                ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child:
+                leading ??
+                (icon == null
+                    ? null
+                    : Icon(
+                        icon,
+                        size: 16,
+                        color: danger ? AppColors.danger : AppColors.textDim,
+                      )),
+          ),
         ),
         Flexible(
           child: Text(
@@ -408,7 +416,11 @@ class SmallIconButton extends StatelessWidget {
     this.size = 16,
     this.padding = 4,
     this.mirror = false,
+    this.image,
   });
+
+  /// In [icon]'s place, [size] square: an image, say.
+  final Widget? image;
 
   final IconData icon;
   final String tooltip;
@@ -434,16 +446,18 @@ class SmallIconButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: Padding(
             padding: EdgeInsets.all(padding),
-            child: Transform.flip(
-              flipX: mirror,
-              child: Icon(
-                icon,
-                size: size,
-                color: onPressed == null
-                    ? AppColors.textFaint
-                    : (color ?? AppColors.textDim),
-              ),
-            ),
+            child: image != null
+                ? SizedBox.square(dimension: size, child: image)
+                : Transform.flip(
+                    flipX: mirror,
+                    child: Icon(
+                      icon,
+                      size: size,
+                      color: onPressed == null
+                          ? AppColors.textFaint
+                          : (color ?? AppColors.textDim),
+                    ),
+                  ),
           ),
         ),
       ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -133,17 +134,37 @@ void main() {
     // What can't run isn't added: it says why.
     expect(await add('no-such-editor'), 'No no-such-editor command found');
     expect(await add(bin.path), '${bin.path} is a folder, not a program');
-    expect(app.settings.openWithApps, isEmpty);
+    expect(app.settings.openWithApps, [':files', ':vscode']);
     // Programs are, by path (or on PATH).
     expect(await add(myeditor), isNull);
     await tester.enterText(find.byKey(const ValueKey('add-app')), other);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(app.settings.openWithApps, [myeditor, other]);
+    expect(app.settings.openWithApps, [':files', ':vscode', myeditor, other]);
     // And removed.
     await tester.tap(find.byKey(ValueKey('remove-app-$other')));
     await tester.pump();
-    expect(app.settings.openWithApps, [myeditor]);
+    expect(app.settings.openWithApps, [':files', ':vscode', myeditor]);
+    // Named, and given an icon, by its row.
+    await tester.enterText(
+      find.byKey(ValueKey('app-name-$myeditor')),
+      'My Editor',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(app.settings.openWithNames, {myeditor: 'My Editor'});
+    await tester.tap(find.byKey(ValueKey('app-icon-$myeditor')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('icon-choice-bolt')));
+    await tester.pumpAndSettle();
+    expect(app.settings.openWithIcons, {myeditor: 'bolt'});
+    // Shown in the toolbar, unless unticked.
+    await tester.tap(find.byKey(ValueKey('app-show-$myeditor')));
+    await tester.pump();
+    expect(app.settings.openWithHidden, [myeditor]);
+    await tester.tap(find.byKey(ValueKey('app-show-$myeditor')));
+    await tester.pump();
+    expect(app.settings.openWithHidden, isEmpty);
     // Installed apps are suggested by name, and added as such.
     app.installedApps = Future.value(const [
       InstalledApp(id: '/Applications/Sublime Text.app', name: 'Sublime Text'),
@@ -181,11 +202,11 @@ void main() {
     }
     await tester.pump();
     final list = find.byKey(const ValueKey('app-list'));
-    expect(tester.getSize(list).height, lessThanOrEqualTo(210));
+    expect(tester.getSize(list).height, lessThanOrEqualTo(230));
     expect(
       tester
           .state<ScrollableState>(
-            find.descendant(of: list, matching: find.byType(Scrollable)),
+            find.descendant(of: list, matching: find.byType(Scrollable)).first,
           )
           .position
           .maxScrollExtent,
@@ -206,16 +227,18 @@ void main() {
       containsAll([
         'Show in the file manager',
         'Open in VS Code',
-        'Open in myeditor',
+        'Open in My Editor',
       ]),
     );
     expect(items, isNot(contains('Open in other')));
-    await tester.tap(find.text('Open in myeditor'));
+    await tester.tap(find.text('Open in My Editor'));
     await tester.pumpAndSettle();
     expect(started.single, '$myeditor $repo');
   });
 
-  testWidgets('Open with… in the toolbar lists the apps', (tester) async {
+  testWidgets('the toolbar: the file manager, and each app shown', (
+    tester,
+  ) async {
     final started = <String>[];
     final saved = startDetached;
     startDetached = (exe, args, _) async =>
@@ -229,7 +252,12 @@ void main() {
       tab = RepoTabController(t.repo, AppController(null, Settings()));
       await tab.load();
     });
-    tab.app.vsCode = '/usr/bin/code';
+    final app = tab.app
+      ..vsCode = '/usr/bin/code'
+      ..addOpenWithApp('alpha')
+      ..addOpenWithApp('beta')
+      ..addOpenWithApp('gamma')
+      ..setOpenWithShown('beta', false);
     final focus = FocusNode();
     addTearDown(() {
       focus.dispose();
@@ -243,24 +271,128 @@ void main() {
       MaterialApp(
         theme: buildTheme(),
         home: Scaffold(
-          body: RepoToolbar(tab: tab, searchFocus: focus),
+          body: ListenableBuilder(
+            listenable: app,
+            builder: (_, _) => RepoToolbar(tab: tab, searchFocus: focus),
+          ),
         ),
       ),
     );
-    // As tall as the search box beside it.
-    expect(tester.getSize(find.byKey(const ValueKey('open-with'))).height, 32);
+    // As tall as the search box beside them.
+    expect(
+      tester.getSize(find.byKey(const ValueKey('open-:files'))).height,
+      32,
+    );
+    List<String> buttons() => [
+      for (final t in tester.widgetList<Tooltip>(
+        find.descendant(
+          of: find.byType(RepoToolbar),
+          matching: find.byType(Tooltip),
+        ),
+      ))
+        if (t.message case final String m when m.contains(' in ')) m,
+    ];
+    // VS Code, found, by default; beta not shown.
+    expect(buttons(), [
+      'Show in the file manager (Ctrl+Shift+O)',
+      'Open in VS Code',
+      'Open in alpha',
+      'Open in gamma',
+    ]);
+    await tester.tap(find.byTooltip('Open in gamma'));
+    await tester.pump();
+    expect(started.single, 'gamma ${t.path}');
 
-    await tester.tap(find.byKey(const ValueKey('open-with')));
-    await tester.pumpAndSettle();
-    expect(find.text('Show in the file manager'), findsOneWidget);
-    expect(find.text('Ctrl+Shift+O'), findsOneWidget); // its shortcut
-    expect(find.text('Manage…'), findsOneWidget);
-    await tester.tap(find.text('Open in VS Code'));
-    await tester.pumpAndSettle();
-    expect(started.single, '/usr/bin/code ${t.path}');
+    // A PNG of the user's as its icon; gone, its own again.
+    final png = File('${t.path}/../icon.png')
+      ..writeAsBytesSync(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        ),
+      );
+    addTearDown(() {
+      if (png.existsSync()) png.deleteSync();
+    });
+    app.setOpenWithIcon('gamma', 'file:${png.path}');
+    await tester.pump();
+    Finder gammaImage() => find.descendant(
+      of: find.byTooltip('Open in gamma'),
+      matching: find.byType(Image),
+    );
+    expect(gammaImage(), findsOneWidget);
+    png.deleteSync();
+    app.setOpenWithIcon('gamma', 'file:${png.path}');
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byTooltip('Open in gamma'),
+        matching: find.byIcon(Icons.terminal),
+      ),
+      findsOneWidget,
+    );
+    app.setOpenWithIcon('gamma', null);
+
+    // Named, and moved first: its button, by its name, first.
+    app
+      ..setOpenWithName('gamma', 'Gamma Editor')
+      ..moveOpenWithApp(4, 0);
+    await tester.pump();
+    expect(app.openWithIds, ['gamma', ':files', ':vscode', 'alpha', 'beta']);
+    expect(buttons().sublist(0, 3), [
+      'Open in Gamma Editor',
+      'Show in the file manager (Ctrl+Shift+O)',
+      'Open in VS Code',
+    ]);
+    // Its own name again, when cleared.
+    app.setOpenWithName('gamma', '');
+    expect(app.settings.openWithNames, isEmpty);
+    // The file manager can go too.
+    app.setOpenWithShown(':files', false);
+    await tester.pump();
+    expect(buttons(), isNot(contains(startsWith('Show in'))));
+
+    // Without VS Code, it has no button, and keeps its place for later.
+    app.vsCode = null;
+    expect(app.openWithIds, ['gamma', ':files', 'alpha', 'beta']);
+    app.moveOpenWithApp(0, 4);
+    expect(app.settings.openWithApps, [
+      ':files',
+      ':vscode',
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    // Removed, it's not hidden any more either.
+    app.removeOpenWithApp('beta');
+    expect(app.settings.openWithHidden, [':files']);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  test('saved: apps\' order, names and icons; VS Code among them', () {
+    final s = Settings()
+      ..openWithApps = ['subl', ':vscode']
+      ..openWithNames = {'subl': 'Sublime'}
+      ..openWithIcons = {'subl': 'bolt'};
+    s.openWithHidden = ['subl'];
+    final back = Settings.fromJson(s.toJson());
+    // (The file manager among them, first, as it wasn't.)
+    expect(back.openWithApps, [':files', 'subl', ':vscode']);
+    expect(back.openWithHidden, ['subl']);
+    expect(back.openWithNames, {'subl': 'Sublime'});
+    expect(back.openWithIcons, {'subl': 'bolt'});
+    // From before: the file manager and VS Code first.
+    expect(
+      Settings.fromJson({
+        'openWithApps': ['subl'],
+      }).openWithApps,
+      [':files', ':vscode', 'subl'],
+    );
+    expect(Settings.fromJson({}).openWithApps, [':files', ':vscode']);
   });
 
   testWidgets('Ctrl+Shift+O shows the repository in the file manager', (

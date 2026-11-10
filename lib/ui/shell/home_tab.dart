@@ -381,7 +381,7 @@ class _RepoTileState extends State<_RepoTile> {
             icon: Icons.open_in_new,
           ),
           const PopupMenuDivider(),
-          ...openWithItems(context, widget.app, widget.path, repoView: false),
+          ...openWithItems(widget.app, widget.path),
           const PopupMenuDivider(),
           menuItem(
             'Copy path',

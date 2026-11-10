@@ -65,8 +65,20 @@ class Settings {
   /// The pick of each repository (by path) that has one.
   Map<String, PullMode> pullModes = {};
 
-  /// Apps added to "Open with" (commands, or app names on macOS).
-  List<String> openWithApps = [];
+  /// The apps to open repositories with, in order: `:files`, the file
+  /// manager; `:vscode`, VS Code, when it's found; commands and installed
+  /// apps.
+  List<String> openWithApps = [':files', ':vscode'];
+
+  /// Apps to open with that get no button in the repository's toolbar
+  /// (all do, unless told not to).
+  List<String> openWithHidden = [];
+
+  /// Names given to apps to open with (by their command), over their own.
+  Map<String, String> openWithNames = {};
+
+  /// Icons picked for apps to open with (by their command): an icon's key.
+  Map<String, String> openWithIcons = {};
 
   PullMode pullModeFor(String repo) => pullModes[repo] ?? pullMode;
 
@@ -96,6 +108,9 @@ class Settings {
     'tabGroups': [for (final g in tabGroups) g.toJson()],
     'scanRoots': scanRoots,
     'openWithApps': openWithApps,
+    'openWithHidden': openWithHidden,
+    'openWithNames': openWithNames,
+    'openWithIcons': openWithIcons,
     'knownRepos': knownRepos,
     'recentRepos': recentRepos,
     'zoom': zoom,
@@ -128,6 +143,11 @@ class Settings {
   static Settings fromJson(Map<String, Object?> j) {
     List<String> strings(Object? v) =>
         v is List ? v.whereType<String>().toList() : <String>[];
+    Map<String, String> stringMap(Object? v) => {
+      if (v is Map)
+        for (final e in v.entries)
+          if (e.value case final String value) '${e.key}': value,
+    };
     double num_(Object? v, double d) => v is num ? v.toDouble() : d;
     final s = Settings()
       ..openTabs = strings(j['openTabs'])
@@ -138,7 +158,16 @@ class Settings {
           for (final g in l) ?TabGroup.fromJson(g),
       ]
       ..scanRoots = strings(j['scanRoots'])
-      ..openWithApps = strings(j['openWithApps'])
+      ..openWithApps = [
+        // The file manager and VS Code have a place among them, first
+        // unless moved.
+        for (final builtIn in [':files', ':vscode'])
+          if (!strings(j['openWithApps']).contains(builtIn)) builtIn,
+        ...strings(j['openWithApps']),
+      ]
+      ..openWithHidden = strings(j['openWithHidden'])
+      ..openWithNames = stringMap(j['openWithNames'])
+      ..openWithIcons = stringMap(j['openWithIcons'])
       ..knownRepos = strings(j['knownRepos'])
       ..recentRepos = strings(j['recentRepos'])
       ..zoom = num_(j['zoom'], 1.0)
