@@ -176,27 +176,29 @@ class _AppShellState extends State<AppShell> {
 
   Map<ShortcutActivator, VoidCallback> _shortcuts() {
     final map = <ShortcutActivator, VoidCallback>{};
-    void both(LogicalKeyboardKey key, VoidCallback cb, {bool shift = false}) {
-      map[SingleActivator(key, control: true, shift: shift)] = cb;
-      map[SingleActivator(key, meta: true, shift: shift)] = cb;
+    // The main modifier: ⌘ on macOS, where Ctrl+letter keys edit text
+    // (⌃B, ⌃T, ⌃O in the commit message); Ctrl elsewhere.
+    void mod(LogicalKeyboardKey key, VoidCallback cb, {bool shift = false}) {
+      final mac = Platform.isMacOS;
+      map[SingleActivator(key, control: !mac, meta: mac, shift: shift)] = cb;
     }
 
-    both(LogicalKeyboardKey.equal, app.zoomIn);
-    both(LogicalKeyboardKey.equal, app.zoomIn, shift: true); // Ctrl + '+'
-    both(LogicalKeyboardKey.add, app.zoomIn);
-    both(LogicalKeyboardKey.numpadAdd, app.zoomIn);
-    both(LogicalKeyboardKey.minus, app.zoomOut);
-    both(LogicalKeyboardKey.numpadSubtract, app.zoomOut);
-    both(LogicalKeyboardKey.digit0, app.zoomReset);
-    both(LogicalKeyboardKey.numpad0, app.zoomReset);
-    both(LogicalKeyboardKey.keyT, () => app.activate(-1));
-    both(LogicalKeyboardKey.keyO, _openRepoDialog);
-    both(
+    mod(LogicalKeyboardKey.equal, app.zoomIn);
+    mod(LogicalKeyboardKey.equal, app.zoomIn, shift: true); // Ctrl + '+'
+    mod(LogicalKeyboardKey.add, app.zoomIn);
+    mod(LogicalKeyboardKey.numpadAdd, app.zoomIn);
+    mod(LogicalKeyboardKey.minus, app.zoomOut);
+    mod(LogicalKeyboardKey.numpadSubtract, app.zoomOut);
+    mod(LogicalKeyboardKey.digit0, app.zoomReset);
+    mod(LogicalKeyboardKey.numpad0, app.zoomReset);
+    mod(LogicalKeyboardKey.keyT, () => app.activate(-1));
+    mod(LogicalKeyboardKey.keyO, _openRepoDialog);
+    mod(
       LogicalKeyboardKey.keyA,
       () => showTabSwitcher(context, app),
       shift: true,
     );
-    both(LogicalKeyboardKey.keyW, () {
+    mod(LogicalKeyboardKey.keyW, () {
       if (app.activeIndex >= 0) app.closeTab(app.activeIndex);
     });
     map[const SingleActivator(LogicalKeyboardKey.tab, control: true)] = () =>
@@ -207,9 +209,9 @@ class _AppShellState extends State<AppShell> {
       shift: true,
     )] = () =>
         app.nextTab(-1);
-    both(LogicalKeyboardKey.keyR, () => app.activeTab?.refresh(forceLog: true));
-    both(LogicalKeyboardKey.keyI, () => app.activeTab?.toggleDetails());
-    both(LogicalKeyboardKey.keyB, () => app.activeTab?.toggleSidebar());
+    mod(LogicalKeyboardKey.keyR, () => app.activeTab?.refresh(forceLog: true));
+    mod(LogicalKeyboardKey.keyI, () => app.activeTab?.toggleDetails());
+    mod(LogicalKeyboardKey.keyB, () => app.activeTab?.toggleSidebar());
     // Settings: ⌘, on macOS (as its apps have it); Ctrl+, elsewhere, and
     // Ctrl+P.
     if (Platform.isMacOS) {
@@ -225,7 +227,7 @@ class _AppShellState extends State<AppShell> {
         app.activeTab?.refresh(forceLog: true);
     for (var i = 1; i <= 9; i++) {
       final key = LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i - 1);
-      both(
+      mod(
         key,
         () =>
             app.activate(i - 1 < app.tabs.length ? i - 1 : app.tabs.length - 1),
