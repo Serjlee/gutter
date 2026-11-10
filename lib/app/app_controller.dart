@@ -688,6 +688,10 @@ class AppController extends ChangeNotifier {
   /// VS Code's `code`, if installed (looked for once).
   late String? vsCode = findVSCode();
 
+  /// The apps installed that can open a folder (looked for once, when
+  /// first asked), to suggest among the apps to open with.
+  late Future<List<InstalledApp>> installedApps = findInstalledApps();
+
   /// The apps a repository can open with, by id: the file manager, VS Code
   /// when installed, then the apps added (their commands are their ids).
   List<String> get openWithIds => [

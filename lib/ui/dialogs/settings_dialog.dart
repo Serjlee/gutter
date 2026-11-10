@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/open_with.dart' show openWithLabel;
+import '../../app/open_with.dart'
+    show InstalledApp, desktopPrefix, openWithLabel;
 import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
@@ -332,9 +333,9 @@ class SettingsForm extends StatelessWidget {
           if (s.openWithApps.isNotEmpty) _AppList(app: app),
           _Row(
             'Add an app',
-            subtitle: Platform.isMacOS
-                ? 'A command (subl), or an app\'s name (Sublime Text)'
-                : 'A command (subl), or its full path',
+            subtitle:
+                'An installed app, by name (Linux or macOS only), or a '
+                'command',
             below: _AddAppField(app: app),
           ),
         ],
@@ -1145,8 +1146,11 @@ class _AppListState extends State<_AppList> {
                 ),
               _Row(
                 openWithLabel(command),
-                // The command, when the name doesn't say it all.
-                subtitle: openWithLabel(command) == command ? null : command,
+                // The command, or the app's file, when the name doesn't
+                // say it all.
+                subtitle: openWithLabel(command) == command
+                    ? null
+                    : command.replaceFirst(desktopPrefix, ''),
                 control: SmallIconButton(
                   key: ValueKey('remove-app-$command'),
                   icon: Icons.close,
@@ -1162,7 +1166,8 @@ class _AppListState extends State<_AppList> {
   }
 }
 
-/// A command to add to the apps to open with, and Add.
+/// An app to add to the apps to open with: picked among those installed
+/// as its name is typed, or a command; and Add.
 class _AddAppField extends StatefulWidget {
   const _AddAppField({required this.app});
   final AppController app;
@@ -1173,16 +1178,49 @@ class _AddAppField extends StatefulWidget {
 
 class _AddAppFieldState extends State<_AddAppField> {
   final _c = TextEditingController();
+  final _focus = FocusNode();
+  List<InstalledApp> _installed = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.app.installedApps.then((apps) {
+      if (mounted) setState(() => _installed = apps);
+    });
+  }
 
   @override
   void dispose() {
     _c.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
+  /// Adds what was typed: the installed app by that name, if any, else
+  /// the command.
   void _add() {
-    widget.app.addOpenWithApp(_c.text);
+    final text = _c.text.trim();
+    if (text.isEmpty) return;
+    final named = _installed
+        .where((a) => a.name.toLowerCase() == text.toLowerCase())
+        .firstOrNull;
+    widget.app.addOpenWithApp(named?.id ?? text);
     _c.clear();
+  }
+
+  Iterable<InstalledApp> _matches(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    final added = widget.app.settings.openWithApps;
+    return _installed
+        .where((a) => a.name.toLowerCase().contains(q) && !added.contains(a.id))
+        // Names starting with it first.
+        .toList()
+      ..sort(
+        (a, b) =>
+            (a.name.toLowerCase().startsWith(q) ? 0 : 1) -
+            (b.name.toLowerCase().startsWith(q) ? 0 : 1),
+      );
   }
 
   @override
@@ -1190,17 +1228,77 @@ class _AddAppFieldState extends State<_AddAppField> {
     return Row(
       children: [
         Expanded(
-          child: TextField(
-            key: const ValueKey('add-app'),
-            controller: _c,
-            style: const TextStyle(fontSize: 13),
-            onSubmitted: (_) => _add(),
-            decoration: InputDecoration(
-              hintText: Platform.isMacOS ? 'subl' : 'subl, idea',
-              hintStyle: TextStyle(fontSize: 13, color: AppColors.textFaint),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 8,
+          child: LayoutBuilder(
+            builder: (context, c) => RawAutocomplete<InstalledApp>(
+              textEditingController: _c,
+              focusNode: _focus,
+              optionsBuilder: (v) => _matches(v.text),
+              displayStringForOption: (a) => a.name,
+              onSelected: (a) {
+                widget.app.addOpenWithApp(a.id);
+                _c.clear();
+              },
+              fieldViewBuilder: (context, controller, focus, submit) =>
+                  TextField(
+                    key: const ValueKey('add-app'),
+                    controller: controller,
+                    focusNode: focus,
+                    style: const TextStyle(fontSize: 13),
+                    onSubmitted: (_) {
+                      submit(); // picks the highlighted suggestion, if any
+                      _add();
+                    },
+                    decoration: InputDecoration(
+                      hintText: _installed.isEmpty
+                          ? 'subl, idea'
+                          : 'Sublime Text, or subl',
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textFaint,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                    ),
+                  ),
+              optionsViewBuilder: (context, select, options) => Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  color: AppColors.panelAlt,
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(6),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: 220,
+                      maxWidth: c.maxWidth,
+                    ),
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      children: [
+                        for (final (i, a) in options.indexed)
+                          InkWell(
+                            onTap: () => select(a),
+                            child: Container(
+                              color:
+                                  AutocompleteHighlightedOption.of(context) == i
+                                  ? AppColors.hover
+                                  : null,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                a.name,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/open_with.dart' show desktopPrefix;
 import '../dialogs/settings_dialog.dart';
 import '../widgets/common.dart';
 
 IconData openWithIcon(String id) => switch (id) {
   AppController.fileManagerId => Icons.folder_open,
   AppController.vsCodeId => Icons.code,
+  // An installed app, or a command.
+  _ when id.startsWith(desktopPrefix) || id.endsWith('.app') => Icons.apps,
   _ => Icons.terminal,
 };
 

@@ -114,6 +114,37 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('remove-app-other')));
     await tester.pump();
     expect(app.settings.openWithApps, ['myeditor']);
+    // Installed apps are suggested by name, and added as such.
+    app.installedApps = Future.value(const [
+      InstalledApp(id: '/Applications/Sublime Text.app', name: 'Sublime Text'),
+      InstalledApp(
+        id: '/Applications/Sublime Merge.app',
+        name: 'Sublime Merge',
+      ),
+    ]);
+    await tester.tap(find.byKey(const ValueKey('settings-tab-git')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-tab-apps')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const ValueKey('add-app')), 'text');
+    await tester.pump();
+    expect(find.text('Sublime Text'), findsOneWidget);
+    expect(find.text('Sublime Merge'), findsNothing);
+    await tester.tap(find.text('Sublime Text'));
+    await tester.pump();
+    expect(app.settings.openWithApps.last, '/Applications/Sublime Text.app');
+    // Typed out in full, Enter adds the app too.
+    await tester.enterText(
+      find.byKey(const ValueKey('add-app')),
+      'sublime merge',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(app.settings.openWithApps.last, '/Applications/Sublime Merge.app');
+    app.removeOpenWithApp('/Applications/Sublime Text.app');
+    app.removeOpenWithApp('/Applications/Sublime Merge.app');
+    await tester.pump();
+
     // Many: they scroll, in a list of their own.
     for (var i = 0; i < 9; i++) {
       app.addOpenWithApp('app$i');
