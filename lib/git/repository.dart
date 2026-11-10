@@ -630,6 +630,20 @@ class Repository {
   Future<void> deleteBranches(List<String> names) =>
       _mutate(() => _run(['branch', '-D', '--', ...names]));
 
+  /// The branch origin has as its default (its HEAD), when the clone
+  /// knows it: `develop` or `trunk` where it isn't main or master.
+  Future<String?> defaultBranch() async {
+    final head = await _run([
+      'symbolic-ref',
+      '-q',
+      '--short',
+      'refs/remotes/origin/HEAD',
+    ], allowFailure: true);
+    final name = head.stdout.trim();
+    if (!head.ok || !name.startsWith('origin/')) return null;
+    return name.substring('origin/'.length);
+  }
+
   /// The repository's main line: the default remote's HEAD, else a
   /// main/master (remote first), else HEAD.
   Future<String> mainBranch() async {

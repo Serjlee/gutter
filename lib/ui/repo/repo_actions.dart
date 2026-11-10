@@ -667,13 +667,20 @@ class RepoActions {
   }
 
   /// Before committing ([push] false) or pushing straight to [branch]:
-  /// when it's main or master, asks first, unless told not to for this
-  /// repository. Whether to go ahead.
+  /// when it's main or master, or the remote's default branch, asks first,
+  /// unless told not to for this repository. Whether to go ahead.
   Future<bool> _confirmMainBranch(String? branch, {required bool push}) async {
     if (branch == null ||
-        !RepoTabController.isMainBranch(branch) ||
         tab.app.settings.mainBranchUnguarded.contains(repo.path)) {
       return true;
+    }
+    if (!RepoTabController.isMainBranch(branch)) {
+      try {
+        if (await repo.defaultBranch() != branch) return true;
+      } catch (_) {
+        return true;
+      }
+      if (!context.mounted) return false;
     }
     final target = push ? tab.pushTarget(branch) : null;
     final (ok, optOut) = await confirmWithOptOut(

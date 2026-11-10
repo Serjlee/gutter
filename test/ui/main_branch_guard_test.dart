@@ -129,6 +129,19 @@ void main() {
     expect(find.text('Commit to feature?'), findsNothing);
     expect(t.subjects().first, 'change 4');
 
+    // Unless the remote has it as its default branch.
+    await tester.runAsync(() async {
+      t.git(['push', '-q', '-u', 'origin', 'feature']);
+      t.git(['remote', 'set-head', 'origin', 'feature']);
+    });
+    await stage('5\n');
+    unawaited(actions.commit());
+    await settle();
+    expect(find.text('Commit to feature?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await settle();
+    expect(t.subjects().first, 'change 4');
+
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
   });
