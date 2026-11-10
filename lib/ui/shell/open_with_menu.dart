@@ -13,13 +13,15 @@ IconData openWithIcon(String id) => switch (id) {
   _ => Icons.terminal,
 };
 
-/// "Open in …" for each app [repo] can open with, and "Manage…" (the
-/// settings' Apps).
+/// "Open in …" for each app [repo] can open with. In the repository's
+/// own view ([repoView]), with the file manager's shortcut and "Manage…"
+/// (the settings' Apps).
 List<PopupMenuEntry<VoidCallback>> openWithItems(
   BuildContext context,
   AppController app,
-  String repo,
-) {
+  String repo, {
+  bool repoView = true,
+}) {
   return [
     for (final id in app.openWithIds)
       menuItem(
@@ -28,15 +30,17 @@ List<PopupMenuEntry<VoidCallback>> openWithItems(
             : 'Open in ${app.openWithName(id)}',
         () => app.openRepoWith(repo, id),
         icon: openWithIcon(id),
-        hint: id == AppController.fileManagerId
+        hint: repoView && id == AppController.fileManagerId
             ? shortcut('O', shift: true)
             : null,
       ),
-    const PopupMenuDivider(),
-    menuItem(
-      'Manage…',
-      () => showSettingsDialog(context, app, section: SettingsSection.apps),
-      icon: Icons.tune,
-    ),
+    if (repoView) ...[
+      const PopupMenuDivider(),
+      menuItem(
+        'Manage…',
+        () => showSettingsDialog(context, app, section: SettingsSection.apps),
+        icon: Icons.tune,
+      ),
+    ],
   ];
 }

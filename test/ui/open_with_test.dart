@@ -93,10 +93,17 @@ void main() {
     var items = await menu();
     expect(items, contains('Show in the file manager'));
     expect(items, isNot(contains('Open in VS Code')));
-    expect(items, contains('Manage…'));
+    // Managed in the settings, not from here; and the shortcut is the
+    // repository view's.
+    expect(items, isNot(contains('Manage…')));
+    expect(items, isNot(contains('Ctrl+Shift+O')));
+    await tester.tapAt(const Offset(1390, 890)); // closes the menu
+    await tester.pumpAndSettle();
 
-    // Manage…: the settings, at Apps, where apps are added.
-    await tester.tap(find.text('Manage…'));
+    // The settings' Apps, where apps are added.
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-tab-apps')));
     await tester.pumpAndSettle();
     expect(
       find.text('Not found: its code command isn\'t installed'),
