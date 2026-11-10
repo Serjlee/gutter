@@ -44,10 +44,12 @@ void main() {
     Future<void> tapLabel() async {
       await tester.tap(find.text('Amend previous commit'));
       // Amending fetches the last message from git.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 200)),
-      );
-      await tester.pump();
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)),
+        );
+        await tester.pump();
+      }
     }
 
     await tapLabel();
@@ -55,6 +57,19 @@ void main() {
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
     await tapLabel();
     expect(tab.amend, isFalse);
+
+    // Ticked, it brings the last message; unticked, takes it back, unless
+    // edited. (Git answers outside the test's clock.)
+    await tester.runAsync(() => tab.setAmend(true));
+    expect(tab.commitMessage.text.trim(), 'one');
+    await tester.runAsync(() => tab.setAmend(false));
+    expect(tab.commitMessage.text, isEmpty);
+    await tester.runAsync(() => tab.setAmend(true));
+    tab.commitMessage.text = 'one, reworded';
+    await tester.runAsync(() => tab.setAmend(false));
+    expect(tab.commitMessage.text, 'one, reworded');
+    tab.commitMessage.clear();
+    await tester.pump();
     // The box itself still works.
     await tester.tap(find.byType(Checkbox));
     await tester.pump();

@@ -290,6 +290,9 @@ class RepoTabController extends ChangeNotifier {
 
   /// The prepared message put in the commit box, and for which operation.
   String? _preparedMessage;
+
+  /// The last commit's message, as ticking "Amend" put it in the box.
+  String? _amendMessage;
   String? headSha;
 
   /// Whether the repository is loading. A tab restored from the last
@@ -1689,6 +1692,7 @@ class RepoTabController extends ChangeNotifier {
     if (ok) {
       commitMessage.clear();
       _preparedMessage = null;
+      _amendMessage = null;
       amend = false;
       _notify();
     }
@@ -1699,8 +1703,12 @@ class RepoTabController extends ChangeNotifier {
     amend = value;
     if (value && commitMessage.text.trim().isEmpty) {
       try {
-        commitMessage.text = await repo.lastCommitMessage();
+        commitMessage.text = _amendMessage = await repo.lastCommitMessage();
       } catch (_) {}
+    } else if (!value) {
+      // The message it filled in goes with it, unless edited since.
+      if (commitMessage.text == _amendMessage) commitMessage.clear();
+      _amendMessage = null;
     }
     _notify();
   }
