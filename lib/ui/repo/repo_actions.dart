@@ -448,7 +448,7 @@ class RepoActions {
     final n = commits.length;
     return [
       menuItem(
-        'Cherry-pick $n commits',
+        'Cherry-pick $n commits…',
         cherryPickSelected,
         icon: Icons.content_copy,
       ),
@@ -793,29 +793,29 @@ class RepoActions {
           icon: Icons.adjust,
         ),
       menuItem(
-        'Create branch here',
+        'Create branch here…',
         () => createBranch(at: c.sha),
         icon: Icons.call_split,
       ),
       menuItem(
-        'Create tag here',
+        'Create tag here…',
         () => createTag(c.sha),
         icon: Icons.sell_outlined,
       ),
       const PopupMenuDivider(),
       if (!inHead) ...[
         menuItem(
-          'Merge into ${branch ?? 'HEAD'}',
+          'Merge into ${branch ?? 'HEAD'}…',
           () => merge(c.sha, _short(c.sha)),
           icon: Icons.merge,
         ),
         menuItem(
-          'Rebase ${branch ?? 'HEAD'} onto this',
+          'Rebase ${branch ?? 'HEAD'} onto this…',
           () => rebaseOnto(c.sha, _short(c.sha)),
           icon: Icons.low_priority,
         ),
         menuItem(
-          'Cherry-pick commit',
+          'Cherry-pick commit…',
           () => cherryPick(c),
           icon: Icons.content_copy,
         ),
@@ -832,7 +832,7 @@ class RepoActions {
         icon: Icons.edit_note,
         enabled: tab.operation == RepoOperation.none,
       ),
-      menuItem('Revert commit', () => revert(c), icon: Icons.undo),
+      menuItem('Revert commit…', () => revert(c), icon: Icons.undo),
       if (branch != null || !isHead) ...[
         const PopupMenuDivider(),
         menuItem(
@@ -875,19 +875,19 @@ class RepoActions {
             ),
           if (!ref.isHead) ...[
             menuItem(
-              'Merge ${ref.name} into $branch',
+              'Merge ${ref.name} into $branch…',
               () => merge(ref.name, ref.name),
               icon: Icons.merge,
             ),
             menuItem(
-              'Rebase $branch onto ${ref.name}',
+              'Rebase $branch onto ${ref.name}…',
               () => rebaseOnto(ref.name, ref.name),
               icon: Icons.low_priority,
             ),
           ],
           const PopupMenuDivider(),
           menuItem(
-            'Create branch here',
+            'Create branch here…',
             () => createBranch(at: ref.name),
             icon: Icons.call_split,
           ),
@@ -916,7 +916,7 @@ class RepoActions {
           if (!ref.isHead) ...[
             const PopupMenuDivider(),
             menuItem(
-              'Delete ${ref.name}',
+              'Delete ${ref.name}…',
               () => deleteBranch(ref),
               icon: Icons.delete_outline,
               danger: true,
@@ -938,23 +938,23 @@ class RepoActions {
             icon: Icons.login,
           ),
           menuItem(
-            'Merge ${ref.name} into $branch',
+            'Merge ${ref.name} into $branch…',
             () => merge(ref.name, ref.name),
             icon: Icons.merge,
           ),
           menuItem(
-            'Rebase $branch onto ${ref.name}',
+            'Rebase $branch onto ${ref.name}…',
             () => rebaseOnto(ref.name, ref.name),
             icon: Icons.low_priority,
           ),
           menuItem(
-            'Create branch here',
+            'Create branch here…',
             () => createBranch(at: ref.name),
             icon: Icons.call_split,
           ),
           const PopupMenuDivider(),
           menuItem(
-            'Delete ${ref.name} on remote',
+            'Delete ${ref.name} on remote…',
             () => deleteBranch(ref),
             icon: Icons.delete_outline,
             danger: true,
@@ -975,7 +975,7 @@ class RepoActions {
             icon: Icons.login,
           ),
           menuItem(
-            'Create branch here',
+            'Create branch here…',
             () => createBranch(at: ref.sha),
             icon: Icons.call_split,
           ),
@@ -993,13 +993,13 @@ class RepoActions {
           ),
           const PopupMenuDivider(),
           menuItem(
-            'Delete tag',
+            'Delete tag…',
             () => deleteTag(ref),
             icon: Icons.delete_outline,
             danger: true,
           ),
           menuItem(
-            'Delete tag on remote',
+            'Delete tag on remote…',
             () => deleteRemoteTag(ref),
             icon: Icons.cloud_off,
             danger: true,
@@ -1020,7 +1020,7 @@ class RepoActions {
     menuItem('Pop stash', () => popStash(s.index), icon: Icons.outbox),
     const PopupMenuDivider(),
     menuItem(
-      'Delete stash',
+      'Delete stash…',
       () => dropStash(s),
       icon: Icons.delete_outline,
       danger: true,

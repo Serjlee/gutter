@@ -872,7 +872,7 @@ class WipPanel extends StatelessWidget {
               enabled: !tab.locked,
             ),
             menuItem(
-              'Discard changes',
+              'Discard changes…',
               () => actions.discard([e]),
               icon: Icons.delete_outline,
               danger: true,

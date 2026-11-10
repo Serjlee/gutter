@@ -67,14 +67,14 @@ void main() {
 
     for (final subject in ['two', 'one']) {
       final labels = await menu(subject);
-      expect(labels, contains('Create branch here'), reason: subject);
-      expect(labels, isNot(contains('Merge into main')), reason: subject);
-      expect(labels, isNot(contains('Rebase main onto this')), reason: subject);
-      expect(labels, isNot(contains('Cherry-pick commit')), reason: subject);
+      expect(labels, contains('Create branch here…'), reason: subject);
+      expect(labels, isNot(contains('Merge into main…')), reason: subject);
+      expect(labels, isNot(contains('Rebase main onto this…')), reason: subject);
+      expect(labels, isNot(contains('Cherry-pick commit…')), reason: subject);
     }
     final side = await menu('side work');
-    expect(side, contains('Merge into main'));
-    expect(side, contains('Rebase main onto this'));
-    expect(side, contains('Cherry-pick commit'));
+    expect(side, contains('Merge into main…'));
+    expect(side, contains('Rebase main onto this…'));
+    expect(side, contains('Cherry-pick commit…'));
   });
 }
