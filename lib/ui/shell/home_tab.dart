@@ -505,8 +505,12 @@ class _VersionInfo extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  app.updates.current.isRelease
+                  // A test build: as its commit compares to the release.
+                  app.updates.current.isRelease ||
+                          updates.devStatus == 'identical'
                       ? 'Up to date (latest ${latest.tag})'
+                      : updates.devStatus == 'behind'
+                      ? 'Newer than the latest release (${latest.tag})'
                       : 'Latest release: ${latest.tag}',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12, color: AppColors.textFaint),
