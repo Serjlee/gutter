@@ -268,6 +268,42 @@ Future<List<String>> _list(String dir) async {
   }
 }
 
+/// Why [command] can't open a repository, if it can't: a path that isn't
+/// there, a folder (bar a macOS app bundle), a file that isn't a program,
+/// or, on Linux, a command not on PATH. Null when it looks fine (macOS
+/// also takes apps by name, which only opening tells).
+String? openWithProblem(String command, {bool? macOS, bool? windows}) {
+  command = command.trim();
+  final mac = macOS ?? Platform.isMacOS;
+  final win = windows ?? Platform.isWindows;
+  if (command.isEmpty) return 'Enter an app or a command';
+  if (command.startsWith(desktopPrefix)) {
+    final file = command.substring(desktopPrefix.length);
+    return readDesktopEntry(file) == null
+        ? '$file is gone: the app may have been uninstalled'
+        : null;
+  }
+  if (command.contains('/') || (win && command.contains(r'\'))) {
+    switch (FileSystemEntity.typeSync(command)) {
+      case FileSystemEntityType.notFound:
+        return '$command doesn\'t exist';
+      case FileSystemEntityType.directory:
+        if (mac && command.endsWith('.app')) return null;
+        return '$command is a folder, not a program';
+      default:
+        // Anyone may run it.
+        if (!win && File(command).statSync().mode & 0x49 == 0) {
+          return '$command isn\'t a program (it can\'t be run)';
+        }
+        return null;
+    }
+  }
+  if (!mac && !win && findExecutable(command) == null) {
+    return 'No $command command found';
+  }
+  return null;
+}
+
 /// Starts a program, not waiting for it: replaced in tests.
 @visibleForTesting
 Future<void> Function(String exe, List<String> args, String workingDirectory)

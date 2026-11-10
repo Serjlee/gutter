@@ -712,8 +712,14 @@ class AppController extends ChangeNotifier {
           await openWith(id, repo);
       }
     } catch (e) {
+      // Why, in words, when it's plain; else what failed.
+      final why = switch (id) {
+        fileManagerId || vsCodeId => null,
+        _ => openWithProblem(id),
+      };
       notify(
-        'Couldn\'t open ${p.basename(repo)} with ${openWithName(id)}: $e',
+        'Couldn\'t open ${p.basename(repo)} with ${openWithName(id)}: '
+        '${why ?? e}',
         error: true,
       );
     }

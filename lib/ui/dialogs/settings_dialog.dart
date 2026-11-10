@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/open_with.dart'
-    show InstalledApp, desktopPrefix, openWithLabel;
+    show InstalledApp, desktopPrefix, openWithLabel, openWithProblem;
 import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
@@ -1187,6 +1187,10 @@ class _AddAppFieldState extends State<_AddAppField> {
     widget.app.installedApps.then((apps) {
       if (mounted) setState(() => _installed = apps);
     });
+    // Edited, it may be fine now.
+    _c.addListener(() {
+      if (_error != null) setState(() => _error = null);
+    });
   }
 
   @override
@@ -1196,15 +1200,25 @@ class _AddAppFieldState extends State<_AddAppField> {
     super.dispose();
   }
 
+  /// Why what was typed couldn't be added, until it changes.
+  String? _error;
+
   /// Adds what was typed: the installed app by that name, if any, else
-  /// the command.
+  /// the command, if it can run.
   void _add() {
     final text = _c.text.trim();
     if (text.isEmpty) return;
     final named = _installed
         .where((a) => a.name.toLowerCase() == text.toLowerCase())
         .firstOrNull;
-    widget.app.addOpenWithApp(named?.id ?? text);
+    final command = named?.id ?? text;
+    // (An app found installed runs as found.)
+    final problem = named == null ? openWithProblem(command) : null;
+    if (problem != null) {
+      setState(() => _error = problem);
+      return;
+    }
+    widget.app.addOpenWithApp(command);
     _c.clear();
   }
 
@@ -1225,6 +1239,24 @@ class _AddAppFieldState extends State<_AddAppField> {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _field(context),
+        if (_error case final error?)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              error,
+              key: const ValueKey('add-app-error'),
+              style: TextStyle(fontSize: 11.5, color: AppColors.danger),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _field(BuildContext context) {
     return Row(
       children: [
         Expanded(

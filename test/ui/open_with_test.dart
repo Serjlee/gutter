@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +61,16 @@ void main() {
     const repo = '/work/gutter';
     final app = AppController(null, Settings()..knownRepos = [repo])
       ..vsCode = null;
+    // Two programs of the user's, in a folder of their own.
+    final bin = Directory.systemTemp.createTempSync('gutter_bin_');
+    addTearDown(() => bin.deleteSync(recursive: true));
+    String program(String name) {
+      final f = File('${bin.path}/$name')..writeAsStringSync('#!/bin/sh\n');
+      Process.runSync('chmod', ['+x', f.path]);
+      return f.path;
+    }
+
+    final myeditor = program('myeditor'), other = program('other');
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -109,18 +121,29 @@ void main() {
       find.text('Not found: its code command isn\'t installed'),
       findsOneWidget,
     );
-    await tester.enterText(find.byKey(const ValueKey('add-app')), 'myeditor');
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('add-app-confirm')));
-    await tester.pump();
-    await tester.enterText(find.byKey(const ValueKey('add-app')), 'other');
+    Future<String?> add(String text) async {
+      await tester.enterText(find.byKey(const ValueKey('add-app')), text);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('add-app-confirm')));
+      await tester.pump();
+      final error = find.byKey(const ValueKey('add-app-error'));
+      return error.evaluate().isEmpty ? null : tester.widget<Text>(error).data;
+    }
+
+    // What can't run isn't added: it says why.
+    expect(await add('no-such-editor'), 'No no-such-editor command found');
+    expect(await add(bin.path), '${bin.path} is a folder, not a program');
+    expect(app.settings.openWithApps, isEmpty);
+    // Programs are, by path (or on PATH).
+    expect(await add(myeditor), isNull);
+    await tester.enterText(find.byKey(const ValueKey('add-app')), other);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(app.settings.openWithApps, ['myeditor', 'other']);
+    expect(app.settings.openWithApps, [myeditor, other]);
     // And removed.
-    await tester.tap(find.byKey(const ValueKey('remove-app-other')));
+    await tester.tap(find.byKey(ValueKey('remove-app-$other')));
     await tester.pump();
-    expect(app.settings.openWithApps, ['myeditor']);
+    expect(app.settings.openWithApps, [myeditor]);
     // Installed apps are suggested by name, and added as such.
     app.installedApps = Future.value(const [
       InstalledApp(id: '/Applications/Sublime Text.app', name: 'Sublime Text'),
@@ -189,7 +212,7 @@ void main() {
     expect(items, isNot(contains('Open in other')));
     await tester.tap(find.text('Open in myeditor'));
     await tester.pumpAndSettle();
-    expect(started.single, 'myeditor $repo');
+    expect(started.single, '$myeditor $repo');
   });
 
   testWidgets('Open with… in the toolbar lists the apps', (tester) async {

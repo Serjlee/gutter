@@ -126,4 +126,31 @@ Exec=subl --new-window
     expect(apps.where((a) => a.name == 'Sublime Text'), hasLength(1));
     expect(apps.where((a) => a.name == 'notes'), isEmpty);
   });
+
+  test('what can\'t open a repository says why', () async {
+    final dir = await Directory.systemTemp.createTemp('gutter_check_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final script = File(p.join(dir.path, 'editor'))..writeAsStringSync('');
+    final bundle = Directory(p.join(dir.path, 'Editor.app'))..createSync();
+    String? problem(String c, {bool mac = false}) =>
+        openWithProblem(c, macOS: mac, windows: false);
+
+    // A folder (as the bin folder a program is in).
+    expect(problem(dir.path), '${dir.path} is a folder, not a program');
+    // On macOS, an app bundle is a folder, and fine.
+    expect(problem(bundle.path, mac: true), isNull);
+    expect(problem(bundle.path), contains('is a folder'));
+    expect(
+      problem('${dir.path}/nothing'),
+      '${dir.path}/nothing doesn\'t exist',
+    );
+    expect(problem(script.path), contains('isn\'t a program'));
+    Process.runSync('chmod', ['+x', script.path]);
+    expect(problem(script.path), isNull);
+    // Commands: on PATH, on Linux; macOS also takes apps by name.
+    expect(problem('sh'), isNull);
+    expect(problem('no-such-editor'), 'No no-such-editor command found');
+    expect(problem('Sublime Text', mac: true), isNull);
+    expect(problem('$desktopPrefix/nowhere/x.desktop'), contains('is gone'));
+  });
 }
