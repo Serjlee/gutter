@@ -694,6 +694,10 @@ class RepoActions {
 
   /// Commits what's staged, asking first on main.
   Future<void> commit() async {
+    if (tab.commitProblem == null && tab.amend && !await _confirmAmend()) {
+      return;
+    }
+    if (!context.mounted) return;
     // A merge, cherry-pick or revert to finish was started on purpose.
     if (tab.commitProblem == null &&
         !tab.commitFinishesOperation &&
@@ -701,6 +705,26 @@ class RepoActions {
       return;
     }
     await tab.commit();
+  }
+
+  /// Amending a commit that is already pushed asks first: the branch will
+  /// need a force push, as when rewording it.
+  Future<bool> _confirmAmend() async {
+    final head = tab.headSha;
+    try {
+      if (head == null || !await repo.inUpstream(head)) return true;
+    } catch (_) {
+      return true;
+    }
+    if (!context.mounted) return false;
+    return confirm(
+      context,
+      title: 'Amend a pushed commit?',
+      message:
+          'The previous commit is already pushed: amended, '
+          '${tab.currentBranch ?? 'the branch'} will need a force push.',
+      confirmLabel: 'Amend',
+    );
   }
 
   /// Pushes [branch] (default: the current one); if the remote rejects it

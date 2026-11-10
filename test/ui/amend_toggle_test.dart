@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gutter/app/app_controller.dart';
 import 'package:gutter/app/settings_store.dart';
 import 'package:gutter/app/theme.dart';
 import 'package:gutter/ui/details/details_panel.dart';
+import 'package:gutter/ui/repo/repo_actions.dart';
 import 'package:gutter/ui/repo/repo_tab_controller.dart';
 
 import '../support/temp_repo.dart';
@@ -74,6 +78,85 @@ void main() {
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
     expect(tab.amend, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('amending a pushed commit asks first', (tester) async {
+    late TempRepo t;
+    late Directory remote;
+    late RepoTabController tab;
+    await tester.runAsync(() async {
+      t = await TempRepo.create();
+      t.commit('one', {'a.txt': '1\n'});
+      remote = await Directory.systemTemp.createTemp('gutter_remote_');
+      Process.runSync('git', ['init', '-q', '--bare', remote.path]);
+      t.git(['remote', 'add', 'origin', remote.path]);
+      t.git(['checkout', '-q', '-b', 'feature']);
+      t.commit('two', {'a.txt': '2\n'});
+      t.git(['push', '-q', '-u', 'origin', 'feature']);
+      t.write('a.txt', '3\n');
+      t.git(['add', 'a.txt']);
+      tab = RepoTabController(t.repo, AppController(null, Settings()));
+      await tab.load();
+      await tab.setAmend(true);
+    });
+    addTearDown(() {
+      tab.dispose();
+      t.dispose();
+      remote.deleteSync(recursive: true);
+    });
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: Scaffold(
+          body: Builder(
+            builder: (c) {
+              context = c;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+
+    /// Lets git answer, then shows what it said.
+    Future<void> settle() async {
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)),
+        );
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+    }
+
+    final pushed = t.git(['rev-parse', 'HEAD']).trim();
+    unawaited(RepoActions(context, tab).commit());
+    await settle();
+    expect(find.text('Amend a pushed commit?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await settle();
+    expect(t.git(['rev-parse', 'HEAD']).trim(), pushed);
+
+    unawaited(RepoActions(context, tab).commit());
+    await settle();
+    await tester.tap(find.text('Amend'));
+    await settle();
+    expect(t.git(['rev-parse', 'HEAD']).trim(), isNot(pushed));
+    expect(t.subjects(), ['two', 'one']);
+
+    // Not pushed any more (amended), it doesn't ask.
+    await tester.runAsync(() async {
+      t.write('a.txt', '4\n');
+      t.git(['add', 'a.txt']);
+      await tab.refresh();
+      await tab.setAmend(true);
+    });
+    unawaited(RepoActions(context, tab).commit());
+    await settle();
+    expect(find.text('Amend a pushed commit?'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
