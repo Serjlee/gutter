@@ -352,6 +352,7 @@ class RepoToolbar extends StatelessWidget {
                     ToolbarButton(
                       icon: Icons.upload,
                       label: 'Push',
+                      tooltip: branch == null ? 'Push' : 'Push $branch',
                       busy: busy == 'Push' || busy == 'Force push',
                       onPressed: idle ? actions.push : null,
                       menu: [
@@ -375,17 +376,24 @@ class RepoToolbar extends StatelessWidget {
                     ToolbarButton(
                       icon: Icons.call_split,
                       label: 'Branch',
+                      tooltip: 'Create a branch',
                       onPressed: idle ? () => actions.createBranch() : null,
                     ),
                     ToolbarButton(
                       icon: Icons.inventory_2_outlined,
                       label: 'Stash',
+                      tooltip: tab.isDirty
+                          ? 'Stash all changes'
+                          : 'Nothing to stash',
                       busy: busy == 'Stash',
                       onPressed: idle && tab.isDirty ? actions.stash : null,
                     ),
                     ToolbarButton(
                       icon: Icons.outbox,
                       label: 'Pop',
+                      tooltip: tab.stashes.isNotEmpty
+                          ? 'Apply the latest stash and drop it'
+                          : 'No stashes to pop',
                       busy: busy == 'Pop stash',
                       onPressed: idle && tab.stashes.isNotEmpty
                           ? () => actions.popStash()
