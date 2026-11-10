@@ -58,7 +58,14 @@ class Settings {
   bool forceTagFetch = false;
 
   /// What the Pull button does, as picked in its menu.
+  /// The last one picked anywhere: what repositories without a pick of
+  /// their own use.
   PullMode pullMode = PullMode.ffOnly;
+
+  /// The pick of each repository (by path) that has one.
+  Map<String, PullMode> pullModes = {};
+
+  PullMode pullModeFor(String repo) => pullModes[repo] ?? pullMode;
 
   /// Repositories where committing or pushing to main (or master) goes
   /// ahead without asking first.
@@ -107,6 +114,7 @@ class Settings {
     'githubAvatars': githubAvatars,
     'forceTagFetch': forceTagFetch,
     'pullMode': pullMode.name,
+    'pullModes': {for (final e in pullModes.entries) e.key: e.value.name},
     'mainBranchUnguarded': mainBranchUnguarded,
     'skippedUpdate': skippedUpdate,
     'themeMode': themeMode,
@@ -148,6 +156,11 @@ class Settings {
       ..githubAvatars = j['githubAvatars'] != false
       ..forceTagFetch = j['forceTagFetch'] == true
       ..pullMode = PullMode.values.asNameMap()[j['pullMode']] ?? PullMode.ffOnly
+      ..pullModes = {
+        if (j['pullModes'] case final Map modes)
+          for (final e in modes.entries)
+            '${e.key}': ?PullMode.values.asNameMap()[e.value],
+      }
       ..mainBranchUnguarded = strings(j['mainBranchUnguarded'])
       ..skippedUpdate = j['skippedUpdate'] as String?
       ..themeMode = switch (j['themeMode']) {

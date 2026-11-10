@@ -69,7 +69,11 @@ void main() {
       final labels = await menu(subject);
       expect(labels, contains('Create branch here…'), reason: subject);
       expect(labels, isNot(contains('Merge into main…')), reason: subject);
-      expect(labels, isNot(contains('Rebase main onto this…')), reason: subject);
+      expect(
+        labels,
+        isNot(contains('Rebase main onto this…')),
+        reason: subject,
+      );
       expect(labels, isNot(contains('Cherry-pick commit…')), reason: subject);
     }
     final side = await menu('side work');

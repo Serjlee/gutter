@@ -251,7 +251,7 @@ class RepoToolbar extends StatelessWidget {
     final busy = tab.busy;
     // Read-only while an interactive rebase is prepared (Fetch still works).
     final idle = busy == null && !tab.locked;
-    final pullMode = tab.app.settings.pullMode;
+    final pullMode = tab.app.settings.pullModeFor(tab.repo.path);
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -332,14 +332,14 @@ class RepoToolbar extends StatelessWidget {
                       tooltip: 'Pull (${_pullModes[pullMode]})',
                       busy: busy == 'Pull',
                       onPressed: idle ? () => actions.pull(pullMode) : null,
-                      // Picks what the button does, from then on.
+                      // Picks what the button does in this repository, from then on.
                       menuTooltip: 'How to pull',
                       menu: [
                         for (final MapEntry(key: mode, value: name)
                             in _pullModes.entries)
                           menuItem(
                             'Pull ($name)',
-                            () => tab.app.setPullMode(mode),
+                            () => tab.app.setPullMode(tab.repo.path, mode),
                             icon: mode == pullMode ? Icons.check : null,
                           ),
                       ],

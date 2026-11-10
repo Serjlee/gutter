@@ -534,7 +534,10 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPullMode(PullMode value) {
+  /// What Pull does in [repo] from now on, and in repositories where
+  /// nothing was picked yet.
+  void setPullMode(String repo, PullMode value) {
+    settings.pullModes[repo] = value;
     settings.pullMode = value;
     save();
     notifyListeners();

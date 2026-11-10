@@ -48,13 +48,23 @@ void main() {
     await tester.tap(find.text('Pull (rebase)'));
     await tester.pumpAndSettle();
     expect(tab.busy, isNull);
-    expect(tab.app.settings.pullMode, PullMode.rebase);
+    expect(tab.app.settings.pullModeFor(t.path), PullMode.rebase);
     expect(find.byTooltip('Pull (rebase)'), findsOneWidget);
 
+    // For this repository: another keeps its own pick, and one without
+    // takes the last one made.
+    final settings = tab.app.settings;
+    expect(settings.pullModeFor(t.path), PullMode.rebase);
+    tab.app.setPullMode('/other', PullMode.merge);
+    expect(settings.pullModeFor(t.path), PullMode.rebase);
+    expect(settings.pullModeFor('/other'), PullMode.merge);
+    expect(settings.pullModeFor('/new'), PullMode.merge);
+
     // Kept.
-    final saved = Settings.fromJson(tab.app.settings.toJson());
-    expect(saved.pullMode, PullMode.rebase);
-    expect(Settings.fromJson({}).pullMode, PullMode.ffOnly);
+    final saved = Settings.fromJson(settings.toJson());
+    expect(saved.pullModeFor(t.path), PullMode.rebase);
+    expect(saved.pullModeFor('/other'), PullMode.merge);
+    expect(Settings.fromJson({}).pullModeFor(t.path), PullMode.ffOnly);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 2));
