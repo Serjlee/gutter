@@ -62,7 +62,7 @@ terminal, and it can read files anywhere (`--filesystem=host`).
 
 **Windows.** The installer installs for your user only
 (`%LOCALAPPDATA%\Programs\Gutter`), so neither it nor updates ask for admin
-rights. Windows doesn't come with git: if Gutter can't find it, the home tab
+rights. Windows doesn't come with git: if Gutter can't find it, the dashboard
 offers to install Git for Windows with `winget` where there is one (not on
 Windows Server before 2025), or to get it from
 [git-scm.com](https://git-scm.com/downloads). Its Git Credential Manager
@@ -73,7 +73,7 @@ Authentication Agent" service and `ssh-add` your key.
 `/usr/local/bin` and `/usr/bin` (Homebrew's first on macOS: apps opened
 from Finder don't get your shell's `PATH`, and `/usr/bin/git` needs
 Apple's command line tools); on Windows, in Git for Windows' install
-folders. You can pick another on the home tab.
+folders. You can pick another in the settings (Git).
 
 </details>
 
@@ -83,7 +83,7 @@ folders. You can pick another on the home tab.
   tags, with support for stashes, search, avatars, and more.
 - **Tabs**, tabbed repositories with grouping support and search.
 - **Repository discovery**: every repository under a folder is found in
-  the background. Open, clone or init from the home tab.
+  the background. Open, clone or init from the dashboard.
 - **Diffs**: unified, split or full file (images too), with optional
   syntax highlighting.
 - **Interactive rebase** without a text editor, with keyboard shortcuts
@@ -100,7 +100,7 @@ folders. You can pick another on the home tab.
 <details>
 <summary>Screenshots</summary>
 
-![Home tab](docs/dashboard.png)
+![Dashboard](docs/dashboard.png)
 ![Tab groups](docs/tab-groups.png)
 ![Line staging](docs/line-staging.png)
 ![Diff with syntax highlighting](docs/diff-highlight.png)
@@ -114,7 +114,7 @@ folders. You can pick another on the home tab.
 
 | Keys | Action |
 | --- | --- |
-| `Ctrl/Cmd T` | Repositories (home) tab |
+| `Ctrl/Cmd T` | Dashboard (the repositories) |
 | `Ctrl/Cmd O` | Open repository |
 | `Ctrl/Cmd W` | Close tab |
 | `Ctrl Tab` / `Ctrl Shift Tab` | Next / previous tab |
