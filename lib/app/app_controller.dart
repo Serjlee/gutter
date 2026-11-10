@@ -12,6 +12,7 @@ import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
 import 'open_with.dart';
+import 'user_env.dart';
 import 'settings_store.dart';
 import 'tab_groups.dart';
 import 'theme.dart';
@@ -691,6 +692,17 @@ class AppController extends ChangeNotifier {
   /// The apps installed that can open a folder (looked for once, when
   /// first asked), to suggest among the apps to open with.
   late Future<List<InstalledApp>> installedApps = findInstalledApps();
+
+  /// Reads the user's PATH from their login shell ([userPath]), then looks
+  /// for VS Code and the installed apps again with it: once, at start.
+  Future<void> loadUserPath() async {
+    final path = await readLoginShellPath();
+    if (path == null || path == userPath) return;
+    userPath = path;
+    vsCode = findVSCode();
+    installedApps = findInstalledApps();
+    notifyListeners();
+  }
 
   /// The apps a repository can open with, by id: the file manager, VS Code
   /// when installed, then the apps added (their commands are their ids).

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../git/git_runner.dart';
+import 'user_env.dart';
 
 /// Where the executable [name] is: on PATH, or where it usually installs
 /// (apps started from Finder or the Dock get a short PATH). Null if none.
@@ -15,10 +16,11 @@ String? findExecutable(
   bool? macOS,
   bool Function(String path)? exists,
 }) {
-  final env = environment ?? Platform.environment;
+  final env = environment ?? userEnvironment;
   final win = windows ?? Platform.isWindows;
   final mac = macOS ?? Platform.isMacOS;
-  final found = exists ?? (String f) => File(f).existsSync();
+  // (Sandboxed, the host's system folders are seen elsewhere.)
+  final found = exists ?? (String f) => File(sandboxPath(f)).existsSync();
   final names = win ? ['$name.exe', '$name.cmd', '$name.bat'] : [name];
   final dirs = [
     ...(env['PATH'] ?? '').split(win ? ';' : ':'),
@@ -43,12 +45,10 @@ String? findVSCode({
   bool? macOS,
   bool Function(String path)? exists,
 }) {
-  // Sandboxed, host apps aren't reachable.
-  if (GitRunner.inFlatpak && environment == null) return null;
-  final env = environment ?? Platform.environment;
+  final env = environment ?? userEnvironment;
   final win = windows ?? Platform.isWindows;
   final mac = macOS ?? Platform.isMacOS;
-  final found = exists ?? (String f) => File(f).existsSync();
+  final found = exists ?? (String f) => File(sandboxPath(f)).existsSync();
   final onPath = findExecutable(
     'code',
     environment: env,
@@ -213,8 +213,9 @@ Future<List<InstalledApp>> findInstalledApps({
   Map<String, String>? environment,
   bool? macOS,
   bool? linux,
+  bool? flatpak,
 }) async {
-  if (GitRunner.inFlatpak && environment == null) return const [];
+  final sandboxed = flatpak ?? (GitRunner.inFlatpak && environment == null);
   final env = environment ?? Platform.environment;
   final home = env['HOME'] ?? '';
   final apps = <String, InstalledApp>{};
@@ -232,9 +233,17 @@ Future<List<InstalledApp>> findInstalledApps({
       }
     }
   } else if (linux ?? Platform.isLinux) {
-    final dataHome = env['XDG_DATA_HOME'] ?? '$home/.local/share';
-    final dataDirs = (env['XDG_DATA_DIRS'] ?? '/usr/local/share:/usr/share')
-        .split(':');
+    // Sandboxed, the XDG folders are the sandbox's: the host's usual ones,
+    // where the sandbox sees them.
+    final dataHome = sandboxed
+        ? '$home/.local/share'
+        : env['XDG_DATA_HOME'] ?? '$home/.local/share';
+    final dataDirs = sandboxed
+        ? [
+            for (final d in ['/usr/local/share', '/usr/share'])
+              sandboxPath(d, flatpak: true),
+          ]
+        : (env['XDG_DATA_DIRS'] ?? '/usr/local/share:/usr/share').split(':');
     // The first file by an id wins, as for the desktops: the user's own
     // before the system's.
     final ids = <String>{};
@@ -244,6 +253,10 @@ Future<List<InstalledApp>> findInstalledApps({
       for (final d in dataDirs) '$d/applications',
       '/var/lib/flatpak/exports/share/applications',
       '/var/lib/snapd/desktop/applications',
+      if (sandboxed) ...[
+        '/run/host/var/lib/flatpak/exports/share/applications',
+        '/run/host/var/lib/snapd/desktop/applications',
+      ],
     ]) {
       for (final f in await _list(dir)) {
         if (!f.endsWith('.desktop') || !ids.add(p.basename(f))) continue;
@@ -284,7 +297,8 @@ String? openWithProblem(String command, {bool? macOS, bool? windows}) {
         : null;
   }
   if (command.contains('/') || (win && command.contains(r'\'))) {
-    switch (FileSystemEntity.typeSync(command)) {
+    final seen = sandboxPath(command);
+    switch (FileSystemEntity.typeSync(seen)) {
       case FileSystemEntityType.notFound:
         return '$command doesn\'t exist';
       case FileSystemEntityType.directory:
@@ -292,7 +306,7 @@ String? openWithProblem(String command, {bool? macOS, bool? windows}) {
         return '$command is a folder, not a program';
       default:
         // Anyone may run it.
-        if (!win && File(command).statSync().mode & 0x49 == 0) {
+        if (!win && File(seen).statSync().mode & 0x49 == 0) {
           return '$command isn\'t a program (it can\'t be run)';
         }
         return null;
@@ -308,10 +322,19 @@ String? openWithProblem(String command, {bool? macOS, bool? windows}) {
 @visibleForTesting
 Future<void> Function(String exe, List<String> args, String workingDirectory)
 startDetached = (exe, args, cwd) async {
-  await Process.start(
+  final (program, argv) = startCommand(
     exe,
     args,
+    cwd: cwd,
+    path: userPath,
+    flatpak: GitRunner.inFlatpak,
+  );
+  await Process.start(
+    program,
+    argv,
     workingDirectory: cwd,
+    // The user's PATH, for the app and what it starts.
+    environment: {'PATH': ?userPath},
     mode: ProcessStartMode.detached,
     // .cmd scripts (VS Code's `code`) only run through the shell.
     runInShell: Platform.isWindows,

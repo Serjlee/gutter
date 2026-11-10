@@ -36,6 +36,8 @@ Future<void> main(List<String> args) async {
   final app = AppController(store, store.load());
   runApp(GutterApp(app: app));
   app.startUpdateChecks();
+  // Apps to open with are looked for on the user's own PATH.
+  unawaited(app.loadUserPath());
   unawaited(app.checkGit());
 
   // Repositories passed on the command line open as tabs.
