@@ -62,6 +62,24 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('theme-mode')), findsNothing);
     expect(find.byKey(const ValueKey('git-path')), findsOneWidget);
+    // A git that doesn't run says so, by its field.
+    expect(find.byKey(const ValueKey('row-problem')), findsNothing);
+    await tester.runAsync(() async {
+      app.setGitPath('/nowhere/git');
+      await app.checkGit();
+    });
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('row-problem'))).data,
+      contains('/nowhere/git'),
+    );
+    await tester.runAsync(() async {
+      app.setGitPath(null);
+      await app.checkGit();
+    });
+    await tester.pump();
+    expect(find.byKey(const ValueKey('row-problem')), findsNothing);
+    expect(find.textContaining('git version'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('force-tag-fetch')));
     await tester.pump();
     expect(app.settings.forceTagFetch, isTrue);

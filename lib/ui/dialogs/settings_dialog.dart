@@ -260,7 +260,12 @@ class SettingsForm extends StatelessWidget {
         [
           _Row(
             'Git executable',
-            subtitle: 'Empty: the one Gutter finds, shown faded',
+            // What runs there (or why not), once checked.
+            subtitle:
+                app.gitProblem ??
+                app.gitVersion ??
+                'Leave empty to use the git Gutter finds',
+            problem: app.gitProblem != null,
             control: SizedBox(width: 240, child: _GitPathField(app: app)),
           ),
         ],
@@ -387,9 +392,19 @@ class _Group extends StatelessWidget {
 /// A setting: its name (and a line on what it does, an ⓘ with more) and
 /// its [control] on the right, or a wider one [below].
 class _Row extends StatelessWidget {
-  const _Row(this.label, {this.subtitle, this.info, this.control, this.below});
+  const _Row(
+    this.label, {
+    this.subtitle,
+    this.problem = false,
+    this.info,
+    this.control,
+    this.below,
+  });
   final String label;
   final String? subtitle;
+
+  /// The subtitle says what is wrong: shown as an error.
+  final bool problem;
   final String? info;
   final Widget? control;
   final Widget? below;
@@ -427,9 +442,12 @@ class _Row extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           subtitle!,
+                          key: problem ? const ValueKey('row-problem') : null,
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: AppColors.textDim,
+                            color: problem
+                                ? AppColors.danger
+                                : AppColors.textDim,
                           ),
                         ),
                       ),
