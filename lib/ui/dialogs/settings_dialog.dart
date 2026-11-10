@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/open_with.dart' show openWithLabel;
 import '../../app/settings_store.dart' show GraphMode;
 import '../../app/theme.dart';
 import '../../app/zoom.dart';
@@ -9,22 +12,29 @@ import '../../graph/graph_painter.dart';
 import '../widgets/common.dart';
 import 'dialogs.dart';
 
-/// The settings, in a dialog: from the home tab, with ⌘, (macOS) or
-/// Ctrl+, (or Ctrl+P), or from the app menu on macOS.
-Future<void> showSettingsDialog(BuildContext context, AppController app) =>
-    showAppDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        // Held at the top: switching sections changes its height.
-        alignment: Alignment.topCenter,
-        insetPadding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-        child: SizedBox(width: 600, child: _SettingsPanel(app: app)),
-      ),
-    );
+/// The settings, in a dialog, at [section]: from the dashboard, with ⌘,
+/// (macOS) or Ctrl+, (or Ctrl+P), or from the app menu on macOS.
+Future<void> showSettingsDialog(
+  BuildContext context,
+  AppController app, {
+  SettingsSection section = SettingsSection.appearance,
+}) => showAppDialog<void>(
+  context: context,
+  builder: (ctx) => Dialog(
+    // Held at the top: switching sections changes its height.
+    alignment: Alignment.topCenter,
+    insetPadding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
+    child: SizedBox(
+      width: 600,
+      child: _SettingsPanel(app: app, section: section),
+    ),
+  ),
+);
 
 enum SettingsSection {
   appearance('Appearance', Icons.palette_outlined),
   git('Git', Icons.call_split),
+  apps('Apps', Icons.apps),
   performance('Performance', Icons.speed);
 
   const SettingsSection(this.label, this.icon);
@@ -35,15 +45,16 @@ enum SettingsSection {
 /// The sections as a toolbar of tabs on top (as macOS apps' settings
 /// have them), the current one's settings, and Done.
 class _SettingsPanel extends StatefulWidget {
-  const _SettingsPanel({required this.app});
+  const _SettingsPanel({required this.app, required this.section});
   final AppController app;
+  final SettingsSection section;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
 }
 
 class _SettingsPanelState extends State<_SettingsPanel> {
-  var _section = SettingsSection.appearance;
+  late var _section = widget.section;
   final _scroll = ScrollController();
 
   @override
@@ -302,6 +313,32 @@ class SettingsForm extends StatelessWidget {
           ),
         ],
       ],
+      SettingsSection.apps => [
+        [
+          _Row(
+            Platform.isMacOS || Platform.isWindows
+                ? app.openWithName(AppController.fileManagerId)
+                : 'File manager',
+            subtitle: 'Always there',
+          ),
+          _Row(
+            'VS Code',
+            subtitle: app.vsCode == null
+                ? 'Not found: its code command isn\'t installed'
+                : 'Found: ${app.vsCode}',
+          ),
+        ],
+        [
+          if (s.openWithApps.isNotEmpty) _AppList(app: app),
+          _Row(
+            'Add an app',
+            subtitle: Platform.isMacOS
+                ? 'A command (subl), or an app\'s name (Sublime Text)'
+                : 'A command (subl), or its full path',
+            below: _AddAppField(app: app),
+          ),
+        ],
+      ],
       SettingsSection.performance => [
         [
           _Row(
@@ -340,9 +377,24 @@ class SettingsForm extends StatelessWidget {
         ],
       ],
     };
+    final intro = switch (section) {
+      SettingsSection.apps =>
+        'The external apps that can be used to open a repository with. '
+            'Can be selected in contextual menus or with the dedicated '
+            'button in the repository view (near the search bar).',
+      _ => null,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (intro != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+            child: Text(
+              intro,
+              style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            ),
+          ),
         for (final (i, rows) in groups.indexed) ...[
           if (i > 0) const SizedBox(height: 16),
           _Group(rows),
@@ -1044,6 +1096,125 @@ class _InfoIconState extends State<_InfoIcon> {
           child: Icon(Icons.info_outline, size: 15, color: AppColors.textDim),
         ),
       ),
+    );
+  }
+}
+
+/// The apps added, each with Remove: a few, then they scroll.
+class _AppList extends StatefulWidget {
+  const _AppList({required this.app});
+  final AppController app;
+
+  @override
+  State<_AppList> createState() => _AppListState();
+}
+
+class _AppListState extends State<_AppList> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = widget.app;
+    final line = AppColors.border.withValues(alpha: 0.7);
+    return ConstrainedBox(
+      // About four apps, the next one peeking out.
+      constraints: const BoxConstraints(maxHeight: 210),
+      child: Scrollbar(
+        controller: _scroll,
+        thumbVisibility: true,
+        child: ListView(
+          key: const ValueKey('app-list'),
+          controller: _scroll,
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          children: [
+            for (final (i, command) in app.settings.openWithApps.indexed) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 14,
+                  endIndent: 14,
+                  color: line,
+                ),
+              _Row(
+                openWithLabel(command),
+                // The command, when the name doesn't say it all.
+                subtitle: openWithLabel(command) == command ? null : command,
+                control: SmallIconButton(
+                  key: ValueKey('remove-app-$command'),
+                  icon: Icons.close,
+                  tooltip: 'Remove',
+                  onPressed: () => app.removeOpenWithApp(command),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A command to add to the apps to open with, and Add.
+class _AddAppField extends StatefulWidget {
+  const _AddAppField({required this.app});
+  final AppController app;
+
+  @override
+  State<_AddAppField> createState() => _AddAppFieldState();
+}
+
+class _AddAppFieldState extends State<_AddAppField> {
+  final _c = TextEditingController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _add() {
+    widget.app.addOpenWithApp(_c.text);
+    _c.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            key: const ValueKey('add-app'),
+            controller: _c,
+            style: const TextStyle(fontSize: 13),
+            onSubmitted: (_) => _add(),
+            decoration: InputDecoration(
+              hintText: Platform.isMacOS ? 'subl' : 'subl, idea',
+              hintStyle: TextStyle(fontSize: 13, color: AppColors.textFaint),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ListenableBuilder(
+          listenable: _c,
+          builder: (_, _) => FilledButton(
+            key: const ValueKey('add-app-confirm'),
+            onPressed: _c.text.trim().isEmpty ? null : _add,
+            child: const Text('Add'),
+          ),
+        ),
+      ],
     );
   }
 }

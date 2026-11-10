@@ -14,6 +14,7 @@ import '../dialogs/dialogs.dart';
 import '../dialogs/interactive_rebase_dialog.dart';
 import '../diff/diff_view.dart';
 import '../graph_view/commit_graph_view.dart';
+import '../shell/open_with_menu.dart';
 import '../sidebar/sidebar.dart';
 import '../widgets/common.dart';
 import 'output_panel.dart';
@@ -423,8 +424,11 @@ class RepoToolbar extends StatelessWidget {
               focus: searchFocus,
               width: c.maxWidth < 900 ? 170 : 260,
             ),
+            _OpenWithButton(tab: tab),
             SmallIconButton(
               icon: Icons.refresh,
+              size: 18,
+              padding: 7, // as tall as the search box
               tooltip: 'Refresh (F5)',
               onPressed: () => tab.refresh(forceLog: true),
             ),
@@ -606,6 +610,31 @@ Future<void> showMovedTags(BuildContext context, RepoTabController tab) async {
   if (go != true) return;
   if (always) tab.app.setForceTagFetch(true);
   await tab.fetch(forceTags: true);
+}
+
+/// "Open with…": the apps the repository opens in (VS Code, the file
+/// manager, …), as in its tab's menu.
+class _OpenWithButton extends StatelessWidget {
+  const _OpenWithButton({required this.tab});
+  final RepoTabController tab;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<VoidCallback>(
+      key: const ValueKey('open-with'),
+      popUpAnimationStyle: AnimationStyle.noAnimation,
+      tooltip: 'Open with…',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 112, maxWidth: 420),
+      itemBuilder: (_) => openWithItems(context, tab.app, tab.repo.path),
+      onSelected: (cb) => cb(),
+      // As tall as the search box.
+      child: Padding(
+        padding: const EdgeInsets.all(7),
+        child: Icon(Icons.open_in_new, size: 18, color: AppColors.textDim),
+      ),
+    );
+  }
 }
 
 class _ToolbarDivider extends StatelessWidget {

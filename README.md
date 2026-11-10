@@ -116,6 +116,7 @@ folders. You can pick another in the settings (Git).
 | --- | --- |
 | `Ctrl/Cmd T` | Dashboard (the repositories) |
 | `Ctrl/Cmd O` | Open repository |
+| `Ctrl/Cmd Shift O` | Show the repository in the file manager |
 | `Cmd ,` / `Ctrl ,` (or `Ctrl P`) | Settings |
 | `Ctrl/Cmd W` | Close tab |
 | `Ctrl Tab` / `Ctrl Shift Tab` | Next / previous tab |

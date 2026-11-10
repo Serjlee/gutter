@@ -193,6 +193,11 @@ class _AppShellState extends State<AppShell> {
     mod(LogicalKeyboardKey.numpad0, app.zoomReset);
     mod(LogicalKeyboardKey.keyT, () => app.activate(-1));
     mod(LogicalKeyboardKey.keyO, _openRepoDialog);
+    mod(LogicalKeyboardKey.keyO, () {
+      if (app.activeTab case final tab?) {
+        app.openRepoWith(tab.repo.path, AppController.fileManagerId);
+      }
+    }, shift: true);
     mod(
       LogicalKeyboardKey.keyA,
       () => showTabSwitcher(context, app),

@@ -8,6 +8,7 @@ import '../../app/theme.dart';
 import '../../git/models.dart' show RepoOperation;
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
+import 'open_with_menu.dart';
 import 'tab_switcher.dart';
 
 /// What's being dragged in the tab strip: a tab, or a group (by its chip).
@@ -202,6 +203,8 @@ class _TabStripState extends State<TabStrip> {
     final others = app.tabs.where((t) => t != tab).toList();
     final i = app.tabs.indexOf(tab);
     showContextMenu(context, at, [
+      ...openWithItems(context, app, tab.repo.path),
+      const PopupMenuDivider(),
       menuItem('Add to new group', () {
         final g = app.createGroup([tab]);
         _editGroupSoon(g);

@@ -65,6 +65,9 @@ class Settings {
   /// The pick of each repository (by path) that has one.
   Map<String, PullMode> pullModes = {};
 
+  /// Apps added to "Open with" (commands, or app names on macOS).
+  List<String> openWithApps = [];
+
   PullMode pullModeFor(String repo) => pullModes[repo] ?? pullMode;
 
   /// Repositories where committing or pushing to main (or master) goes
@@ -92,6 +95,7 @@ class Settings {
     'openTabGroups': openTabGroups,
     'tabGroups': [for (final g in tabGroups) g.toJson()],
     'scanRoots': scanRoots,
+    'openWithApps': openWithApps,
     'knownRepos': knownRepos,
     'recentRepos': recentRepos,
     'zoom': zoom,
@@ -134,6 +138,7 @@ class Settings {
           for (final g in l) ?TabGroup.fromJson(g),
       ]
       ..scanRoots = strings(j['scanRoots'])
+      ..openWithApps = strings(j['openWithApps'])
       ..knownRepos = strings(j['knownRepos'])
       ..recentRepos = strings(j['recentRepos'])
       ..zoom = num_(j['zoom'], 1.0)

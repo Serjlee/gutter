@@ -12,6 +12,7 @@ import '../dialogs/settings_dialog.dart';
 import '../dialogs/update_dialog.dart';
 import '../widgets/common.dart';
 import 'git_missing_banner.dart';
+import 'open_with_menu.dart';
 
 /// Repository browser: scanned folders, discovered repos, recents, settings.
 class HomeTab extends StatefulWidget {
@@ -379,11 +380,9 @@ class _RepoTileState extends State<_RepoTile> {
             () => widget.app.openRepo(widget.path),
             icon: Icons.open_in_new,
           ),
-          menuItem(
-            'Show in file manager',
-            () => openWithSystem(widget.path),
-            icon: Icons.folder_open,
-          ),
+          const PopupMenuDivider(),
+          ...openWithItems(context, widget.app, widget.path),
+          const PopupMenuDivider(),
           menuItem(
             'Copy path',
             () => copyToClipboard(

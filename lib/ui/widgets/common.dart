@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -188,6 +189,9 @@ PopupMenuItem<VoidCallback> menuItem(
   IconData? icon,
   bool enabled = true,
   bool danger = false,
+
+  /// Its keyboard shortcut, shown faint at the right.
+  String? hint,
 }) {
   return PopupMenuItem<VoidCallback>(
     value: onTap,
@@ -217,6 +221,13 @@ PopupMenuItem<VoidCallback> menuItem(
             ),
           ),
         ),
+        if (hint != null) ...[
+          const SizedBox(width: 24),
+          Text(
+            hint,
+            style: TextStyle(fontSize: 12, color: AppColors.textFaint),
+          ),
+        ],
       ],
     ),
   );
@@ -395,6 +406,7 @@ class SmallIconButton extends StatelessWidget {
     required this.onPressed,
     this.color,
     this.size = 16,
+    this.padding = 4,
     this.mirror = false,
   });
 
@@ -403,6 +415,9 @@ class SmallIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color? color;
   final double size;
+
+  /// Around the icon: the button is [size] + 2 × [padding] square.
+  final double padding;
 
   /// Flips the icon sideways (a right panel's icon becomes a left one's).
   final bool mirror;
@@ -418,7 +433,7 @@ class SmallIconButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(4),
           child: Padding(
-            padding: const EdgeInsets.all(4),
+            padding: EdgeInsets.all(padding),
             child: Transform.flip(
               flipX: mirror,
               child: Icon(

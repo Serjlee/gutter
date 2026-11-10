@@ -11,6 +11,7 @@ import '../graph/graph_painter.dart' show LineHint;
 import '../scan/repo_scanner.dart';
 import '../ui/repo/repo_tab_controller.dart';
 import 'avatars.dart';
+import 'open_with.dart';
 import 'settings_store.dart';
 import 'tab_groups.dart';
 import 'theme.dart';
@@ -674,6 +675,74 @@ class AppController extends ChangeNotifier {
 
   Future<void> rescanAll() async {
     await Future.wait(settings.scanRoots.map(scan));
+  }
+
+  // ------------------------------------------------------------ open with
+
+  /// The file manager's id among the apps to open with.
+  static const fileManagerId = ':files';
+
+  /// VS Code's id among the apps to open with.
+  static const vsCodeId = ':vscode';
+
+  /// VS Code's `code`, if installed (looked for once).
+  late String? vsCode = findVSCode();
+
+  /// The apps a repository can open with, by id: the file manager, VS Code
+  /// when installed, then the apps added (their commands are their ids).
+  List<String> get openWithIds => [
+    fileManagerId,
+    if (vsCode != null) vsCodeId,
+    ...settings.openWithApps,
+  ];
+
+  /// Opens [repo] with the app [id], saying why not if it fails.
+  Future<void> openRepoWith(String repo, String id) async {
+    try {
+      switch (id) {
+        case fileManagerId:
+          await openFolder(repo);
+        case vsCodeId:
+          await openWith(vsCode ?? 'code', repo);
+        default:
+          await openWith(id, repo);
+      }
+    } catch (e) {
+      notify(
+        'Couldn\'t open ${p.basename(repo)} with ${openWithName(id)}: $e',
+        error: true,
+      );
+    }
+  }
+
+  /// The name of the app [id] in menus and messages.
+  String openWithName(String id) => switch (id) {
+    fileManagerId =>
+      Platform.isMacOS
+          ? 'Finder'
+          : Platform.isWindows
+          ? 'File Explorer'
+          : 'the file manager',
+    vsCodeId => 'VS Code',
+    _ => openWithLabel(id),
+  };
+
+  /// Adds [command] to the apps to open with, once.
+  void addOpenWithApp(String command) {
+    command = command.trim();
+    if (command.isEmpty || settings.openWithApps.contains(command)) return;
+    settings.openWithApps = [...settings.openWithApps, command];
+    save();
+    notifyListeners();
+  }
+
+  void removeOpenWithApp(String command) {
+    settings.openWithApps = [
+      for (final c in settings.openWithApps)
+        if (c != command) c,
+    ];
+    save();
+    notifyListeners();
   }
 
   void forgetRepo(String path) {
