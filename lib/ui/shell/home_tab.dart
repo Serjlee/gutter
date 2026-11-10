@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -167,6 +169,7 @@ class _HomeTabState extends State<HomeTab> {
                         key: const ValueKey('open-settings'),
                         icon: Icons.settings_outlined,
                         label: 'Settings…',
+                        hint: Platform.isMacOS ? '⌘,' : 'Ctrl+,',
                         onTap: () => showSettingsDialog(context, app),
                       ),
                       const SizedBox(height: 20),
@@ -313,10 +316,14 @@ class _ActionButton extends StatelessWidget {
     super.key,
     required this.icon,
     required this.label,
+    this.hint,
     required this.onTap,
   });
   final IconData icon;
   final String label;
+
+  /// Its shortcut, shown faint at the right.
+  final String? hint;
   final VoidCallback onTap;
 
   @override
@@ -330,7 +337,17 @@ class _ActionButton extends StatelessWidget {
       ),
       onPressed: onTap,
       icon: Icon(icon, size: 18, color: AppColors.accent),
-      label: Text(label),
+      label: hint == null
+          ? Text(label)
+          : Row(
+              children: [
+                Expanded(child: Text(label)),
+                Text(
+                  hint!,
+                  style: TextStyle(fontSize: 12, color: AppColors.textFaint),
+                ),
+              ],
+            ),
     ),
   );
 }

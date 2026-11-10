@@ -210,11 +210,14 @@ class _AppShellState extends State<AppShell> {
     both(LogicalKeyboardKey.keyR, () => app.activeTab?.refresh(forceLog: true));
     both(LogicalKeyboardKey.keyI, () => app.activeTab?.toggleDetails());
     both(LogicalKeyboardKey.keyB, () => app.activeTab?.toggleSidebar());
-    // Settings: ⌘, on macOS (as its apps have it), Ctrl+P elsewhere.
+    // Settings: ⌘, on macOS (as its apps have it); Ctrl+, elsewhere, and
+    // Ctrl+P.
     if (Platform.isMacOS) {
       map[const SingleActivator(LogicalKeyboardKey.comma, meta: true)] =
           _openSettings;
     } else {
+      map[const SingleActivator(LogicalKeyboardKey.comma, control: true)] =
+          _openSettings;
       map[const SingleActivator(LogicalKeyboardKey.keyP, control: true)] =
           _openSettings;
     }

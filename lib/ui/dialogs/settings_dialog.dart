@@ -10,7 +10,7 @@ import '../widgets/common.dart';
 import 'dialogs.dart';
 
 /// The settings, in a dialog: from the home tab, with ⌘, (macOS) or
-/// Ctrl+P, or from the app menu on macOS.
+/// Ctrl+, (or Ctrl+P), or from the app menu on macOS.
 Future<void> showSettingsDialog(BuildContext context, AppController app) =>
     showAppDialog<void>(
       context: context,

@@ -85,6 +85,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-close')));
     await tester.pump();
 
+    // Ctrl+, too, as the dashboard's button says.
+    expect(find.text('Ctrl+,'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('theme-mode')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('settings-close')));
+    await tester.pump();
+
     // What the macOS runner sends for "Settings…".
     Future<void> settingsItem() async {
       await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
