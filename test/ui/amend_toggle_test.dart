@@ -45,6 +45,23 @@ void main() {
     );
     await tester.pump();
 
+    // The commit button says what is missing, and waits for it.
+    FilledButton button() => tester.widget(find.byType(FilledButton));
+    expect(find.text('Stage files to commit'), findsOneWidget);
+    await tester.runAsync(() async {
+      t.git(['add', 'a.txt']);
+      await tab.refresh();
+    });
+    await tester.pump();
+    expect(find.text('Enter a message to commit'), findsOneWidget);
+    expect(button().onPressed, isNull);
+    tab.commitMessage.text = 'two';
+    await tester.pump();
+    expect(find.text('Commit 1 file'), findsOneWidget);
+    expect(button().onPressed, isNotNull);
+    tab.commitMessage.clear();
+    await tester.pump();
+
     Future<void> tapLabel() async {
       await tester.tap(find.text('Amend previous commit'));
       // Amending fetches the last message from git.

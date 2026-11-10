@@ -1701,6 +1701,7 @@ class RepoTabController extends ChangeNotifier {
 
   Future<void> setAmend(bool value) async {
     amend = value;
+    _notify(); // ticked at once: the message follows
     if (value && commitMessage.text.trim().isEmpty) {
       try {
         commitMessage.text = _amendMessage = await repo.lastCommitMessage();

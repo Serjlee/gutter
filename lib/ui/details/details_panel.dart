@@ -676,7 +676,11 @@ class WipPanel extends StatelessWidget {
           ),
         ),
         const Divider(),
-        _CommitComposer(tab: tab),
+        // The button follows the message, too.
+        ListenableBuilder(
+          listenable: tab.commitMessage,
+          builder: (_, _) => _CommitComposer(tab: tab),
+        ),
       ],
     );
   }
@@ -1035,15 +1039,21 @@ class _CommitComposer extends StatelessWidget {
     final finishes = tab.commitFinishesOperation && !tab.amend;
     // A stopped rebase goes on with its own commits' messages.
     final rebasing = tab.operation == RepoOperation.rebase && !tab.amend;
+    final hasChanges = stagedCount > 0 || tab.amend || finishes;
+    // (A stopped rebase needs no message.)
+    final noMessage = !rebasing && tab.commitMessage.text.trim().isEmpty;
     final canCommit =
         conflicts == 0 &&
-        (stagedCount > 0 || tab.amend || finishes || rebasing) &&
+        (hasChanges || rebasing) &&
+        !noMessage &&
         tab.busy == null &&
         !tab.locked;
     final label = conflicts > 0
         ? 'Resolve conflicts to commit'
         : rebasing
         ? 'Continue rebase'
+        : hasChanges && noMessage
+        ? 'Enter a message to commit'
         : finishes
         ? 'Commit ${tab.operation.label.toLowerCase()}'
         : tab.amend
