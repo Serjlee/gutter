@@ -102,15 +102,18 @@ class DesktopEntry {
     required this.name,
     required this.exec,
     this.hidden = false,
+    this.terminal = false,
   });
   final String name;
 
   /// The command line, with field codes (`%f`, `%U`, …) for the files.
   final String exec;
 
-  /// Not to be listed (`NoDisplay`, `Hidden`, a terminal app, or not an
-  /// application).
+  /// Not to be listed (`NoDisplay`, `Hidden`, or not an application).
   final bool hidden;
+
+  /// Runs in a terminal (`Terminal`): opened in one.
+  final bool terminal;
 
   /// Whether it takes files or folders to open.
   bool get opensFiles => RegExp('%[fFuU]').hasMatch(exec);
@@ -132,7 +135,7 @@ DesktopEntry? readDesktopEntry(String path) =>
 /// name and a command.
 DesktopEntry? parseDesktopEntry(String text) {
   String? name, exec, type;
-  var hidden = false, inEntry = false;
+  var hidden = false, terminal = false, inEntry = false;
   for (var line in const LineSplitter().convert(text)) {
     line = line.trim();
     if (line.startsWith('[')) {
@@ -151,9 +154,10 @@ DesktopEntry? parseDesktopEntry(String text) {
         exec = value;
       case 'Type':
         type = value;
-      // Run in a terminal, they'd start in none: not listed either.
-      case 'NoDisplay' || 'Hidden' || 'Terminal':
+      case 'NoDisplay' || 'Hidden':
         if (value == 'true') hidden = true;
+      case 'Terminal':
+        terminal = value == 'true';
     }
   }
   if (name == null || exec == null) return null;
@@ -161,6 +165,7 @@ DesktopEntry? parseDesktopEntry(String text) {
     name: name,
     exec: exec,
     hidden: hidden || (type != null && type != 'Application'),
+    terminal: terminal,
   );
 }
 
@@ -354,20 +359,110 @@ Future<void> openFolder(String path) => startDetached(
 
 /// Opens the folder [path] with [command]: a program (on PATH or by path)
 /// given the folder, or, on macOS, an app by name or bundle (`open -a`).
-Future<void> openWith(String command, String path) {
+/// A [terminal] app, or an installed one that says it is, runs in
+/// [terminalApp] (a terminal's path), on Linux.
+Future<void> openWith(
+  String command,
+  String path, {
+  bool terminal = false,
+  String? terminalApp,
+}) {
   command = command.trim();
+  List<String> argv;
   if (command.startsWith(desktopPrefix)) {
     final file = command.substring(desktopPrefix.length);
     final entry = readDesktopEntry(file);
     if (entry == null) throw FileSystemException('Not found', file);
-    final args = execArgs(entry.exec, path);
-    return startDetached(args.first, args.sublist(1), path);
+    argv = execArgs(entry.exec, path);
+    terminal |= entry.terminal;
+  } else {
+    final exe = command.contains(Platform.pathSeparator)
+        ? command
+        : findExecutable(command);
+    if (Platform.isMacOS && (command.endsWith('.app') || exe == null)) {
+      return startDetached('open', ['-a', command, path], path);
+    }
+    argv = [exe ?? command, path];
   }
-  final exe = command.contains(Platform.pathSeparator)
-      ? command
-      : findExecutable(command);
-  if (Platform.isMacOS && (command.endsWith('.app') || exe == null)) {
-    return startDetached('open', ['-a', command, path], path);
+  if (terminal && !Platform.isMacOS && !Platform.isWindows) {
+    if (terminalApp == null) throw StateError('No terminal found');
+    argv = [terminalApp, ...terminalArgs(terminalApp, path, argv)];
   }
-  return startDetached(exe ?? command, [path], path);
+  return startDetached(argv.first, argv.sublist(1), path);
+}
+
+/// The terminals known, by command, and how each runs a command line in a
+/// folder (most also start in their own working directory, the folder).
+final _terminals = <String, List<String> Function(String, List<String>)>{
+  // The user's pick of terminal, where the desktop has the standard's.
+  'xdg-terminal-exec': (dir, cmd) => cmd,
+  'cosmic-term': (dir, cmd) => ['-w', dir, '--', ...cmd],
+  'ptyxis': (dir, cmd) => [
+    '--new-window',
+    '--working-directory=$dir',
+    '--',
+    ...cmd,
+  ],
+  'kgx': (dir, cmd) => ['--working-directory=$dir', '--', ...cmd],
+  'gnome-terminal': (dir, cmd) => ['--working-directory=$dir', '--', ...cmd],
+  'konsole': (dir, cmd) => ['--workdir', dir, '-e', ...cmd],
+  'xfce4-terminal': (dir, cmd) => ['--working-directory=$dir', '-x', ...cmd],
+  'kitty': (dir, cmd) => ['--directory', dir, ...cmd],
+  'ghostty': (dir, cmd) => ['--working-directory=$dir', '-e', ...cmd],
+  'wezterm': (dir, cmd) => ['start', '--cwd', dir, '--', ...cmd],
+  'alacritty': (dir, cmd) => ['--working-directory', dir, '-e', ...cmd],
+  'foot': (dir, cmd) => ['--working-directory=$dir', ...cmd],
+  'terminator': (dir, cmd) => ['--working-directory=$dir', '-x', ...cmd],
+  'urxvt': (dir, cmd) => ['-cd', dir, '-e', ...cmd],
+  'xterm': (dir, cmd) => ['-e', ...cmd],
+};
+
+/// The terminals each desktop comes with (by `XDG_CURRENT_DESKTOP`).
+const _desktopTerminals = {
+  'COSMIC': ['cosmic-term'],
+  'KDE': ['konsole'],
+  'GNOME': ['ptyxis', 'kgx', 'gnome-terminal'],
+  'XFCE': ['xfce4-terminal'],
+};
+
+/// The arguments that make [terminal] (its path or command) run [command]
+/// in [dir]: `-e` and the command, for a terminal not known.
+List<String> terminalArgs(String terminal, String dir, List<String> command) =>
+    (_terminals[p.basename(terminal)] ?? (_, cmd) => ['-e', ...cmd])(
+      dir,
+      command,
+    );
+
+/// The terminals installed (their paths), the likeliest pick first: the
+/// one `$TERMINAL` names, `xdg-terminal-exec` (which runs the user's pick),
+/// the desktop's own, then the others known. None on macOS and Windows.
+List<String> findTerminals({
+  Map<String, String>? environment,
+  bool? linux,
+  bool Function(String path)? exists,
+}) {
+  if (!(linux ?? (!Platform.isMacOS && !Platform.isWindows))) return const [];
+  final env = environment ?? userEnvironment;
+  String? find(String name) => name.contains('/')
+      ? ((exists ?? (String f) => File(sandboxPath(f)).existsSync())(name)
+            ? name
+            : null)
+      : findExecutable(
+          name,
+          environment: env,
+          windows: false,
+          macOS: false,
+          exists: exists,
+        );
+  final desktops = (env['XDG_CURRENT_DESKTOP'] ?? '').toUpperCase().split(':');
+  final found = <String>{};
+  for (final name in [
+    if (env['TERMINAL'] case final t? when t.trim().isNotEmpty) t.trim(),
+    'xdg-terminal-exec',
+    for (final d in desktops) ...?_desktopTerminals[d],
+    ..._terminals.keys,
+  ]) {
+    if (find(name) case final path?) found.add(path);
+  }
+  return found.toList();
 }

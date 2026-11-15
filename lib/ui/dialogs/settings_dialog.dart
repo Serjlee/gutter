@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/app_controller.dart';
 import '../../app/open_with.dart'
@@ -326,6 +327,7 @@ class SettingsForm extends StatelessWidget {
                 'command',
             below: _AddAppField(app: app),
           ),
+          if (_AppRow.terminals) _terminalRow(app),
         ],
       ],
       SettingsSection.performance => [
@@ -1088,6 +1090,36 @@ class _InfoIconState extends State<_InfoIcon> {
   }
 }
 
+/// The terminal apps run in: the likeliest found, or one picked.
+Widget _terminalRow(AppController app) {
+  final found = app.terminals.map(p.basename).toList();
+  final picked = found.contains(app.settings.terminal)
+      ? app.settings.terminal
+      : null;
+  return _Row(
+    'Terminal',
+    subtitle: found.isEmpty
+        ? 'None found: terminal apps can\'t run'
+        : 'What terminal apps run in',
+    info:
+        'Apps checked under Terminal, such as lazygit or Neovim, open in a '
+        'window of this terminal, in the repository.\n\n'
+        'Automatic picks the one \$TERMINAL names, else xdg-terminal-exec '
+        '(which opens your preferred terminal), else the desktop\'s own.',
+    control: found.isEmpty
+        ? null
+        : AppDropdown<String?>(
+            key: const ValueKey('terminal'),
+            value: picked,
+            items: [
+              (null, 'Automatic (${found.first})', null),
+              for (final t in found) (t, t, null),
+            ],
+            onChanged: app.setTerminal,
+          ),
+  );
+}
+
 /// The apps to open with, in order (drag to reorder), each with its icon
 /// and name to change, and Remove: a few, then they scroll.
 class _AppList extends StatefulWidget {
@@ -1132,6 +1164,11 @@ class _AppListState extends State<_AppList> {
           child: Row(
             children: [
               Expanded(child: Text('APP', style: header)),
+              if (_AppRow.terminals)
+                SizedBox(
+                  width: _AppRow.terminalWidth,
+                  child: Center(child: Text('TERMINAL', style: header)),
+                ),
               SizedBox(
                 width: _AppRow.showWidth,
                 child: Center(child: Text('SHOW', style: header)),
@@ -1191,6 +1228,10 @@ class _AppRow extends StatefulWidget {
   static const leadWidth = 6.0 + 26 + 4 + 32 + 10;
   static const trailWidth = 4.0 + 24 + 10;
   static const showWidth = 44.0;
+  static const terminalWidth = 64.0;
+
+  /// Whether apps can run in a terminal: on Linux.
+  static bool get terminals => !Platform.isMacOS && !Platform.isWindows;
 
   @override
   State<_AppRow> createState() => _AppRowState();
@@ -1224,6 +1265,7 @@ class _AppRowState extends State<_AppRow> {
         app.vsCode ?? 'Not found: its code command isn\'t installed',
       _ => id.replaceFirst(desktopPrefix, ''),
     };
+    final installed = id.startsWith(desktopPrefix);
     final row = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1308,6 +1350,29 @@ class _AppRowState extends State<_AppRow> {
                   ],
                 ),
               ),
+              if (_AppRow.terminals)
+                SizedBox(
+                  width: _AppRow.terminalWidth,
+                  child: builtIn
+                      ? null
+                      : Tooltip(
+                          message: installed
+                              ? (app.opensInTerminal(id)
+                                    ? 'It runs in a terminal, it says'
+                                    : 'It has a window of its own, it says')
+                              : 'Runs in a terminal, for an app with no '
+                                    'window of its own',
+                          child: Checkbox(
+                            key: ValueKey('app-terminal-$id'),
+                            value: app.opensInTerminal(id),
+                            // An installed app says, itself.
+                            onChanged: installed
+                                ? null
+                                : (v) =>
+                                      app.setOpenWithInTerminal(id, v ?? false),
+                          ),
+                        ),
+                ),
               SizedBox(
                 width: _AppRow.showWidth,
                 child: Tooltip(

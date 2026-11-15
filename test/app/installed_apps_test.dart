@@ -31,6 +31,13 @@ Exec=subl --new-window
       isTrue,
     );
     expect(parseDesktopEntry('[Desktop Entry]\nName=X')?.exec, isNull);
+    // A terminal app: listed, to open in a terminal.
+    final vim = parseDesktopEntry(
+      '[Desktop Entry]\nName=Vim\nExec=vim %F\nTerminal=true',
+    )!;
+    expect(vim.hidden, isFalse);
+    expect(vim.terminal, isTrue);
+    expect(e.terminal, isFalse);
   });
 
   test('a .desktop command line, opening a folder', () {
@@ -87,7 +94,8 @@ Exec=subl --new-window
     // The user's own Zed shadows the system's.
     desktop('user', 'zed', 'Name=Zed (mine)\nExec=/opt/zed %U');
 
-    final apps = await findInstalledApps(
+    // (Those of the machine's own Flatpaks and Snaps left out.)
+    final apps = (await findInstalledApps(
       environment: {
         'HOME': root.path,
         'XDG_DATA_HOME': p.join(root.path, 'user'),
@@ -95,8 +103,8 @@ Exec=subl --new-window
       },
       linux: true,
       macOS: false,
-    );
-    expect([for (final a in apps) a.name], ['Editor', 'Zed (mine)']);
+    )).where((a) => a.id.contains(root.path)).toList();
+    expect([for (final a in apps) a.name], ['Editor', 'Vim', 'Zed (mine)']);
     expect(
       apps.last.id,
       '$desktopPrefix${p.join(root.path, 'user', 'applications', 'zed.desktop')}',
@@ -111,6 +119,64 @@ Exec=subl --new-window
     addTearDown(() => startDetached = saved);
     await openWith(apps.last.id, '/work/repo');
     expect(started.single, '/opt/zed /work/repo');
+    // A terminal app, in the terminal; none found, it can't.
+    started.clear();
+    await openWith(apps[1].id, '/work/repo', terminalApp: '/usr/bin/kitty');
+    expect(
+      started.single,
+      '/usr/bin/kitty --directory /work/repo vim /work/repo',
+    );
+    expect(() => openWith(apps[1].id, '/work/repo'), throwsStateError);
+  });
+
+  test('a command in a terminal: each runs it its own way', () {
+    const dir = '/work/my repo';
+    const cmd = ['lazygit', dir];
+    expect(terminalArgs('/usr/bin/alacritty', dir, cmd), [
+      '--working-directory',
+      dir,
+      '-e',
+      ...cmd,
+    ]);
+    expect(terminalArgs('gnome-terminal', dir, cmd), [
+      '--working-directory=$dir',
+      '--',
+      ...cmd,
+    ]);
+    expect(terminalArgs('/usr/bin/xdg-terminal-exec', dir, cmd), cmd);
+    // One not known: -e, as most take.
+    expect(terminalArgs('/opt/myterm', dir, cmd), ['-e', ...cmd]);
+  });
+
+  test('terminals: \$TERMINAL\'s, xdg-terminal-exec, the desktop\'s own, '
+      'then the others', () {
+    List<String> find(Set<String> files, Map<String, String> env) =>
+        findTerminals(
+          environment: {'PATH': '/usr/bin', ...env},
+          linux: true,
+          exists: files.contains,
+        );
+    const all = {
+      '/usr/bin/xterm',
+      '/usr/bin/konsole',
+      '/usr/bin/kitty',
+      '/usr/bin/xdg-terminal-exec',
+    };
+    expect(find(all, {}), [
+      '/usr/bin/xdg-terminal-exec',
+      '/usr/bin/konsole',
+      '/usr/bin/kitty',
+      '/usr/bin/xterm',
+    ]);
+    expect(
+      find(all.difference({'/usr/bin/xdg-terminal-exec'}), {
+        'XDG_CURRENT_DESKTOP': 'KDE',
+        'TERMINAL': 'xterm',
+      }),
+      ['/usr/bin/xterm', '/usr/bin/konsole', '/usr/bin/kitty'],
+    );
+    expect(find({}, {}), isEmpty);
+    expect(findTerminals(linux: false), isEmpty);
   });
 
   test('installed apps: on macOS, the app bundles', () async {

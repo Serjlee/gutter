@@ -693,6 +693,40 @@ class AppController extends ChangeNotifier {
   /// first asked), to suggest among the apps to open with.
   late Future<List<InstalledApp>> installedApps = findInstalledApps();
 
+  /// The terminals installed (their paths), the likeliest first: what
+  /// terminal apps run in (Linux).
+  late List<String> terminals = findTerminals();
+
+  /// The terminal apps run in: the one picked, if found, else the
+  /// likeliest. Null if none is found.
+  String? get terminal =>
+      terminals.where((t) => p.basename(t) == settings.terminal).firstOrNull ??
+      terminals.firstOrNull;
+
+  /// Picks the terminal apps run in, by command; null, the likeliest.
+  void setTerminal(String? name) {
+    settings.terminal = name;
+    save();
+    notifyListeners();
+  }
+
+  /// Whether the app [id] runs in a terminal: as set, for a command, or as
+  /// an installed app says.
+  bool opensInTerminal(String id) => id.startsWith(desktopPrefix)
+      ? readDesktopEntry(id.substring(desktopPrefix.length))?.terminal ?? false
+      : settings.openWithInTerminal.contains(id);
+
+  /// Runs the command [id] in a terminal, or not.
+  void setOpenWithInTerminal(String id, bool inTerminal) {
+    settings.openWithInTerminal = [
+      for (final t in settings.openWithInTerminal)
+        if (t != id) t,
+      if (inTerminal) id,
+    ];
+    save();
+    notifyListeners();
+  }
+
   /// Reads the user's PATH from their login shell ([userPath]), then looks
   /// for VS Code and the installed apps again with it: once, at start.
   Future<void> loadUserPath() async {
@@ -701,6 +735,7 @@ class AppController extends ChangeNotifier {
     userPath = path;
     vsCode = findVSCode();
     installedApps = findInstalledApps();
+    terminals = findTerminals();
     notifyListeners();
   }
 
@@ -738,12 +773,19 @@ class AppController extends ChangeNotifier {
         case vsCodeId:
           await openWith(vsCode ?? 'code', repo);
         default:
-          await openWith(id, repo);
+          await openWith(
+            id,
+            repo,
+            terminal: settings.openWithInTerminal.contains(id),
+            terminalApp: terminal,
+          );
       }
     } catch (e) {
       // Why, in words, when it's plain; else what failed.
       final why = switch (id) {
         fileManagerId || vsCodeId => null,
+        _ when opensInTerminal(id) && terminal == null =>
+          'no terminal found to run it in',
         _ => openWithProblem(id),
       };
       notify(
@@ -788,6 +830,7 @@ class AppController extends ChangeNotifier {
     settings.openWithNames.remove(command);
     settings.openWithIcons.remove(command);
     settings.openWithHidden.remove(command);
+    settings.openWithInTerminal.remove(command);
     save();
     notifyListeners();
   }

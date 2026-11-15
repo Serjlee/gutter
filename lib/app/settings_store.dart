@@ -80,6 +80,14 @@ class Settings {
   /// Icons picked for apps to open with (by their command): an icon's key.
   Map<String, String> openWithIcons = {};
 
+  /// Commands among the apps to open with that run in a terminal (Linux).
+  /// Installed apps say so themselves.
+  List<String> openWithInTerminal = [];
+
+  /// The terminal they run in, by command (`kitty`): the likeliest found
+  /// when unset, or not found.
+  String? terminal;
+
   PullMode pullModeFor(String repo) => pullModes[repo] ?? pullMode;
 
   /// Repositories where committing or pushing to main (or master) goes
@@ -111,6 +119,8 @@ class Settings {
     'openWithHidden': openWithHidden,
     'openWithNames': openWithNames,
     'openWithIcons': openWithIcons,
+    'openWithInTerminal': openWithInTerminal,
+    'terminal': terminal,
     'knownRepos': knownRepos,
     'recentRepos': recentRepos,
     'zoom': zoom,
@@ -168,6 +178,8 @@ class Settings {
       ..openWithHidden = strings(j['openWithHidden'])
       ..openWithNames = stringMap(j['openWithNames'])
       ..openWithIcons = stringMap(j['openWithIcons'])
+      ..openWithInTerminal = strings(j['openWithInTerminal'])
+      ..terminal = j['terminal'] as String?
       ..knownRepos = strings(j['knownRepos'])
       ..recentRepos = strings(j['recentRepos'])
       ..zoom = num_(j['zoom'], 1.0)

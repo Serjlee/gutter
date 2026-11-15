@@ -373,6 +373,41 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  test('a command checked to, runs in the terminal; none, it says', () async {
+    final started = <String>[];
+    final saved = startDetached;
+    startDetached = (exe, args, _) async =>
+        started.add([exe, ...args].join(' '));
+    addTearDown(() => startDetached = saved);
+    const repo = '/work/gutter';
+    final app = AppController(null, Settings())
+      ..terminals = ['/usr/bin/foot', '/usr/bin/xterm']
+      ..addOpenWithApp('no-such-tui')
+      ..setOpenWithInTerminal('no-such-tui', true);
+    expect(app.opensInTerminal('no-such-tui'), isTrue);
+    expect(app.terminal, '/usr/bin/foot');
+    await app.openRepoWith(repo, 'no-such-tui');
+    expect(
+      started.single,
+      '/usr/bin/foot --working-directory=$repo '
+      'no-such-tui $repo',
+    );
+    // The terminal picked.
+    app.setTerminal('xterm');
+    expect(app.terminal, '/usr/bin/xterm');
+
+    final messages = <String>[];
+    app.messages.listen((m) => messages.add(m.text));
+    app.terminals = [];
+    await app.openRepoWith(repo, 'no-such-tui');
+    await Future<void>.delayed(Duration.zero);
+    expect(messages.single, contains('no terminal found'));
+
+    // Removed, it's forgotten.
+    app.removeOpenWithApp('no-such-tui');
+    expect(app.settings.openWithInTerminal, isEmpty);
+  });
+
   test('saved: apps\' order, names and icons; VS Code among them', () {
     final s = Settings()
       ..openWithApps = ['subl', ':vscode']
@@ -385,6 +420,17 @@ void main() {
     expect(back.openWithHidden, ['subl']);
     expect(back.openWithNames, {'subl': 'Sublime'});
     expect(back.openWithIcons, {'subl': 'bolt'});
+    expect(
+      Settings.fromJson(
+        (Settings()
+              ..openWithInTerminal = ['lazygit']
+              ..terminal = 'kitty')
+            .toJson(),
+      ),
+      isA<Settings>()
+          .having((s) => s.openWithInTerminal, 'in terminal', ['lazygit'])
+          .having((s) => s.terminal, 'terminal', 'kitty'),
+    );
     // From before: the file manager and VS Code first.
     expect(
       Settings.fromJson({
