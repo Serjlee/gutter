@@ -247,6 +247,16 @@ void main() {
     await tester.pump();
     expect(find.text('beta'), findsOneWidget);
 
+    // Right-click the chip → Close group…: asked first.
+    await tester.tap(find.text('work'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close group…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Close work?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(order(), ['alpha', 'beta*', 'gamma*']);
+
     // Right-click the chip → Ungroup.
     await tester.tap(find.text('work'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
@@ -254,6 +264,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.groups, isEmpty);
     expect(find.text('work'), findsNothing);
+
+    // Grouped again and closed, confirmed: its tabs go.
+    final again = app.createGroup([app.tabs[1], app.tabs[2]], name: 'work');
+    await tester.pump();
+    await tester.tap(find.text('work'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close group…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close 2 tabs'));
+    await tester.pumpAndSettle();
+    expect(app.groups, isNot(contains(again)));
+    expect(order(), ['alpha']);
   });
 
   testWidgets('all tabs: grouped, searchable, Enter shows the pick', (

@@ -6,6 +6,7 @@ import '../../app/app_controller.dart';
 import '../../app/tab_groups.dart';
 import '../../app/theme.dart';
 import '../../git/models.dart' show RepoOperation;
+import '../dialogs/dialogs.dart' show confirm;
 import '../repo/repo_tab_controller.dart';
 import '../widgets/common.dart';
 import 'tab_switcher.dart';
@@ -662,7 +663,24 @@ Future<void> showGroupEditor(
           Positioned(
             left: topLeft.dx.clamp(8, size.width - 298),
             top: topLeft.dy + 4,
-            child: _GroupEditor(app: app, group: group),
+            child: _GroupEditor(
+              app: app,
+              group: group,
+              // Asked from the chip: the editor is gone by then.
+              onClose: () async {
+                final n = app.tabsIn(group).length;
+                final ok = await confirm(
+                  context,
+                  title: 'Close ${groupLabel(group)}?',
+                  message:
+                      'Its $n tab${n == 1 ? '' : 's'} will close too. The '
+                      'repositories stay on the dashboard.',
+                  confirmLabel: 'Close $n tab${n == 1 ? '' : 's'}',
+                  danger: true,
+                );
+                if (ok) app.closeGroup(group);
+              },
+            ),
           ),
         ],
       );
@@ -671,9 +689,16 @@ Future<void> showGroupEditor(
 }
 
 class _GroupEditor extends StatefulWidget {
-  const _GroupEditor({required this.app, required this.group});
+  const _GroupEditor({
+    required this.app,
+    required this.group,
+    required this.onClose,
+  });
   final AppController app;
   final TabGroup group;
+
+  /// Closes the group and its tabs, once confirmed.
+  final VoidCallback onClose;
 
   @override
   State<_GroupEditor> createState() => _GroupEditorState();
@@ -799,12 +824,7 @@ class _GroupEditorState extends State<_GroupEditor> {
               Icons.layers_clear_outlined,
               () => app.ungroup(g),
             ),
-            action(
-              'Close group',
-              Icons.close,
-              () => app.closeGroup(g),
-              danger: true,
-            ),
+            action('Close group…', Icons.close, widget.onClose, danger: true),
             const SizedBox(height: 4),
           ],
         ),
